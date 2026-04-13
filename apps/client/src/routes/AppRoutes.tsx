@@ -9,7 +9,6 @@ import FullScreenLoader from '../components/UI/loader/FullScreenLoader'
 import NavigationLoader from '../components/UI/loader/NavigationLoader'
 import Login from '../pages/auth/Login'
 import Signup from '../pages/auth/Signup'
-import LandingPage from '../pages/LandingPage'
 import ClientPreview from '../pages/preview/ClientPreview'
 import AppEntry from './AppEntry'
 import GlobalRedirectHandler from './WalletRedirectHandler'
@@ -107,7 +106,7 @@ export default function AppRoutes() {
       <Suspense fallback={<FullScreenLoader />}>
         <Routes>
           {/* public */}
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/app" element={<AppEntry />} />
@@ -190,7 +189,7 @@ export default function AppRoutes() {
             <Route path="/ops/rto" element={<RtoList />} />
           </Route>
           {/* fallback */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
