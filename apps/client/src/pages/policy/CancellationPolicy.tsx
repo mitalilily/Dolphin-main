@@ -12,7 +12,7 @@ const CancellationPolicy = () => {
             primary={
               <>
                 You may cancel your account at any time by emailing us at{' '}
-                <Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>.
+                <Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>.
               </>
             }
           />
@@ -27,11 +27,11 @@ const CancellationPolicy = () => {
         </ListItem>
 
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier (SkyRush Express Courier Pvt Ltd) reserves the right to modify, suspend, or terminate the Service for any reason, without prior notice at any time." />
+          <ListItemText primary="Dolphin Enterprise (Dolphin Enterprise Pvt Ltd) reserves the right to modify, suspend, or terminate the Service for any reason, without prior notice at any time." />
         </ListItem>
 
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="Fraud Prevention: Without limiting any other remedies, SkyRush Express Courier may suspend or terminate your account if we suspect that you have engaged in fraudulent or unlawful activity in connection with the Platform." />
+          <ListItemText primary="Fraud Prevention: Without limiting any other remedies, Dolphin Enterprise may suspend or terminate your account if we suspect that you have engaged in fraudulent or unlawful activity in connection with the Platform." />
         </ListItem>
 
         <ListItem sx={{ display: 'list-item' }}>

@@ -53,7 +53,7 @@ const PrivacyPolicy = () => {
               <>
                 Your Privacy Rights: You may review, update, or correct your details, or withdraw
                 consent by contacting us at{' '}
-                <Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>.
+                <Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>.
               </>
             }
           />
@@ -73,10 +73,10 @@ const PrivacyPolicy = () => {
               <>
                 Grievance Officer: If you have queries or complaints, reach out to us at{' '}
                 <a
-                  href="mailto:support@skyrushexpress.in"
+                  href="mailto:support@dolphinenterprise.com"
                   style={{ color: '#0052CC', textDecoration: 'none' }}
                 >
-                  support@skyrushexpress.in
+                  support@dolphinenterprise.com
                 </a>
                 .
               </>

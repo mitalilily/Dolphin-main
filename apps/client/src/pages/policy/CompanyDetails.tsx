@@ -22,7 +22,7 @@ const CompanyDetails = () => {
     <Stack mt={2} gap={5}>
       <PageHeading
         title="Contact Us"
-        subtitle="We’re here to help with bookings, account support, and courier operations. Reach out to SkyRush Express Courier whenever you need assistance."
+        subtitle="We’re here to help with bookings, account support, and courier operations. Reach out to Dolphin Enterprise whenever you need assistance."
       />
 
       <Box
@@ -47,7 +47,7 @@ const CompanyDetails = () => {
           }}
         >
           <Typography variant="h6" fontWeight="bold" color="secondary" gutterBottom>
-            SkyRush Express Courier
+            Dolphin Enterprise
           </Typography>
 
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
@@ -60,7 +60,7 @@ const CompanyDetails = () => {
             <Chip
               clickable
               component={Link}
-              href="mailto:support@skyrushexpress.in"
+              href="mailto:support@dolphinenterprise.com"
               label="Support Email"
               color="primary"
               variant="filled"
@@ -106,7 +106,7 @@ const CompanyDetails = () => {
             width="100%"
             draggable={false}
             zoom={16}
-            popupText="SkyRush Express Courier"
+            popupText="Dolphin Enterprise"
             currentLocation={false}
           />
         </Paper>

@@ -136,6 +136,8 @@ export default function Dashboard() {
   const actions = stats.actions || {}
   const couriers = stats.couriers || {}
   const charts = stats.charts || {}
+  const hasActionItems =
+    (actions.ndrCount || 0) > 0 || (actions.rtoCount || 0) > 0 || (actions.pendingInvoices || 0) > 0
 
   // Get widget order from preferences or use default
   const widgetOrder =
@@ -162,6 +164,7 @@ export default function Dashboard() {
   // Filter out hidden widgets from widgetOrder so they don't take up space
   const visibleWidgetOrder = widgetOrder.filter((widgetId) => {
     if (widgetId === 'recommendations') return false
+    if (widgetId === 'actionItems' && !hasActionItems) return false
     // Default to visible if not set in preferences
     return widgetVisibility[widgetId] !== false
   })

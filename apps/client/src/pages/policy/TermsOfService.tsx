@@ -18,19 +18,19 @@ const TermsOfService = () => {
           <ListItemText primary="You must provide your full legal name, current address, a valid email address, and any other information needed in order to complete the signup process." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You are responsible for keeping your password secure. SkyRush Express Courier cannot and will not be liable for any loss or damage from your failure to maintain the security of your account and password." />
+          <ListItemText primary="You are responsible for keeping your password secure. Dolphin Enterprise cannot and will not be liable for any loss or damage from your failure to maintain the security of your account and password." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You may not use the SkyRush Express Courier service for any illegal or unauthorized purpose nor may you, in the use of the Service, violate any laws in your jurisdiction (including but not limited to copyright laws) as well as the laws of India." />
+          <ListItemText primary="You may not use the Dolphin Enterprise service for any illegal or unauthorized purpose nor may you, in the use of the Service, violate any laws in your jurisdiction (including but not limited to copyright laws) as well as the laws of India." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You are responsible for all activity and content (data, graphics, photos, links) that is uploaded under your SkyRush Express Courier account." />
+          <ListItemText primary="You are responsible for all activity and content (data, graphics, photos, links) that is uploaded under your Dolphin Enterprise account." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText primary="You must not transmit any worms or viruses or any code of a destructive nature." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="A breach or violation of any of the Account Terms as determined in the sole discretion of SkyRush Express Courier will result in an immediate termination of your services." />
+          <ListItemText primary="A breach or violation of any of the Account Terms as determined in the sole discretion of Dolphin Enterprise will result in an immediate termination of your services." />
         </ListItem>
       </List>
 
@@ -40,7 +40,7 @@ const TermsOfService = () => {
       </Typography>
       <List sx={{ listStyleType: 'disc', pl: 3 }}>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You must read, agree with and accept all of the terms and conditions contained in this User Agreement and the Privacy Policy before you may become a member of SkyRush Express Courier." />
+          <ListItemText primary="You must read, agree with and accept all of the terms and conditions contained in this User Agreement and the Privacy Policy before you may become a member of Dolphin Enterprise." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText primary="We reserve the right to modify or terminate the Service for any reason, without notice at any time." />
@@ -52,10 +52,10 @@ const TermsOfService = () => {
           <ListItemText primary="Your use of the Service is at your sole risk. The Service is provided on an “as is” and “as available” basis without any warranty or condition, express, implied or statutory." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier does not warrant that the service will be uninterrupted, timely, secure, or error-free." />
+          <ListItemText primary="Dolphin Enterprise does not warrant that the service will be uninterrupted, timely, secure, or error-free." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier does not warrant that the results that may be obtained from the use of the service will be accurate or reliable." />
+          <ListItemText primary="Dolphin Enterprise does not warrant that the results that may be obtained from the use of the service will be accurate or reliable." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText primary="You understand that your Content (not including credit card information), may be transferred unencrypted and involve (a) transmissions over various networks; and (b) changes to conform and adapt to technical requirements of connecting networks or devices." />
@@ -64,52 +64,52 @@ const TermsOfService = () => {
           <ListItemText primary="We may, but have no obligation to, remove Content and Accounts containing Content that we determine in our sole discretion are unlawful, offensive, threatening, libellous, defamatory, pornographic, obscene or otherwise objectionable or violates any party’s intellectual property or these Terms of Service." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier does not warrant that the quality of any products, services, information, or other material purchased or obtained by you through the Service will meet your expectations, or that any errors in the Service will be corrected." />
+          <ListItemText primary="Dolphin Enterprise does not warrant that the quality of any products, services, information, or other material purchased or obtained by you through the Service will meet your expectations, or that any errors in the Service will be corrected." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You expressly understand and agree that SkyRush Express Courier shall not be liable for any direct, indirect, incidental, special, consequential or exemplary damages, including but not limited to, damages for loss of profits, goodwill, use, data or other intangible losses resulting from the use of or inability to use the service." />
+          <ListItemText primary="You expressly understand and agree that Dolphin Enterprise shall not be liable for any direct, indirect, incidental, special, consequential or exemplary damages, including but not limited to, damages for loss of profits, goodwill, use, data or other intangible losses resulting from the use of or inability to use the service." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="In no event shall SkyRush Express Courier or our suppliers be liable for lost profits or any special, incidental or consequential damages arising out of or in connection with our site, our services or this agreement (however arising including negligence). You agree to indemnify and hold us and (as applicable) our parent, subsidiaries, affiliates, SkyRush Express Courier partners, officers, directors, agents, and employees, harmless from any claim or demand, including reasonable attorneys’ fees, made by any third party due to or arising out of your breach of this Agreement or the documents it incorporates by reference, or your violation of any law or the rights of a third party." />
+          <ListItemText primary="In no event shall Dolphin Enterprise or our suppliers be liable for lost profits or any special, incidental or consequential damages arising out of or in connection with our site, our services or this agreement (however arising including negligence). You agree to indemnify and hold us and (as applicable) our parent, subsidiaries, affiliates, Dolphin Enterprise partners, officers, directors, agents, and employees, harmless from any claim or demand, including reasonable attorneys’ fees, made by any third party due to or arising out of your breach of this Agreement or the documents it incorporates by reference, or your violation of any law or the rights of a third party." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText
             primary={
               <>
                 Technical support is only provided to paying account holders and is only available
-                via email (<Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>)
+                via email (<Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>)
                 and if agreed upon earlier via phone (9217553934) and request ticketing system.
               </>
             }
           />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You agree not to reproduce, duplicate, copy, sell, resell or exploit any portion of the Service, use of the Service, or access to the Service without the express written permission by SkyRush Express Courier." />
+          <ListItemText primary="You agree not to reproduce, duplicate, copy, sell, resell or exploit any portion of the Service, use of the Service, or access to the Service without the express written permission by Dolphin Enterprise." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="Verbal or written abuse of any kind (including threats of abuse or retribution) of any SkyRush Express Courier customer, employee, member, or officer will result in immediate account termination." />
+          <ListItemText primary="Verbal or written abuse of any kind (including threats of abuse or retribution) of any Dolphin Enterprise customer, employee, member, or officer will result in immediate account termination." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="We do not claim any intellectual property rights over the material you provide to the SkyRush Express Courier service." />
+          <ListItemText primary="We do not claim any intellectual property rights over the material you provide to the Dolphin Enterprise service." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="By uploading images and item description content to SkyRush Express Courier, you agree to allow other internet users to view them and you agree to allow SkyRush Express Courier to display and store them and you agree that SkyRush Express Courier can, at any time, review all the content submitted by you to its Service." />
+          <ListItemText primary="By uploading images and item description content to Dolphin Enterprise, you agree to allow other internet users to view them and you agree to allow Dolphin Enterprise to display and store them and you agree that Dolphin Enterprise can, at any time, review all the content submitted by you to its Service." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="The failure of SkyRush Express Courier to exercise or enforce any right or provision of the Terms of Service shall not constitute a waiver of such right or provision. The Terms of Service constitutes the entire agreement between you and SkyRush Express Courier and govern your use of the Service, superseding any prior agreements between you and SkyRush Express Courier (including, but not limited to, any prior versions of the Terms of Service)." />
+          <ListItemText primary="The failure of Dolphin Enterprise to exercise or enforce any right or provision of the Terms of Service shall not constitute a waiver of such right or provision. The Terms of Service constitutes the entire agreement between you and Dolphin Enterprise and govern your use of the Service, superseding any prior agreements between you and Dolphin Enterprise (including, but not limited to, any prior versions of the Terms of Service)." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="You shall not purchase search engine or other pay per click keywords (such as Google AdWords), or domain names that use SkyRush Express Courier trademarks and/or variations and misspellings thereof." />
+          <ListItemText primary="You shall not purchase search engine or other pay per click keywords (such as Google AdWords), or domain names that use Dolphin Enterprise trademarks and/or variations and misspellings thereof." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier does not pre-screen Content and it is in their sole discretion to refuse or remove any Content that is available via the Service." />
+          <ListItemText primary="Dolphin Enterprise does not pre-screen Content and it is in their sole discretion to refuse or remove any Content that is available via the Service." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText
             primary={
               <>
                 Questions about the Terms of Service should be sent to:{' '}
-                <Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>
+                <Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>
               </>
             }
           />
@@ -122,7 +122,7 @@ const TermsOfService = () => {
       </Typography>
       <List sx={{ listStyleType: 'disc', pl: 3 }}>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="There are different payment term options available, and depending on the payment term decided with SkyRush Express Courier, the merchant has to pay on the pre-decided monthly, quarterly, half-yearly or yearly terms." />
+          <ListItemText primary="There are different payment term options available, and depending on the payment term decided with Dolphin Enterprise, the merchant has to pay on the pre-decided monthly, quarterly, half-yearly or yearly terms." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
           <ListItemText primary="The merchant has to pay within 7 days from the date of Invoice, or he/she risks the chance of closure/termination of the online store." />
@@ -131,7 +131,7 @@ const TermsOfService = () => {
           <ListItemText primary="All fees are exclusive of all state and central taxes, service, sales tax or other taxes, fees or charges now in force or enacted in the future (“Taxes”)." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier does not provide refunds." />
+          <ListItemText primary="Dolphin Enterprise does not provide refunds." />
         </ListItem>
       </List>
 
@@ -144,10 +144,10 @@ const TermsOfService = () => {
           <ListItemText primary="Once your account is cancelled all of your Content will be immediately deleted from the Service. Since deletion of all data is final please be sure that you do in fact want to cancel your account before doing so." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="We reserve the right to modify or terminate the SkyRush Express Courier service for any reason, without notice at any time." />
+          <ListItemText primary="We reserve the right to modify or terminate the Dolphin Enterprise service for any reason, without notice at any time." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="Fraud: Without limiting any other remedies, SkyRush Express Courier may suspend or terminate your account if we suspect that you (by conviction, settlement, insurance or escrow investigation, or otherwise) have engaged in fraudulent activity in connection with the Site." />
+          <ListItemText primary="Fraud: Without limiting any other remedies, Dolphin Enterprise may suspend or terminate your account if we suspect that you (by conviction, settlement, insurance or escrow investigation, or otherwise) have engaged in fraudulent activity in connection with the Site." />
         </ListItem>
       </List>
 
@@ -157,13 +157,13 @@ const TermsOfService = () => {
       </Typography>
       <List sx={{ listStyleType: 'disc', pl: 3 }}>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="Prices for using SkyRush Express Courier are subject to change upon 14 days’ notice from SkyRush Express Courier. Such notice may be provided at any time by posting the changes to the SkyRush Express Courier Site or via an announcement." />
+          <ListItemText primary="Prices for using Dolphin Enterprise are subject to change upon 14 days’ notice from Dolphin Enterprise. Such notice may be provided at any time by posting the changes to the Dolphin Enterprise Site or via an announcement." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier reserves the right at any time to modify or discontinue the Service (or any part thereof) with or without notice." />
+          <ListItemText primary="Dolphin Enterprise reserves the right at any time to modify or discontinue the Service (or any part thereof) with or without notice." />
         </ListItem>
         <ListItem sx={{ display: 'list-item' }}>
-          <ListItemText primary="SkyRush Express Courier shall not be liable to you or to any third party for any modification, price change, suspension or discontinuance of the Service." />
+          <ListItemText primary="Dolphin Enterprise shall not be liable to you or to any third party for any modification, price change, suspension or discontinuance of the Service." />
         </ListItem>
       </List>
 
@@ -179,7 +179,7 @@ const TermsOfService = () => {
           <ListItemText
             primary={
               <>
-                Without prejudice to the generality of the above, SkyRush Express Courier does not permit
+                Without prejudice to the generality of the above, Dolphin Enterprise does not permit
                 hosting of the following items:
                 <List sx={{ listStyleType: 'circle', pl: 4 }}>
                   <ListItem sx={{ display: 'list-item' }}>

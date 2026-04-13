@@ -10,7 +10,7 @@ const PolicyPages = () => {
       <Box display={'flex'} justifyContent={'center'}>
         <PageHeading
           title="Legal & Policy Information"
-          subtitle="All policies, terms, and privacy information for SkyRush Express Courier"
+          subtitle="All policies, terms, and privacy information for Dolphin Enterprise"
         />{' '}
       </Box>
 
@@ -22,7 +22,7 @@ const PolicyPages = () => {
         </Box>
         <Typography paragraph>
           • You may cancel your account at any time by emailing us at{' '}
-          <Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>.
+          <Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>.
         </Typography>
         <Typography paragraph>
           • Once your account is cancelled, all of your data and content will be permanently deleted
@@ -34,11 +34,11 @@ const PolicyPages = () => {
           invoice via email. Once that invoice has been paid, no further charges will apply.
         </Typography>
         <Typography paragraph>
-          • SkyRush Express Courier (SkyRush Express Courier Pvt Ltd) reserves the right to modify, suspend, or terminate
+          • Dolphin Enterprise (Dolphin Enterprise Pvt Ltd) reserves the right to modify, suspend, or terminate
           the Service for any reason, without prior notice at any time.
         </Typography>
         <Typography paragraph>
-          • Fraud Prevention: Without limiting any other remedies, SkyRush Express Courier may suspend or
+          • Fraud Prevention: Without limiting any other remedies, Dolphin Enterprise may suspend or
           terminate your account if we suspect that you (through conviction, settlement,
           investigation, or otherwise) have engaged in fraudulent or unlawful activity in connection
           with the Platform.
@@ -58,7 +58,7 @@ const PolicyPages = () => {
         </Box>
         <Typography paragraph>Last Updated: [Insert Date]</Typography>
         <Typography paragraph>
-          SkyRush Express Courier (SkyRush Express Courier Pvt Ltd) ("we," "our," or "us") operates the services offered
+          Dolphin Enterprise (Dolphin Enterprise Pvt Ltd) ("we," "our," or "us") operates the services offered
           via our website and related platforms (collectively, the “Platform”). Please read this
           Privacy Policy carefully before accessing or using our Platform, as continued use
           indicates your acceptance of this Policy.
@@ -159,7 +159,7 @@ const PolicyPages = () => {
           services).
           <br />
           To do so, please contact us at{' '}
-          <Link href="mailto:support@skyrushexpress.in">support@skyrushexpress.in</Link>.
+          <Link href="mailto:support@dolphinenterprise.com">support@dolphinenterprise.com</Link>.
         </Typography>
         <Typography paragraph>
           10. Third-Party Links

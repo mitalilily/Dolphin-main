@@ -215,8 +215,7 @@ export default function OtpLoginPanel() {
       <Stack direction="row" spacing={1} alignItems="center">
         <FiShield size={14} color={brand.success} />
         <Typography sx={{ color: brand.inkSoft, fontSize: '0.82rem', lineHeight: 1.6 }}>
-          OTP login uses the existing `/auth/request-otp` and `/auth/verify-otp` flow.
-        </Typography>
+    </Typography>
       </Stack>
 
       <CustomModal
