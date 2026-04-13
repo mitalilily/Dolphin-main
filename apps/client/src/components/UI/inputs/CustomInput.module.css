@@ -1,0 +1,35 @@
+.inputContainer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border: "1px solid green";
+}
+
+.customLabel {
+  color: #4b8e40;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+.customLabel:hover {
+  color: #f89a3a;
+}
+
+.required {
+  color: red;
+  margin-left: 4px;
+}
+
+.outlinedInputRoot {
+  border-radius: 12px !important;
+  background-color: #ffffff;
+  border: 1px solid rgba(75, 142, 64, 0.2);
+  box-shadow: 0 1px 4px rgba(75, 142, 64, 0.08);
+}
+
+.inputElement {
+  padding: 12px;
+  font-size: 14px;
+  color: #1a1a1a;
+  z-index: 2;
+}
