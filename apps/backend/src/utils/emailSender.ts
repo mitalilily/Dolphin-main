@@ -85,7 +85,7 @@ const sendEmail = async (
   const maskedRecipient = maskEmailForLog(to)
 
   const mailOptions: any = {
-    from: `"SkyRush Express Courier" <${EMAIL_FROM}>`,
+    from: `"Dolphin Enterprise" <${EMAIL_FROM}>`,
     to,
     subject,
     html: htmlContent,
@@ -167,7 +167,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
             letter-spacing:0.08em;
             text-transform:uppercase;
           ">
-            SkyRush Express
+            Dolphin Enterprise
           </div>
 
           <h1 style="margin:18px 0 8px; font-size:28px; line-height:1.2; font-weight:800;">
@@ -234,10 +234,10 @@ export const sendVerificationEmail = async (to: string, token: string) => {
 
           <div style="margin-top:22px; padding-top:18px; border-top:1px solid #eadfd4;">
             <p style="margin:0; font-size:12px; line-height:1.7; color:#8c7b70;">
-              Sent by SkyRush Express Courier
+              Sent by Dolphin Enterprise
             </p>
             <p style="margin:4px 0 0; font-size:12px; line-height:1.7; color:#a19185;">
-              © ${new Date().getFullYear()} SkyRush Express Courier. All rights reserved.
+              © ${new Date().getFullYear()} Dolphin Enterprise. All rights reserved.
             </p>
           </div>
         </div>
@@ -245,7 +245,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
     </div>
   `
 
-  await sendEmail(to, 'Your SkyRush Express Courier verification code', html)
+  await sendEmail(to, 'Your Dolphin Enterprise verification code', html)
 }
 
 // Employee Credentials Email
@@ -258,7 +258,7 @@ export const sendEmployeeCredentials = async (
   const html = `
     <div style="font-family: 'Segoe UI', Roboto, Arial, sans-serif; max-width: 600px; margin: auto; padding: 32px; border: 1px solid #e5e7eb; border-radius: 12px; background-color: #fafafa;">
       <div style="text-align: center; margin-bottom: 24px;">
-        <h2 style="color: #1e293b; margin: 0;">Welcome to <span style="color:#2563eb;">SkyRush Express Courier</span> 🚀</h2>
+        <h2 style="color: #1e293b; margin: 0;">Welcome to <span style="color:#2563eb;">Dolphin Enterprise</span> 🚀</h2>
         <p style="font-size: 15px; color: #64748b; margin-top: 8px;">Your employee account has been created successfully.</p>
       </div>
 
@@ -280,17 +280,17 @@ export const sendEmployeeCredentials = async (
       </div>
 
       <p style="font-size: 14px; color: #64748b; margin-top: 28px; text-align: center;">
-        You can now log in to your SkyRush Express Courier account using these credentials.<br/>
+        You can now log in to your Dolphin Enterprise account using these credentials.<br/>
         If you face any issues, please contact your administrator.
       </p>
 
       <div style="text-align: center; margin-top: 32px; font-size: 13px; color: #94a3b8;">
-        — The SkyRush Express Courier Team
+        — The Dolphin Enterprise Team
       </div>
     </div>
   `
 
-  await sendEmail(to, 'Your SkyRush Express Courier Employee Account', html)
+  await sendEmail(to, 'Your Dolphin Enterprise Employee Account', html)
 }
 const escapeHtml = (unsafe: string) =>
   unsafe
@@ -306,7 +306,7 @@ export const sendTempPasswordEmail = async (to: string, tempPassword: string) =>
   const html = `
     <div style="font-family: 'Segoe UI', Roboto, Arial, sans-serif; max-width:600px; margin:auto; padding:32px; border:1px solid #e5e7eb; border-radius:12px; background-color:#f9fafb;">
       <div style="text-align:center; margin-bottom:24px;">
-        <h2 style="color:#1e293b; margin:0;">SkyRush Express Courier Account Password Reset</h2>
+        <h2 style="color:#1e293b; margin:0;">Dolphin Enterprise Account Password Reset</h2>
         <p style="font-size:15px; color:#64748b; margin-top:8px;">
           Your account password has been reset by our team.
         </p>
@@ -326,12 +326,12 @@ export const sendTempPasswordEmail = async (to: string, tempPassword: string) =>
 
       <p style="font-size:13px; color:#94a3b8; margin-top:28px; text-align:center;">
         If you did not request this, please contact our support immediately.<br/>
-        — The SkyRush Express Courier Team
+        — The Dolphin Enterprise Team
       </p>
     </div>
   `
 
-  await sendEmail(to, 'Your Temporary SkyRush Express Courier Password', html)
+  await sendEmail(to, 'Your Temporary Dolphin Enterprise Password', html)
 }
 
 export const sendInvoiceReadyEmail = async (opts: {
@@ -397,7 +397,7 @@ export const sendInvoiceReadyEmail = async (opts: {
     </p>
 
     <div style="margin-top:22px; font-size:12px; color:#999;">
-      — SkyRush Express Courier Team
+      — Dolphin Enterprise Team
     </div>
   </div>
   `
@@ -471,7 +471,7 @@ export const sendInvoiceReminderEmail = async (opts: {
     </p>
 
     <div style="margin-top:22px; font-size:12px; color:#999;">
-      — SkyRush Express Courier Team
+      — Dolphin Enterprise Team
     </div>
   </div>
   `
@@ -510,7 +510,7 @@ export const sendKycStatusEmail = async (opts: {
       <p style="margin: 14px 0 0 0; color: #6b7280; font-size: 13px;">
         If you need help, please contact support from your dashboard.
       </p>
-      <p style="margin: 20px 0 0 0; color: #9ca3af; font-size: 12px;">— SkyRush Express Courier Team</p>
+      <p style="margin: 20px 0 0 0; color: #9ca3af; font-size: 12px;">— Dolphin Enterprise Team</p>
     </div>
   `
 

@@ -10,7 +10,7 @@
 set +e
 
 # VPS configuration
-VPS_TARGET_PATH="/var/www/delexpress/admin-dashboard/build"
+VPS_TARGET_PATH="/var/www/dolphin/admin-dashboard/build"
 
 # Get VPS connection details from argument or environment variables
 if [ -n "$1" ]; then
@@ -45,7 +45,7 @@ echo "ðŸ”¨ Running build with production environment variables..."
 
 # Set production API URL
 # React apps need REACT_APP_ prefix for environment variables
-export REACT_APP_API_BASE_URL="https://api.delexpress.in/api"
+export REACT_APP_API_BASE_URL="https://dolphin-main-production-4236.up.railway.app/api"
 
 echo "ðŸ“¡ Using production API URL: ${REACT_APP_API_BASE_URL}"
 echo ""

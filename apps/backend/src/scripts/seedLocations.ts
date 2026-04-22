@@ -65,20 +65,44 @@ async function insertBatch(rows: Row[]) {
     created_at: new Date(),
   }))
 
-  await db
-    .insert(locations)
-    .values(values)
-    .onConflictDoUpdate({
-      target: locations.pincode,
-      set: {
-        city: sql`excluded.city`,
-        state: sql`excluded.state`,
-        country: sql`excluded.country`,
-        tags: sql`excluded.tags`,
-      },
-    })
+  try {
+    await db
+      .insert(locations)
+      .values(values)
+      .onConflictDoUpdate({
+        target: locations.pincode,
+        set: {
+          city: sql`excluded.city`,
+          state: sql`excluded.state`,
+          country: sql`excluded.country`,
+          tags: sql`excluded.tags`,
+        },
+      })
 
-  console.log(`Upserted ${rows.length} rows`)
+    console.log(`Upserted ${rows.length} rows`)
+  } catch (err) {
+    console.warn(
+      `Batch upsert failed for ${rows.length} rows. Falling back to row-by-row import.`,
+      (err as Error).message,
+    )
+
+    for (const value of values) {
+      await db
+        .insert(locations)
+        .values(value)
+        .onConflictDoUpdate({
+          target: locations.pincode,
+          set: {
+            city: sql`excluded.city`,
+            state: sql`excluded.state`,
+            country: sql`excluded.country`,
+            tags: sql`excluded.tags`,
+          },
+        })
+    }
+
+    console.log(`Upserted ${rows.length} rows via fallback`)
+  }
 }
 
 async function importXlsx(filename: string) {

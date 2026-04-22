@@ -92,10 +92,10 @@ const localOrigins = [
   'http://127.0.0.1:3001',
   'http://localhost:4173',
   'http://127.0.0.1:4173',
-  'https://admin.skyrushcargo.in',
-  'https://app.skyrushcargo.in',
-  'https://skyrushcargo.in',
-  'https://www.skyrushcargo.in',
+  'https://admin.dolphinenterprises.in',
+  'https://app.dolphinenterprises.in',
+  'https://dolphinenterprises.in',
+  'https://www.dolphinenterprises.in',
 ]
 const configuredAllowedOrigins = `${process.env.CORS_ALLOWED_ORIGINS || ''},${process.env.CORS_ORIGINS || ''}`
   .split(',')
@@ -112,7 +112,7 @@ const isAllowedOrigin = (origin: string) => {
     return true
   }
 
-  return /^https:\/\/([a-z0-9-]+\.)*skyrushcargo\.in$/.test(normalizedOrigin)
+  return /^https:\/\/([a-z0-9-]+\.)*dolphinenterprises\.in$/.test(normalizedOrigin)
 }
 
 app.use(
@@ -137,14 +137,14 @@ app.use(
 app.get('/', (_req, res) => {
   res.status(200).json({
     ok: true,
-    service: 'SkyRush Express Courier backend',
+    service: 'Dolphin Enterprise backend',
   })
 })
 
 app.get('/health', (_req, res) => {
   res.status(200).json({
     ok: true,
-    service: 'SkyRush Express Courier backend',
+    service: 'Dolphin Enterprise backend',
   })
 })
 

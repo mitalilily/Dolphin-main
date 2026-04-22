@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { db, pool } from '../models/client'
 import { users } from '../models/schema/users'
 
-const ADMIN_EMAIL = 'admin@delexpress.in'
+const ADMIN_EMAIL = 'admin@dolphinenterprises.in'
 const ADMIN_PASSWORD = 'Admin@12345!'
 
 async function ensureDelExpressAdmin() {

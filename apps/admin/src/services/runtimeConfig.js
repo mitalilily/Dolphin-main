@@ -1,5 +1,5 @@
-const DEFAULT_API_BASE_URL = 'https://delexpress-backend.onrender.com/api'
-const DEFAULT_SOCKET_URL = 'https://delexpress-backend.onrender.com'
+const DEFAULT_API_BASE_URL = 'https://dolphin-main-production-4236.up.railway.app/api'
+const DEFAULT_SOCKET_URL = 'https://dolphin-main-production-4236.up.railway.app'
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
   if (!value) return null

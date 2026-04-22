@@ -1,6 +1,6 @@
 // seedAdmin.ts
 import bcrypt from 'bcryptjs'
-import { eq } from 'drizzle-orm'
+import { eq, or } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { db } from '../models/client'
 import { User } from '../models/services/userService'
@@ -19,12 +19,33 @@ export const seedAdmin = async ({
   email,
   role = 'admin',
 }: SeedAdminProps): Promise<User> => {
-  // check if user already exists
-  const existing = await db.select().from(users).where(eq(users.phone, phone))
-  if (existing.length > 0) return existing[0] as User
-
   // hash password
   const hashedPassword = await bcrypt.hash(password, 10)
+  const normalizedEmail = email?.trim().toLowerCase() || null
+
+  // check if user already exists
+  const existing = await db
+    .select()
+    .from(users)
+    .where(normalizedEmail ? or(eq(users.phone, phone), eq(users.email, normalizedEmail)) : eq(users.phone, phone))
+
+  if (existing.length > 0) {
+    const [current] = existing
+    const [updated] = await db
+      .update(users)
+      .set({
+        email: normalizedEmail ?? current.email ?? null,
+        passwordHash: hashedPassword,
+        role,
+        phoneVerified: true,
+        emailVerified: !!normalizedEmail,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, current.id))
+      .returning()
+
+    return updated as User
+  }
 
   // insert new user
   const [newUser] = await db
@@ -32,11 +53,11 @@ export const seedAdmin = async ({
     .values({
       id: uuidv4(),
       phone,
-      email: email ?? null,
+      email: normalizedEmail,
       passwordHash: hashedPassword,
       role,
       phoneVerified: true,
-      emailVerified: !!email,
+      emailVerified: !!normalizedEmail,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -47,7 +68,7 @@ export const seedAdmin = async ({
 
 seedAdmin({
   phone: '+916283315911', // valid Indian phone format
-  email: 'admin@skyrush.in', // professional-looking dev email
+  email: 'admin@dolphinenterprises.in',
   password: 'Admin@12345!', // strong password
   role: 'admin',
 })
