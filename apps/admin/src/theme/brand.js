@@ -1,0 +1,26 @@
+export const adminBrand = {
+  name: 'Dolphin Enterprise',
+  panelName: 'Dolphin Enterprise',
+  logo: '/logo/dolphin-logo-transparent.png',
+  shortLogo: '/logo/dolphin-logo.png',
+  ink: '#10324A',
+  inkSoft: '#5F7A8F',
+  page: '#FBFBFB',
+  cream: '#F7F1DF',
+  sky: '#C6E7FF',
+  aqua: '#D4F6FF',
+  accent: '#FFDDAE',
+  gold: '#F3D971',
+  line: '#DCE8F1',
+  surface: '#FFFFFF',
+  surfaceGlass: 'rgba(255,255,255,0.82)',
+  success: '#56C0A5',
+  warning: '#F59E0B',
+  danger: '#D14343',
+  shadow: '0 24px 70px rgba(15, 44, 67, 0.08)',
+  pageGradient:
+    'radial-gradient(circle at 0% 0%, rgba(249, 239, 202, 0.82), transparent 28%), radial-gradient(circle at 100% 0%, rgba(212, 246, 255, 0.62), transparent 28%), linear-gradient(180deg, #F7F1DF 0%, #FBFBFB 28%, #F5FBFF 62%, #FBFBFB 100%)',
+  surfaceGradient:
+    'linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(248,251,255,0.98) 100%)',
+  buttonGradient: 'linear-gradient(135deg, #8FD8FF 0%, #FFD8A8 100%)',
+}

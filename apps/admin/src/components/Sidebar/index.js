@@ -1,5 +1,6 @@
 import { Box } from '@chakra-ui/react'
 import React from 'react'
+import { adminBrand } from 'theme/brand'
 import SidebarContent from './SidebarContent'
 
 function Sidebar(props) {
@@ -27,7 +28,7 @@ function Sidebar(props) {
           <SidebarContent
             sidebarWidth={sidebarWidth}
             routes={routes}
-            logoText={logoText || 'SkyRush Express Courier'}
+            logoText={logoText || adminBrand.panelName}
             sidebarVariant={sidebarVariant}
           />
         </Box>

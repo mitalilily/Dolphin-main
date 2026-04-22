@@ -23,6 +23,7 @@ import { useHistory } from 'react-router-dom'
 import { DoorstepCourierScene } from '../../components/Brand/AnimatedCourierScene'
 import { loginAdmin } from '../../services/auth.service'
 import { useAuthStore } from '../../store/useAuthStore'
+import { adminBrand } from '../../theme/brand'
 
 function isTokenValid(token) {
   try {
@@ -34,21 +35,21 @@ function isTokenValid(token) {
 }
 
 function SignIn() {
-  const pageBg = useColorModeValue('#F5F0E8', '#171310')
-  const shellBg = useColorModeValue('rgba(255,252,248,0.94)', 'rgba(22, 18, 15, 0.92)')
-  const shellBorder = useColorModeValue('rgba(23,19,16,0.08)', 'rgba(255,255,255,0.12)')
+  const pageBg = useColorModeValue(adminBrand.page, '#071521')
+  const shellBg = useColorModeValue('rgba(255,255,255,0.94)', 'rgba(8, 25, 38, 0.92)')
+  const shellBorder = useColorModeValue('rgba(16,50,74,0.08)', 'rgba(255,255,255,0.12)')
   const sideBg = useColorModeValue(
-    'linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(248,242,234,0.98) 100%)',
-    'linear-gradient(180deg, rgba(22,18,15,0.96) 0%, rgba(30,24,20,0.94) 100%)',
+    'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(247,241,223,0.94) 100%)',
+    'linear-gradient(180deg, rgba(8,25,38,0.96) 0%, rgba(16,50,74,0.94) 100%)',
   )
-  const textPrimary = useColorModeValue('#171310', 'whiteAlpha.900')
-  const textSecondary = useColorModeValue('#74685D', 'whiteAlpha.700')
+  const textPrimary = useColorModeValue(adminBrand.ink, 'whiteAlpha.900')
+  const textSecondary = useColorModeValue(adminBrand.inkSoft, 'whiteAlpha.700')
   const inputBg = useColorModeValue('rgba(255,255,255,0.94)', 'rgba(38, 30, 25, 0.72)')
-  const inputBorder = useColorModeValue('rgba(23,19,16,0.12)', 'rgba(255,255,255,0.18)')
-  const iconHoverBg = useColorModeValue('rgba(23,19,16,0.06)', 'rgba(255,255,255,0.12)')
-  const chipBg = useColorModeValue('rgba(23,19,16,0.06)', 'rgba(255,255,255,0.08)')
-  const chipBorder = useColorModeValue('rgba(23,19,16,0.1)', 'rgba(255,255,255,0.14)')
-  const brand = useColorModeValue('#171310', '#F3E9DE')
+  const inputBorder = useColorModeValue('rgba(16,50,74,0.12)', 'rgba(255,255,255,0.18)')
+  const iconHoverBg = useColorModeValue('rgba(16,50,74,0.06)', 'rgba(255,255,255,0.12)')
+  const chipBg = useColorModeValue('rgba(198,231,255,0.22)', 'rgba(255,255,255,0.08)')
+  const chipBorder = useColorModeValue('rgba(16,50,74,0.1)', 'rgba(255,255,255,0.14)')
+  const brand = useColorModeValue(adminBrand.ink, '#F3E9DE')
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -127,8 +128,8 @@ function SignIn() {
         position="absolute"
         inset="0"
         bgImage={useColorModeValue(
-          'radial-gradient(circle at 10% 8%, rgba(216,201,183,0.34) 0%, transparent 38%), radial-gradient(circle at 94% 2%, rgba(217,121,67,0.14) 0%, transparent 28%)',
-          'radial-gradient(circle at 10% 8%, rgba(255,255,255,0.1) 0%, transparent 38%), radial-gradient(circle at 94% 2%, rgba(217,121,67,0.12) 0%, transparent 28%)',
+          'radial-gradient(circle at 10% 8%, rgba(249,239,202,0.5) 0%, transparent 38%), radial-gradient(circle at 94% 2%, rgba(198,231,255,0.32) 0%, transparent 28%)',
+          'radial-gradient(circle at 10% 8%, rgba(255,255,255,0.1) 0%, transparent 38%), radial-gradient(circle at 94% 2%, rgba(198,231,255,0.12) 0%, transparent 28%)',
         )}
       />
 
@@ -144,7 +145,7 @@ function SignIn() {
         borderColor={shellBorder}
         borderRadius={{ base: '24px', lg: '32px' }}
         boxShadow={useColorModeValue(
-          '0 28px 72px rgba(36,26,27,0.12)',
+          '0 28px 72px rgba(15,44,67,0.12)',
           '0 28px 72px rgba(0,0,0,0.38)',
         )}
         overflow="hidden"
@@ -163,7 +164,7 @@ function SignIn() {
           minH={{ base: '240px', '2xl': 'unset' }}
           position="relative"
           overflow="hidden"
-          borderRight={{ base: 'none', '2xl': '1px solid rgba(23,19,16,0.08)' }}
+          borderRight={{ base: 'none', '2xl': '1px solid rgba(16,50,74,0.08)' }}
         >
           <VStack align="flex-start" spacing={4} position="relative" zIndex="1">
             <HStack spacing={2.5} flexWrap="wrap">
@@ -186,8 +187,8 @@ function SignIn() {
             <HStack spacing={3} align="center">
               <Box
                 as="img"
-                src="/skyrush-logo.png"
-                alt="SkyRush Express Courier"
+                src={adminBrand.logo}
+                alt={adminBrand.panelName}
                 h="62px"
                 w="224px"
                 objectFit="contain"
@@ -211,8 +212,8 @@ function SignIn() {
             </Heading>
 
             <Text color={textSecondary} fontSize="sm" maxW="420px" lineHeight="1.8">
-              Review orders, monitor activity, and manage operations from a cleaner SkyRush admin
-              workspace with stronger hierarchy and a more editorial rhythm.
+              Review orders, monitor activity, and manage operations from a cleaner Dolphin admin
+              workspace with the same brand language and shared backend wiring as the client.
             </Text>
           </VStack>
         </Flex>
@@ -234,8 +235,8 @@ function SignIn() {
                 <HStack spacing={3} align="center" mb={4}>
                   <Box
                     as="img"
-                    src="/skyrush-logo.png"
-                    alt="SkyRush Express Courier"
+                    src={adminBrand.logo}
+                    alt={adminBrand.panelName}
                     h="46px"
                     w="168px"
                     objectFit="contain"
@@ -295,7 +296,7 @@ function SignIn() {
                   _hover={{ borderColor: 'brand.400' }}
                   _focus={{
                     borderColor: 'brand.500',
-                    boxShadow: '0 0 0 4px rgba(23,19,16,0.08)',
+                    boxShadow: '0 0 0 4px rgba(198,231,255,0.34)',
                   }}
                 />
               </FormControl>
@@ -318,7 +319,7 @@ function SignIn() {
                     _hover={{ borderColor: 'brand.400' }}
                     _focus={{
                       borderColor: 'brand.500',
-                      boxShadow: '0 0 0 4px rgba(23,19,16,0.08)',
+                      boxShadow: '0 0 0 4px rgba(198,231,255,0.34)',
                     }}
                   />
                   <InputRightElement h="54px" pr="10px">

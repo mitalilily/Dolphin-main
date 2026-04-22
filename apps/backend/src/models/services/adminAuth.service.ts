@@ -9,13 +9,21 @@ import { findUserByEmail, findUserById, saveRefreshToken } from "./userService";
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 export const loginAdmin = async (email: string, password: string) => {
-  const user = await findUserByEmail(email);
+  const normalizedEmail = email.trim().toLowerCase();
+  const user = await findUserByEmail(normalizedEmail);
 
   if (!user || user.role !== "admin") {
     throw new Error("Unauthorized");
   }
 
-  const isMatch = await bcrypt.compare(password, user.passwordHash!);
+  if (!user.passwordHash) {
+    console.error(
+      `[adminAuth] Admin user ${normalizedEmail} exists but is missing a password hash`,
+    );
+    throw new Error("Unauthorized");
+  }
+
+  const isMatch = await bcrypt.compare(password, user.passwordHash);
   if (!isMatch) {
     throw new Error("Invalid credentials");
   }

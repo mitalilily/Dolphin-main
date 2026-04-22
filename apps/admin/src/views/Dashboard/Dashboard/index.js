@@ -154,7 +154,7 @@ export default function Dashboard() {
                 <HStack justify="space-between" flexWrap="wrap" spacing={3}>
                   <VStack align="flex-start" spacing={1}>
                     <Text fontSize="xs" fontWeight="800" letterSpacing="0.16em" textTransform="uppercase" color="brand.500">
-                      SkyRush operations deck
+                      Dolphin operations deck
                     </Text>
                     <Heading size="lg" color={textPrimary} letterSpacing="-0.04em">
                       Run admin operations from a clearer top layer.

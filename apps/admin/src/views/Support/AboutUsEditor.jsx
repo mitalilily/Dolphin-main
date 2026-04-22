@@ -50,8 +50,8 @@ const AboutUsEditor = () => {
 
   const handleLoadTemplate = () => {
     const templateHtml = `
-      <h2>About SkyRush Express Courier</h2>
-      <p><strong>SkyRush Express Courier</strong> is a modern shipping operations platform built for ecommerce sellers who want faster dispatch, lower courier costs, and a smoother post-purchase experience.</p>
+      <h2>About Dolphin Enterprise</h2>
+      <p><strong>Dolphin Enterprise</strong> is a modern shipping operations platform built for ecommerce sellers who want faster dispatch, lower courier costs, and a smoother post-purchase experience.</p>
 
       <h3>What We Do</h3>
       <ul>
@@ -68,8 +68,8 @@ const AboutUsEditor = () => {
       </ul>
 
       <h3>Contact</h3>
-      <p><strong>Email:</strong> support@skyrushexpress.in</p>
-      <p><strong>Website:</strong> www.skyrushexpress.in</p>
+      <p><strong>Email:</strong> support@dolphinenterprise.com</p>
+      <p><strong>Website:</strong> www.dolphinenterprise.com</p>
       <p><strong>Message:</strong> Ship smarter. Save more on every order.</p>
     `
 
@@ -127,7 +127,7 @@ const AboutUsEditor = () => {
     if (!validateForm()) return
 
     try {
-      await updatePageMutation.mutateAsync({ title: 'About Us - SkyRush Express Courier', content })
+      await updatePageMutation.mutateAsync({ title: 'About Us - Dolphin Enterprise', content })
       toast({
         title: 'About Us content saved',
         status: 'success',
@@ -175,7 +175,7 @@ const AboutUsEditor = () => {
             </HStack>
             <HStack spacing={3} mt={1}>
               <Text fontSize="sm" color="gray.500">
-                Manage the SkyRush Express Courier story shown on the customer support screen.
+                Manage the Dolphin Enterprise story shown on the customer support screen.
               </Text>
               {page?.updated_at && (
                 <Badge colorScheme="green" variant="subtle" fontSize="0.7rem">
@@ -193,7 +193,7 @@ const AboutUsEditor = () => {
               onClick={handleLoadTemplate}
               isDisabled={isLoading || updatePageMutation.isLoading}
             >
-              Load SkyRush Express Courier Copy
+              Load Dolphin Enterprise Copy
             </Button>
             <Button
               colorScheme="brand"

@@ -1,6 +1,6 @@
 ## Summary
 
-Describe the issue clearly and include the affected SkyRush Express Courier area.
+Describe the issue clearly and include the affected Dolphin Enterprise admin area.
 
 ## Steps To Reproduce
 

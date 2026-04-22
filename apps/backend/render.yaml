@@ -9,9 +9,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: delexpress-postgres
-          property: connectionString
+        sync: false
+        # Set this to the full Railway Postgres connection string
+        # Example: postgresql://user:password@host:5432/database?sslmode=require
       - key: CORS_ORIGINS
         sync: false
       - key: ACCESS_TOKEN_SECRET

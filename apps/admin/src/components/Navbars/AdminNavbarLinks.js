@@ -22,6 +22,7 @@ import PropTypes from 'prop-types'
 import { useRef } from 'react'
 import routes from 'routes.js'
 import { useAuthStore } from 'store/useAuthStore'
+import { adminBrand } from 'theme/brand'
 import NotificationMenu from './NotificationMenu'
 
 export default function HeaderLinks({ variant, children, fixed, secondary, onOpen, ...rest }) {
@@ -126,7 +127,7 @@ export default function HeaderLinks({ variant, children, fixed, secondary, onOpe
                       Confirm Logout
                     </Text>
                     <Text fontSize="sm" color={styles.searchIcon}>
-                      You will leave the SkyRush Express Courier admin workspace.
+                      You will leave the Dolphin admin workspace.
                     </Text>
                   </Box>
                   <Flex justify="flex-end" gap="8px">
@@ -155,7 +156,7 @@ export default function HeaderLinks({ variant, children, fixed, secondary, onOpe
         </Popover>
       ) : null}
 
-      <SidebarResponsive logoText={rest.logoText || 'SkyRush Express Courier'} secondary={secondary} routes={routes} {...rest} />
+      <SidebarResponsive logoText={rest.logoText || adminBrand.panelName} secondary={secondary} routes={routes} {...rest} />
 
       <IconButton
         aria-label="Settings"

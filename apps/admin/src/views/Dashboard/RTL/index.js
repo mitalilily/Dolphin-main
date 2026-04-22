@@ -8,7 +8,6 @@ import {
 } from "@chakra-ui/react";
 // assets
 import peopleImage from "assets/img/people-image.png";
-import logoChakra from "assets/svg/logo-white.svg";
 import BarChart from "components/Charts/BarChart";
 import LineChart from "components/Charts/LineChart";
 // Custom icons
@@ -27,6 +26,8 @@ import OrdersOverview from "../Dashboard/components/OrdersOverview";
 import Projects from "../Dashboard/components/Projects";
 import SalesOverview from "../Dashboard/components/SalesOverview";
 import WorkWithTheRockets from "../Dashboard/components/WorkWithTheRockets";
+
+const logoChakra = '/logo/dolphin-logo-transparent.png'
 
 export default function Dashboard() {
   // Chakra Color Mode
@@ -68,7 +69,7 @@ export default function Dashboard() {
         gap='24px'>
         <BuiltByDevelopers
           title={"Ø¨Ù†Ø§Ù‡Ø§ Ø§Ù„Ù…Ø·ÙˆØ±ÙˆÙ†"}
-          name={"Ù„ÙˆØ­Ø© Ù…Ø¹Ù„ÙˆÙ…Ø§Øª SkyRush Express Courier"}
+          name={"Ù„ÙˆØ­Ø© Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Dolphin Enterprise"}
           description={
             "Ù…Ù† Ø§Ù„Ø£Ù„ÙˆØ§Ù† ÙˆØ§Ù„Ø¨Ø·Ø§Ù‚Ø§Øª ÙˆØ§Ù„Ø·Ø¨Ø§Ø¹Ø© Ø¥Ù„Ù‰ Ø§Ù„Ø¹Ù†Ø§ØµØ± Ø§Ù„Ù…Ø¹Ù‚Ø¯Ø© ØŒ Ø³ØªØ¬Ø¯ Ø§Ù„ÙˆØ«Ø§Ø¦Ù‚ Ø§Ù„ÙƒØ§Ù…Ù„Ø©."
           }

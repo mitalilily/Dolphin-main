@@ -68,8 +68,7 @@ export const useAssignUserPlan = () => {
         duration: 3000,
         isClosable: true,
       })
-      // optional: invalidate queries to refetch updated user data
-      queryClient.invalidateQueries(['userInfo'])
+      queryClient.invalidateQueries({ queryKey: ['userInfo'] })
     },
     onError: (error) => {
       toast({

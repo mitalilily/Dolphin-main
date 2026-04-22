@@ -4,6 +4,7 @@ import PropTypes from 'prop-types'
 import React from 'react'
 import { NavLink } from 'react-router-dom'
 import routes from 'routes.js'
+import { adminBrand } from 'theme/brand'
 
 const navLinks = [
   { label: 'Dashboard', to: '/admin/dashboard' },
@@ -14,14 +15,14 @@ const navLinks = [
 export default function AuthNavbar(props) {
   const { logoText, secondary, ...rest } = props
 
-  const defaultMainText = useColorModeValue('#171310', 'gray.100')
-  const defaultMutedText = useColorModeValue('#74685D', 'gray.400')
-  const defaultNavbarBg = useColorModeValue('rgba(255,252,248,0.94)', 'rgba(22,18,15,0.94)')
-  const defaultNavbarBorder = useColorModeValue('1px solid rgba(23,19,16,0.08)', '1px solid rgba(255,255,255,0.12)')
-  const defaultNavbarShadow = useColorModeValue('0 18px 36px rgba(23, 19, 16, 0.1)', '0 18px 36px rgba(0, 0, 0, 0.42)')
-  const navShellBg = useColorModeValue('rgba(255,255,255,0.72)', 'rgba(255,255,255,0.06)')
-  const navShellBorder = useColorModeValue('rgba(23,19,16,0.08)', 'rgba(255,255,255,0.12)')
-  const navHoverBg = useColorModeValue('rgba(217,121,67,0.12)', 'rgba(255,255,255,0.08)')
+  const defaultMainText = useColorModeValue(adminBrand.ink, 'gray.100')
+  const defaultMutedText = useColorModeValue(adminBrand.inkSoft, 'gray.400')
+  const defaultNavbarBg = useColorModeValue('rgba(255,255,255,0.9)', 'rgba(8,25,38,0.94)')
+  const defaultNavbarBorder = useColorModeValue('1px solid rgba(16,50,74,0.08)', '1px solid rgba(255,255,255,0.12)')
+  const defaultNavbarShadow = useColorModeValue('0 18px 36px rgba(15,44,67,0.1)', '0 18px 36px rgba(0, 0, 0, 0.42)')
+  const navShellBg = useColorModeValue('rgba(247,241,223,0.72)', 'rgba(255,255,255,0.06)')
+  const navShellBorder = useColorModeValue('rgba(16,50,74,0.08)', 'rgba(255,255,255,0.12)')
+  const navHoverBg = useColorModeValue('rgba(198,231,255,0.38)', 'rgba(255,255,255,0.08)')
   const mainText = secondary ? 'white' : defaultMainText
   const mutedText = secondary ? 'whiteAlpha.700' : defaultMutedText
   const navbarBg = secondary ? 'none' : defaultNavbarBg
@@ -49,13 +50,13 @@ export default function AuthNavbar(props) {
     >
       <Flex w="100%" justifyContent={{ base: 'start', lg: 'space-between' }} align="center" gap={4}>
         <Link href={`${process.env.PUBLIC_URL}/#/`} display="flex" alignItems="center" color={mainText}>
-          <Box as="img" src="/skyrush-logo.png" alt="SkyRush Express Courier" h="30px" w="118px" objectFit="contain" me="10px" />
+          <Box as="img" src={adminBrand.logo} alt={adminBrand.panelName} h="34px" w="126px" objectFit="contain" me="10px" />
           <Box display={{ base: 'none', md: 'block' }}>
             <Text fontSize="xs" letterSpacing="0.16em" textTransform="uppercase" fontWeight="800" color="secondary.500">
               Admin Portal
             </Text>
             <Text fontSize="sm" color={mutedText} fontWeight="700">
-              Operations workspace
+              Unified ops workspace
             </Text>
           </Box>
         </Link>
@@ -89,7 +90,7 @@ export default function AuthNavbar(props) {
         </HStack>
 
         <Box ms={{ base: 'auto', lg: '0px' }} display={{ base: 'flex', lg: 'none' }}>
-          <SidebarResponsive logoText={logoText || 'SkyRush Express Courier'} secondary={secondary} routes={routes} {...rest} />
+          <SidebarResponsive logoText={logoText || adminBrand.panelName} secondary={secondary} routes={routes} {...rest} />
         </Box>
 
         <Link href="/auth/signin" display={{ base: 'none', lg: 'block' }}>

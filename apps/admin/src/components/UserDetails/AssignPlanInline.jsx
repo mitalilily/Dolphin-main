@@ -27,7 +27,7 @@ const AssignPlanInline = ({ userId, currentPlanId }) => {
         duration: 4000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['user', userId]) // refresh user data
+      queryClient.invalidateQueries({ queryKey: ['userInfo', userId] })
     },
     onError: (err) => {
       toast({

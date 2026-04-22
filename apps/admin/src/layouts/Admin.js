@@ -15,6 +15,7 @@ import FixedPlugin from '../components/FixedPlugin/FixedPlugin'
 import MainPanel from '../components/Layout/MainPanel'
 import PanelContainer from '../components/Layout/PanelContainer'
 import PanelContent from '../components/Layout/PanelContent'
+import { adminBrand } from '../theme/brand'
 
 export default function Dashboard(props) {
   const { ...rest } = props
@@ -83,12 +84,12 @@ export default function Dashboard(props) {
 
   return (
     <ChakraProvider theme={theme} resetCss={false}>
-      <Sidebar
-        routes={routes}
-        logoText={'SkyRush Express Courier'}
-        sidebarVariant={sidebarVariant}
-        sidebarWidth={sidebarWidth}
-        {...rest}
+        <Sidebar
+          routes={routes}
+          logoText={adminBrand.panelName}
+          sidebarVariant={sidebarVariant}
+          sidebarWidth={sidebarWidth}
+          {...rest}
       />
 
       <MainPanel
@@ -101,7 +102,7 @@ export default function Dashboard(props) {
         <Portal>
           <AdminNavbar
             onOpen={onOpen}
-            logoText={'SkyRush Express Courier'}
+            logoText={adminBrand.panelName}
             brandText={getActiveRoute(routes)}
             secondary={getActiveNavbar(routes)}
             fixed={fixed}

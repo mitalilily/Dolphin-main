@@ -1,18 +1,15 @@
 import axios from 'axios'
+import { getAdminApiBaseUrl } from './runtimeConfig'
 
-const isLocalhost =
-  typeof window !== 'undefined' && ['localhost', '127.0.0.1'].includes(window.location.hostname)
-
-const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL ||
-  (isLocalhost ? 'http://127.0.0.1:5002/api' : 'https://delexpress-backend.onrender.com/api')
+const API_BASE_URL = getAdminApiBaseUrl()
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // only if using cookies
+  withCredentials: true,
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Request interceptor: attach access token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken')
   if (token && config.headers) {
@@ -21,16 +18,15 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Response interceptor: auto-refresh token on 401
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
 
-    // Prevent infinite loops
     if (
       error.response?.status === 401 &&
-      !originalRequest._retry &&
+      !originalRequest?._retry &&
+      !originalRequest?.url?.includes('/auth/refresh-token') &&
       localStorage.getItem('refreshToken')
     ) {
       originalRequest._retry = true
@@ -42,7 +38,7 @@ api.interceptors.response.use(
           { refreshToken },
           {
             headers: {
-              'x-refresh-token': refreshToken, // ✅ Send in header for better security
+              'x-refresh-token': refreshToken,
             },
           },
         )
@@ -50,35 +46,30 @@ api.interceptors.response.use(
         const newAccessToken = res.data.accessToken
         const newRefreshToken = res.data.refreshToken
 
-        // Save tokens
         localStorage.setItem('accessToken', newAccessToken)
         localStorage.setItem('refreshToken', newRefreshToken)
 
-        // Update Zustand store - import it dynamically to avoid circular dependencies
         import('../store/useAuthStore').then(({ useAuthStore }) => {
           const userId = localStorage.getItem('userId')
           useAuthStore.getState().login(newAccessToken, userId, newRefreshToken)
         })
 
-        // Retry original request with new access token
         originalRequest.headers.Authorization = `Bearer ${newAccessToken}`
         return api(originalRequest)
       } catch (refreshErr) {
-        console.error('❌ Refresh token failed:', refreshErr)
+        console.error('Refresh token failed:', refreshErr)
         localStorage.removeItem('accessToken')
         localStorage.removeItem('refreshToken')
         localStorage.removeItem('userId')
 
-        // Update Zustand store
         import('../store/useAuthStore').then(({ useAuthStore }) => {
           useAuthStore.getState().logout()
         })
 
-        window.location.href = '/auth/signin' // Force logout
+        window.location.href = '/auth/signin'
       }
     }
 
-    // Reject if not handled
     return Promise.reject(error)
   },
 )

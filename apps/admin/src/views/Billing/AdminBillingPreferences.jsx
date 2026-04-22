@@ -25,6 +25,7 @@ import {
   adminApplyBillingPreferenceToAll,
   adminUpdateUserBillingPreference,
 } from 'services/billingPreferences.service'
+import { adminBrand } from 'theme/brand'
 import { getPresignedDownloadUrls } from 'services/upload.service'
 
 export default function AdminBillingPreferences() {
@@ -497,7 +498,7 @@ export default function AdminBillingPreferences() {
               <Box>
                 <FormLabel>Issuer Name</FormLabel>
                 <Input
-                  placeholder="SkyRush Express Courier"
+                  placeholder={adminBrand.panelName}
                   value={issuerForm.brandName}
                   onChange={(e) => handleIssuerFieldChange('brandName', e.target.value)}
                 />

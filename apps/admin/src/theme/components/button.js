@@ -28,6 +28,8 @@ export const buttonStyles = {
       baseStyle: {
         borderRadius: '999px',
         fontWeight: '700',
+        transitionProperty: 'transform, background-color, border-color, box-shadow',
+        transitionDuration: '180ms',
         _focus: {
           boxShadow: 'none',
         },

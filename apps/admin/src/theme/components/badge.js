@@ -1,18 +1,18 @@
-import { baseStyle } from "@chakra-ui/react";
-
 export const badgeStyles = {
-    components: {
-        Badge: {
-            sizes: {
-                md: {
-                    width: "65px",
-                    height: "25px"
-                }
-            },
-            baseStyle: {
-                textTransform: "capitalize"
-            }
-
-        }
-    }
+  components: {
+    Badge: {
+      sizes: {
+        md: {
+          px: '10px',
+          minH: '26px',
+        },
+      },
+      baseStyle: {
+        textTransform: 'none',
+        borderRadius: '999px',
+        fontWeight: '700',
+        letterSpacing: '0.01em',
+      },
+    },
+  },
 }

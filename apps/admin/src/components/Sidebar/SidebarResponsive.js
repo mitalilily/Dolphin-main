@@ -16,6 +16,7 @@ import {
 import IconBox from 'components/Icons/IconBox'
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { adminBrand } from 'theme/brand'
 
 function SidebarResponsive(props) {
   const location = useLocation()
@@ -23,13 +24,13 @@ function SidebarResponsive(props) {
 
   const activeRoute = (routeName) => (location.pathname === routeName ? 'active' : '')
 
-  const drawerBg = useColorModeValue('rgba(255,251,245,0.98)', 'rgba(16, 24, 40, 0.98)')
-  const activeBg = useColorModeValue('rgba(10, 78, 163, 0.12)', 'rgba(143, 212, 255, 0.16)')
-  const hoverBg = useColorModeValue('rgba(245, 124, 0, 0.12)', 'rgba(255, 255, 255, 0.08)')
+  const drawerBg = useColorModeValue('rgba(255,255,255,0.98)', 'rgba(16, 24, 40, 0.98)')
+  const activeBg = useColorModeValue('rgba(198,231,255,0.24)', 'rgba(143, 212, 255, 0.16)')
+  const hoverBg = useColorModeValue('rgba(255,221,174,0.22)', 'rgba(255, 255, 255, 0.08)')
   const textColor = useColorModeValue('gray.700', 'gray.100')
   const iconColor = useColorModeValue('gray.500', 'gray.300')
-  const activeTextColor = '#0A4EA3'
-  const dividerColor = useColorModeValue('rgba(12, 59, 128, 0.1)', 'rgba(143, 212, 255, 0.18)')
+  const activeTextColor = adminBrand.ink
+  const dividerColor = useColorModeValue('rgba(16, 50, 74, 0.1)', 'rgba(143, 212, 255, 0.18)')
   const hamburgerSurface = useColorModeValue('rgba(255,255,255,0.72)', 'rgba(16, 24, 40, 0.82)')
   const hamburgerBorder = useColorModeValue('rgba(12,59,128,0.12)', 'rgba(255,255,255,0.12)')
   const defaultHamburgerColor = useColorModeValue('gray.700', 'gray.200')
@@ -67,7 +68,7 @@ function SidebarResponsive(props) {
               borderRadius="18px"
               w="100%"
               border="1px solid"
-              borderColor={isActive ? 'rgba(10, 78, 163, 0.2)' : 'transparent'}
+              borderColor={isActive ? 'rgba(198,231,255,0.4)' : 'transparent'}
               _hover={{ bg: hoverBg, transform: 'translateX(2px)' }}
               _active={{ bg: 'inherit', transform: 'none' }}
               _focus={{ boxShadow: 'none' }}
@@ -75,7 +76,7 @@ function SidebarResponsive(props) {
             >
               <Flex align="center">
                 <IconBox
-                  bg={isActive ? 'rgba(10, 78, 163, 0.14)' : 'rgba(10, 78, 163, 0.06)'}
+                  bg={isActive ? 'rgba(198,231,255,0.48)' : 'rgba(198,231,255,0.18)'}
                   color={isActive ? activeTextColor : iconColor}
                   h="34px"
                   w="34px"
@@ -100,7 +101,7 @@ function SidebarResponsive(props) {
   const brand = (
     <Box pt="26px" mb="12px">
       <Flex align="center" justify="center" gap="10px" mb="18px" fontWeight="bold" direction="column">
-        <Box as="img" src="/skyrush-logo.png" alt="SkyRush Express Courier" h="42px" w="168px" objectFit="contain" />
+        <Box as="img" src={adminBrand.logo} alt={adminBrand.panelName} h="44px" w="168px" objectFit="contain" />
         <Text fontSize="xs" color={textColor} fontWeight="700" textTransform="uppercase" letterSpacing="0.16em">
           {logoText}
         </Text>
@@ -138,8 +139,8 @@ function SidebarResponsive(props) {
           maxW="296px"
           borderRadius="0 26px 26px 0"
           bg={drawerBg}
-          borderRight="1px solid rgba(12,59,128,0.08)"
-          boxShadow="0 28px 56px rgba(36,26,27,0.16)"
+          borderRight="1px solid rgba(16,50,74,0.08)"
+          boxShadow="0 28px 56px rgba(15,44,67,0.16)"
         >
           <DrawerCloseButton _focus={{ boxShadow: 'none' }} color={textColor} />
           <DrawerBody px="14px" pt="2">

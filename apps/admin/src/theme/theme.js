@@ -1,4 +1,5 @@
 import { extendTheme } from '@chakra-ui/react'
+import { adminBrand } from './brand'
 import { CardComponent } from './additions/card/Card'
 import { CardBodyComponent } from './additions/card/CardBody'
 import { CardHeaderComponent } from './additions/card/CardHeader'
@@ -13,20 +14,20 @@ import { breakpoints } from './foundations/breakpoints'
 import { globalStyles } from './styles'
 
 const fieldBase = {
-  borderRadius: '18px',
-  borderColor: 'rgba(12,59,128,0.12)',
-  bg: 'rgba(255,255,255,0.72)',
+  borderRadius: '20px',
+  borderColor: 'rgba(16,50,74,0.12)',
+  bg: 'rgba(255,255,255,0.88)',
   fontWeight: '600',
   _placeholder: {
     color: 'gray.500',
   },
   _hover: {
-    borderColor: 'rgba(12,59,128,0.22)',
+    borderColor: 'rgba(16,50,74,0.22)',
   },
   _focusVisible: {
     borderColor: 'brand.500',
-    boxShadow: '0 0 0 4px rgba(10, 78, 163, 0.12)',
-    bg: 'rgba(255,255,255,0.9)',
+    boxShadow: '0 0 0 4px rgba(198, 231, 255, 0.34)',
+    bg: 'rgba(255,255,255,0.94)',
   },
 }
 
@@ -34,7 +35,7 @@ const dividerStyles = {
   components: {
     Divider: {
       baseStyle: {
-        borderColor: 'rgba(12,59,128,0.12)',
+        borderColor: 'rgba(16,50,74,0.08)',
         borderWidth: '1px',
       },
       defaultProps: {
@@ -54,7 +55,7 @@ const componentOverrides = {
         filled: {
           field: {
             ...fieldBase,
-            bg: 'rgba(255,248,240,0.92)',
+            bg: 'rgba(255,255,255,0.9)',
           },
         },
       },
@@ -111,7 +112,7 @@ const componentOverrides = {
                 fontWeight: '800',
                 fontSize: '11px',
                 color: 'gray.600',
-                borderColor: 'rgba(12,59,128,0.12)',
+                borderColor: 'rgba(16,50,74,0.1)',
                 bg: 'transparent',
                 pb: '10px',
               },
@@ -120,8 +121,8 @@ const componentOverrides = {
           tbody: {
             tr: {
               td: {
-                bg: 'rgba(255,255,255,0.78)',
-                borderColor: 'rgba(12,59,128,0.08)',
+                bg: 'rgba(255,255,255,0.9)',
+                borderColor: 'rgba(16,50,74,0.08)',
                 fontSize: '14px',
                 color: 'gray.800',
                 py: '16px',
@@ -150,15 +151,15 @@ const componentOverrides = {
           _selected: {
             color: 'gray.900',
             bg: 'rgba(255,255,255,0.78)',
-            boxShadow: '0 12px 28px rgba(36,26,27,0.08)',
+            boxShadow: adminBrand.shadow,
           },
         },
         tablist: {
           p: '6px',
           borderRadius: '999px',
-          bg: 'rgba(255,248,240,0.72)',
-          border: '1px solid rgba(12,59,128,0.08)',
-          boxShadow: '0 14px 28px rgba(36,26,27,0.06)',
+          bg: 'rgba(255,255,255,0.72)',
+          border: '1px solid rgba(16,50,74,0.08)',
+          boxShadow: '0 14px 28px rgba(15,44,67,0.06)',
         },
       },
     },
@@ -167,27 +168,27 @@ const componentOverrides = {
         dialog: {
           borderRadius: '30px',
           borderWidth: '1px',
-          borderColor: 'rgba(12,59,128,0.12)',
-          boxShadow: '0 34px 72px rgba(36,26,27,0.18)',
-          bg: 'rgba(255, 251, 246, 0.98)',
+          borderColor: 'rgba(16,50,74,0.12)',
+          boxShadow: '0 34px 72px rgba(15,44,67,0.18)',
+          bg: 'rgba(255, 255, 255, 0.98)',
           overflow: 'hidden',
           backdropFilter: 'blur(16px)',
         },
         header: {
           fontWeight: '800',
-          fontFamily: "'Plus Jakarta Sans', 'Barlow', sans-serif",
-          borderBottom: '1px solid rgba(12,59,128,0.08)',
+          fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+          borderBottom: '1px solid rgba(16,50,74,0.08)',
           pb: '18px',
         },
         body: {
           py: '20px',
         },
         footer: {
-          borderTop: '1px solid rgba(12,59,128,0.08)',
+          borderTop: '1px solid rgba(16,50,74,0.08)',
           pt: '18px',
         },
         overlay: {
-          bg: 'rgba(20, 25, 35, 0.5)',
+          bg: 'rgba(16, 50, 74, 0.32)',
           backdropFilter: 'blur(10px)',
         },
       },
@@ -208,8 +209,8 @@ const componentOverrides = {
     },
   },
   fonts: {
-    heading: "'Plus Jakarta Sans', 'Barlow', 'Segoe UI', sans-serif",
-    body: "'Barlow', 'Segoe UI', sans-serif",
+    heading: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+    body: "'Poppins', ui-sans-serif, system-ui, sans-serif",
   },
 }
 

@@ -14,9 +14,10 @@ import {
   useColorModeValue,
 } from '@chakra-ui/react'
 import React from 'react'
+import { adminBrand } from '../../theme/brand'
 
 function SignUp() {
-  const pageBg = useColorModeValue('#F4F8FF', '#081F45')
+  const pageBg = useColorModeValue(adminBrand.page, '#081F45')
   const shellBg = useColorModeValue('rgba(255,255,255,0.92)', 'rgba(7, 28, 68, 0.9)')
   const shellBorder = useColorModeValue('rgba(10,78,163,0.12)', 'rgba(26,166,247,0.18)')
   const heroBg = useColorModeValue(
@@ -27,8 +28,8 @@ function SignUp() {
   const textSecondary = useColorModeValue('#5A6B84', 'whiteAlpha.700')
   const inputBg = useColorModeValue('rgba(255,255,255,0.92)', 'rgba(7, 23, 54, 0.74)')
   const inputBorder = useColorModeValue('rgba(10,78,163,0.18)', 'rgba(26,166,247,0.2)')
-  const brand = useColorModeValue('#0A4EA3', '#8FD4FF')
-  const accent = useColorModeValue('#F57C00', '#FFB547')
+  const brand = useColorModeValue(adminBrand.ink, '#8FD4FF')
+  const accent = useColorModeValue(adminBrand.accent, '#FFB547')
 
   return (
     <Flex
@@ -76,7 +77,7 @@ function SignUp() {
           borderRight={{ base: 'none', lg: '1px solid rgba(10,78,163,0.08)' }}
         >
           <VStack align="flex-start" spacing={5} position="relative" zIndex="1">
-            <Box as="img" src="/skyrush-logo.png" alt="SkyRush Express Courier" h="62px" w="224px" objectFit="contain" />
+            <Box as="img" src={adminBrand.logo} alt={adminBrand.panelName} h="62px" w="224px" objectFit="contain" />
             <Heading
               fontFamily="'Barlow', 'Plus Jakarta Sans', sans-serif"
               fontSize={{ base: '3xl', md: '5xl' }}
@@ -90,8 +91,8 @@ function SignUp() {
               </Text>
             </Heading>
             <Text color={textSecondary} fontSize="sm" maxW="360px" lineHeight="1.8">
-              Create a SkyRush Express Courier workspace for teams that need cleaner shipment
-              control, billing visibility, and faster daily operations.
+              Create a Dolphin admin workspace for teams that need cleaner shipment control,
+              billing visibility, and faster daily operations.
             </Text>
           </VStack>
 
@@ -138,7 +139,7 @@ function SignUp() {
                   Create your admin workspace
                 </Heading>
                 <Text mt={2} color={textSecondary} fontSize="sm" lineHeight="1.8">
-                  Use this setup form to onboard your SkyRush operations team.
+                  Use this setup form to onboard your Dolphin operations team.
                 </Text>
               </Box>
 
@@ -161,7 +162,7 @@ function SignUp() {
                     Company
                   </FormLabel>
                   <Input
-                    placeholder="SkyRush operations"
+                    placeholder="Dolphin operations"
                     h="52px"
                     borderRadius="18px"
                     bg={inputBg}
@@ -216,7 +217,7 @@ function SignUp() {
                 _hover={{ bg: 'brand.600' }}
                 _active={{ bg: 'brand.700' }}
               >
-                Start with SkyRush
+                Start with Dolphin
               </Button>
 
               <Text color={textSecondary} fontWeight="medium" textAlign="center">

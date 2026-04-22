@@ -1,7 +1,7 @@
 const PanelContainer = {
   baseStyle: {
-    p: { base: '20px 12px', md: '30px 18px' },
-    minHeight: 'calc(100vh - 123px)',
+    p: { base: '18px 12px', md: '28px 18px' },
+    minHeight: 'calc(100vh - 110px)',
     position: 'relative',
   },
 }

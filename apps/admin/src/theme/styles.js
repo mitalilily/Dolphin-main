@@ -1,4 +1,5 @@
 import { mode } from '@chakra-ui/theme-tools'
+import { adminBrand } from './brand'
 import colors from './foundations/colors'
 
 export const globalStyles = {
@@ -8,18 +9,18 @@ export const globalStyles = {
   styles: {
     global: (props) => ({
       body: {
-        bg: mode('#F5F0E8', '#171310')(props),
+        bg: mode(adminBrand.page, '#071521')(props),
         color: mode('gray.900', 'whiteAlpha.900')(props),
-        fontFamily: "'Barlow', 'Segoe UI', sans-serif",
+        fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif",
         backgroundImage: mode(
-          'radial-gradient(circle at 8% 6%, rgba(216,201,183,0.34) 0%, transparent 26%), radial-gradient(circle at 92% 4%, rgba(217,121,67,0.16) 0%, transparent 24%), linear-gradient(180deg, #fffdf8 0%, #f5f0e8 100%)',
-          'radial-gradient(circle at 8% 6%, rgba(255,255,255,0.1) 0%, transparent 26%), radial-gradient(circle at 92% 4%, rgba(217,121,67,0.12) 0%, transparent 24%), linear-gradient(180deg, #171310 0%, #100d0b 100%)',
+          adminBrand.pageGradient,
+          'radial-gradient(circle at 8% 6%, rgba(198,231,255,0.16) 0%, transparent 26%), radial-gradient(circle at 92% 4%, rgba(255,221,174,0.12) 0%, transparent 24%), linear-gradient(180deg, #071521 0%, #0b2232 100%)',
         ),
         backgroundAttachment: 'fixed',
       },
       html: {
-        fontFamily: "'Barlow', 'Segoe UI', sans-serif",
-        bg: mode('#F5F0E8', '#171310')(props),
+        fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+        bg: mode(adminBrand.page, '#071521')(props),
       },
       '#root': {
         minHeight: '100vh',
@@ -28,7 +29,7 @@ export const globalStyles = {
         boxSizing: 'border-box',
       },
       '::selection': {
-        background: mode('brand.100', 'brand.600')(props),
+        background: mode('brand.200', 'brand.600')(props),
       },
       '::-webkit-scrollbar': {
         width: '10px',

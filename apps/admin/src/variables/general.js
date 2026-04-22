@@ -32,7 +32,7 @@ import { SiDropbox } from "react-icons/si";
 export const dashboardTableData = [
   {
     logo: AdobexdLogo,
-    name: "SkyRush Express Courier Version",
+    name: "Dolphin Enterprise Version",
     members: [avatar1, avatar2, avatar3, avatar4, avatar5],
     budget: "$14,000",
     progression: 60,
@@ -114,7 +114,7 @@ export const timelineData = [
 export const rtlDashboardTableData = [
   {
     logo: AdobexdLogo,
-    name: "Ù†Ø³Ø®Ø© SkyRush Express Courier",
+    name: "Ù†Ø³Ø®Ø© Dolphin Enterprise",
     members: [avatar1, avatar2, avatar3, avatar4, avatar5],
     budget: "$14,000",
     progression: 60,
@@ -254,7 +254,7 @@ export const tablesTableData = [
 export const tablesProjectData = [
   {
     logo: AdobexdLogo,
-    name: "SkyRush Express Courier Version",
+    name: "Dolphin Enterprise Version",
     budget: "$14,000",
     status: "Working",
     progression: 60,

@@ -61,7 +61,6 @@ const Orders = () => {
   }, [location.search])
 
   const textColor = useColorModeValue('gray.700', 'white')
-  const bgStats = useColorModeValue('white', 'gray.700')
   const borderColor = useColorModeValue('gray.200', 'gray.600')
 
   // Calculate statistics
@@ -379,8 +378,8 @@ const Orders = () => {
               setPage(1)
             }}
           >
-            <option value="asc">Newest first</option>
-            <option value="desc">Oldest first</option>
+            <option value="desc">Newest first</option>
+            <option value="asc">Oldest first</option>
           </Select>
         </HStack>
       </Flex>

@@ -11,7 +11,7 @@
 }
 
 .light .rdp {
-  --rdp-accent-color: #333369; /* Primary color */
-  --rdp-accent-color-dark: #2F3B5F; /* primary-600 */
+  --rdp-accent-color: #10324A; /* brand primary */
+  --rdp-accent-color-dark: #0B2232; /* brand-700 */
   --rdp-text-color: #1A1A1A; /* text-primary */
 }

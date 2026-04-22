@@ -8,6 +8,7 @@ import {
 } from "@chakra-ui/react";
 import PropTypes from "prop-types";
 import { NavLink } from "react-router-dom";
+import { adminBrand } from "theme/brand";
 import AdminNavbarLinks from "./AdminNavbarLinks";
 
 const navItems = [
@@ -21,22 +22,22 @@ const navItems = [
 export default function AdminNavbar(props) {
   const { fixed, secondary, onOpen, sidebarWidth = 275, brandText, ...rest } = props;
 
-  const mainText = useColorModeValue("#171310", "gray.100");
-  const secondaryText = useColorModeValue("#74685D", "gray.400");
+  const mainText = useColorModeValue(adminBrand.ink, "gray.100");
+  const secondaryText = useColorModeValue(adminBrand.inkSoft, "gray.400");
   const navbarShadow = useColorModeValue(
-    "0 18px 36px rgba(23,19,16,0.08)",
+    "0 18px 36px rgba(15,44,67,0.08)",
     "0 18px 36px rgba(0, 0, 0, 0.4)"
   );
   const defaultNavbarBg = useColorModeValue(
-    "rgba(255,252,248,0.94)",
-    "linear-gradient(110deg, rgba(22,18,15,0.94) 0%, rgba(34,28,24,0.94) 100%)"
+    "rgba(255,255,255,0.9)",
+    "linear-gradient(110deg, rgba(8,25,38,0.94) 0%, rgba(16,50,74,0.94) 100%)"
   );
   const defaultNavbarBorder = useColorModeValue(
-    "1px solid rgba(23,19,16,0.08)",
+    "1px solid rgba(16,50,74,0.08)",
     "1px solid rgba(255,255,255,0.12)"
   );
   const activeBg = useColorModeValue(
-    "rgba(217,121,67,0.12)",
+    "rgba(198,231,255,0.38)",
     "rgba(255,255,255,0.08)"
   );
   const navShellBg = useColorModeValue(
@@ -44,7 +45,7 @@ export default function AdminNavbar(props) {
     "rgba(255,255,255,0.06)"
   );
   const navShellBorder = useColorModeValue(
-    "rgba(23,19,16,0.08)",
+    "rgba(16,50,74,0.08)",
     "rgba(255,255,255,0.12)"
   );
   const navbarBg = secondary ? "transparent" : defaultNavbarBg;
@@ -84,10 +85,10 @@ export default function AdminNavbar(props) {
         >
           <Box
             as="img"
-            src="/skyrush-logo.png"
-            alt="SkyRush Express Courier"
-            h="30px"
-            w="118px"
+            src={adminBrand.logo}
+            alt={adminBrand.panelName}
+            h="34px"
+            w="126px"
             objectFit="contain"
           />
           <Box minW={0} display={{ base: "none", md: "block" }}>
@@ -98,7 +99,7 @@ export default function AdminNavbar(props) {
               textTransform="uppercase"
               color={secondaryText}
             >
-              Admin Panel
+              {adminBrand.panelName}
             </Text>
             <Text
               fontSize="sm"
@@ -106,7 +107,7 @@ export default function AdminNavbar(props) {
               color={mainText}
               noOfLines={1}
             >
-              {brandText || "Dashboard"}
+              {brandText || "Admin dashboard"}
             </Text>
           </Box>
         </Flex>

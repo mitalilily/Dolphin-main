@@ -1,5 +1,5 @@
 // src/services/plans.service.ts
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { db } from '../client'
 import { plans } from '../schema/plans'
 import { userPlans } from '../schema/userPlans'
@@ -74,6 +74,16 @@ export const PlansService = {
     }
   },
   assignOrUpdateUserPlan: async (userId: string, planId: string) => {
+    const [targetPlan] = await db
+      .select()
+      .from(plans)
+      .where(and(eq(plans.id, planId), eq(plans.is_active, true)))
+      .limit(1)
+
+    if (!targetPlan) {
+      throw new Error('Active plan not found')
+    }
+
     // Check if user already has a plan
     const existing = await db.select().from(userPlans).where(eq(userPlans.userId, userId)).limit(1)
 

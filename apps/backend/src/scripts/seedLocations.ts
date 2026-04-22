@@ -1,6 +1,7 @@
 // src/scripts/seedLocations.ts
 import fs from 'fs'
 import path from 'path'
+import { sql } from 'drizzle-orm'
 import XLSX from 'xlsx'
 import { db } from '../models/client'
 import { locations } from '../schema/schema'
@@ -8,7 +9,6 @@ import { locations } from '../schema/schema'
 const DATA_DIR = path.resolve('src/scripts/data')
 const CHUNK_SIZE = 10
 
-// ---------- Types ----------
 type Row = {
   pincode: string
   city: string
@@ -17,7 +17,6 @@ type Row = {
   tags: string[]
 }
 
-// ---------- Helpers ----------
 function normalize(x: any): string {
   return (x ?? '').toString().trim()
 }
@@ -54,7 +53,6 @@ function mapRow(raw: Record<string, any>): Row | null {
   return { pincode, city, state, country: 'India', tags }
 }
 
-// ---------- Insert helper ----------
 async function insertBatch(rows: Row[]) {
   if (!rows.length) return
 
@@ -63,26 +61,33 @@ async function insertBatch(rows: Row[]) {
     city: r.city,
     state: r.state,
     country: r.country,
-    tags: Array.isArray(r.tags) ? r.tags : [], // force array
+    tags: Array.isArray(r.tags) ? r.tags : [],
     created_at: new Date(),
   }))
 
-  for (const zone of values) {
-    console.log('inserting:', zone.pincode, 'tags:', JSON.stringify(zone.tags))
-    await db.insert(locations).values(zone) // Drizzle insert
-  }
+  await db
+    .insert(locations)
+    .values(values)
+    .onConflictDoUpdate({
+      target: locations.pincode,
+      set: {
+        city: sql`excluded.city`,
+        state: sql`excluded.state`,
+        country: sql`excluded.country`,
+        tags: sql`excluded.tags`,
+      },
+    })
 
-  console.log(`✅ Inserted ${rows.length} rows`)
+  console.log(`Upserted ${rows.length} rows`)
 }
 
-// ---------- Main import ----------
 async function importXlsx(filename: string) {
   const fullPath = path.join(DATA_DIR, filename)
   if (!fs.existsSync(fullPath)) {
     console.error('File not found:', fullPath)
     return
   }
-  console.log('📂 Reading XLSX:', fullPath)
+  console.log('Reading XLSX:', fullPath)
 
   const wb = XLSX.readFile(fullPath)
   const sheet = wb.Sheets[wb.SheetNames[0]]
@@ -102,7 +107,7 @@ async function importXlsx(filename: string) {
     if (batch.length >= CHUNK_SIZE) {
       await insertBatch(batch)
       processed += batch.length
-      if (processed % 1000 === 0) console.log(`➡️  Processed ${processed} rows...`)
+      if (processed % 1000 === 0) console.log(`Processed ${processed} rows...`)
       batch = []
     }
   }
@@ -112,10 +117,9 @@ async function importXlsx(filename: string) {
     processed += batch.length
   }
 
-  console.log(`✅ Import finished. Total inserted: ${processed}`)
+  console.log(`Import finished. Total rows processed: ${processed}`)
 }
 
-// ---------- CLI ----------
 ;(async () => {
   const arg = process.argv[2]
   if (!arg) {

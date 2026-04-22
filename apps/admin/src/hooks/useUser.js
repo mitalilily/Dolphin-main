@@ -32,7 +32,7 @@ export function useApproveUser() {
     onSuccess: (data, userId) => {
       if (data?.success) {
         // userId is the variable passed to mutate, usually userId
-        queryClient.invalidateQueries(['userInfo', userId])
+        queryClient.invalidateQueries({ queryKey: ['userInfo', userId] })
         toast({
           title: 'User Approved',
           description: `User ID ${userId} has been successfully approved.`,
@@ -94,7 +94,7 @@ export function useUpdateBankAccountStatus(userId) {
         duration: 3000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userBankAccounts', userId])
+      queryClient.invalidateQueries({ queryKey: ['userBankAccounts', userId] })
     },
     onError: (error) => {
       toast({
@@ -132,7 +132,7 @@ export const useApproveKyc = () => {
         duration: 4000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userKyc', userId])
+      queryClient.invalidateQueries({ queryKey: ['userKyc', userId] })
     },
     onError: (error) => {
       toast({
@@ -160,7 +160,7 @@ export const useRejectKyc = () => {
         duration: 4000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userKyc', userId])
+      queryClient.invalidateQueries({ queryKey: ['userKyc', userId] })
     },
     onError: (error) => {
       toast({
@@ -188,7 +188,7 @@ export const useRevokeKyc = () => {
         duration: 4000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userKyc', userId])
+      queryClient.invalidateQueries({ queryKey: ['userKyc', userId] })
     },
     onError: (error) => {
       toast({
@@ -216,7 +216,7 @@ export const useApproveDocument = (userId) => {
         duration: 3000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userKyc', userId])
+      queryClient.invalidateQueries({ queryKey: ['userKyc', userId] })
     },
     onError: (error) => {
       toast({
@@ -244,7 +244,7 @@ export const useRejectDocument = (userId) => {
         duration: 3000,
         isClosable: true,
       })
-      queryClient.invalidateQueries(['userKyc', userId])
+      queryClient.invalidateQueries({ queryKey: ['userKyc', userId] })
     },
     onError: (error) => {
       toast({
