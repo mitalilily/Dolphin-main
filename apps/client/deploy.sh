@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Build and deploy script for delexpress-client
+# Build and deploy script for dolphin client
 # Usage: ./deploy.sh [vps_user@vps_ip]
 # Example: ./deploy.sh user@your-server-ip
 # Note: You will be prompted for your VPS password during upload
@@ -10,7 +10,7 @@
 set +e
 
 # VPS configuration
-VPS_TARGET_PATH="/var/www/delexpress/delexpress-client/dist"
+VPS_TARGET_PATH="/var/www/dolphin/client/dist"
 
 # Get VPS connection details from argument or environment variables
 if [ -n "$1" ]; then
@@ -28,7 +28,7 @@ else
   exit 1
 fi
 
-echo "ðŸš€ Building delexpress-client..."
+echo "ðŸš€ Building dolphin client..."
 
 # Navigate to project directory
 cd "$(dirname "$0")"
@@ -45,8 +45,8 @@ echo "ðŸ”¨ Running build with production environment variables..."
 
 # Set production environment variables
 # Vite uses VITE_ prefix for environment variables
-export VITE_API_URL="https://api.delexpress.in/api"
-export VITE_APP_SOCKET_URL="https://api.delexpress.in"
+export VITE_API_URL="https://dolphin-main-production-4236.up.railway.app/api"
+export VITE_APP_SOCKET_URL="https://dolphin-main-production-4236.up.railway.app"
 
 # Keep other environment variables from .env if needed (Shopify, Google OAuth, etc.)
 # These can be overridden here if you have different production values
@@ -99,8 +99,8 @@ if [ $RSYNC_EXIT_CODE -eq 0 ]; then
   echo ""
   echo "âœ… Deployment complete!"
   echo "ðŸ“ Dist files uploaded to: ${VPS_TARGET_PATH}"
-  echo "ðŸ“‚ Structure: delexpress-client/dist/ (contains index.html, assets/, etc.)"
-  echo "ðŸ’¡ All existing files in delexpress-client/ are kept untouched"
+  echo "ðŸ“‚ Structure: client/dist/ (contains index.html, assets/, etc.)"
+  echo "ðŸ’¡ All existing files in client/ are kept untouched"
 else
   echo ""
   echo "âŒ Upload failed. Please check your connection and try again."

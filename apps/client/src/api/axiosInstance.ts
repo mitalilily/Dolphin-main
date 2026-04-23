@@ -3,7 +3,7 @@ import axios from 'axios'
 import { clearAuthTokens, getAuthTokens, setAuthTokens } from './tokenVault'
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL
-const DEFAULT_API_BASE_URL = 'https://delexpress-backend.onrender.com/api'
+const DEFAULT_API_BASE_URL = 'https://dolphin-main-production-4236.up.railway.app/api'
 
 const getApiBaseUrl = () => {
   const fallback = DEFAULT_API_BASE_URL.replace(/\/+$/, '')

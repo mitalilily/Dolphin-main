@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client'
 
-const DEFAULT_SOCKET_URL = 'https://delexpress-backend.onrender.com'
+const DEFAULT_SOCKET_URL = 'https://dolphin-main-production-4236.up.railway.app'
 
 const getSocketUrl = () => {
   const rawSocketUrl = import.meta.env.VITE_APP_SOCKET_URL
