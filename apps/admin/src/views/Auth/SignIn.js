@@ -212,8 +212,9 @@ function SignIn() {
             </Heading>
 
             <Text color={textSecondary} fontSize="sm" maxW="420px" lineHeight="1.8">
-              Review orders, monitor activity, and manage operations from a cleaner Dolphin admin
-              workspace with the same brand language and shared backend wiring as the client.
+              Manage orders, track activity, and oversee daily operations through a streamlined
+              Dolphin admin dashboard designed to match your brand identity and seamlessly
+              connected to the same backend as the client platform.
             </Text>
           </VStack>
         </Flex>
