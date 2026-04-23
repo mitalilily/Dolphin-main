@@ -1,5 +1,9 @@
 import axios from 'axios'
-import { getAdminApiBaseUrl } from './runtimeConfig'
+import {
+  getAdminApiBaseUrl,
+  getNextAdminApiBaseUrl,
+  setPreferredAdminApiBaseUrl,
+} from './runtimeConfig'
 
 const API_BASE_URL = getAdminApiBaseUrl()
 
@@ -11,6 +15,7 @@ const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
+  config.baseURL = getAdminApiBaseUrl()
   const token = localStorage.getItem('accessToken')
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`
@@ -22,6 +27,17 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const currentBaseUrl = originalRequest?.baseURL || API_BASE_URL
+
+    if (!error.response && originalRequest && !originalRequest._backendRetry) {
+      const nextBaseUrl = getNextAdminApiBaseUrl(currentBaseUrl)
+
+      if (nextBaseUrl && nextBaseUrl !== currentBaseUrl) {
+        originalRequest._backendRetry = true
+        originalRequest.baseURL = setPreferredAdminApiBaseUrl(nextBaseUrl) || nextBaseUrl
+        return api(originalRequest)
+      }
+    }
 
     if (
       error.response?.status === 401 &&

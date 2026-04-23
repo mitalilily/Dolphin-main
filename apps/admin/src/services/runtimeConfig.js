@@ -1,5 +1,10 @@
 const DEFAULT_API_BASE_URL = 'https://dolphin-main-production-4236.up.railway.app/api'
 const DEFAULT_SOCKET_URL = 'https://dolphin-main-production-4236.up.railway.app'
+const FALLBACK_API_BASE_URLS = [
+  DEFAULT_API_BASE_URL,
+  'https://delexpress-backend.onrender.com/api',
+]
+const ACTIVE_ADMIN_API_BASE_URL_KEY = 'activeAdminApiBaseUrl'
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
   if (!value) return null
@@ -15,7 +20,29 @@ const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
   }
 }
 
-export const getAdminApiBaseUrl = () => {
+const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+
+const readStoredApiBaseUrl = () => {
+  if (!canUseStorage()) return null
+  return normalizeBaseUrl(window.localStorage.getItem(ACTIVE_ADMIN_API_BASE_URL_KEY), {
+    ensureApi: true,
+  })
+}
+
+export const setPreferredAdminApiBaseUrl = (value) => {
+  const normalized = normalizeBaseUrl(value, { ensureApi: true })
+  if (!canUseStorage()) return normalized
+
+  if (normalized) {
+    window.localStorage.setItem(ACTIVE_ADMIN_API_BASE_URL_KEY, normalized)
+  } else {
+    window.localStorage.removeItem(ACTIVE_ADMIN_API_BASE_URL_KEY)
+  }
+
+  return normalized
+}
+
+export const getAdminApiBaseUrlCandidates = () => {
   const currentHost = typeof window !== 'undefined' ? window.location.hostname : ''
   const isHostedFrontend =
     currentHost.endsWith('netlify.app') || currentHost.endsWith('vercel.app')
@@ -23,19 +50,38 @@ export const getAdminApiBaseUrl = () => {
     currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '0.0.0.0'
 
   const configured = normalizeBaseUrl(process.env.REACT_APP_API_BASE_URL, { ensureApi: true })
-  if (!configured) return DEFAULT_API_BASE_URL
+  const stored = readStoredApiBaseUrl()
+  const candidates = [configured, stored, ...FALLBACK_API_BASE_URLS]
+    .filter(Boolean)
+    .filter((value, index, list) => list.indexOf(value) === index)
 
-  try {
-    const candidate = new URL(configured)
-    const pointsBackToFrontend = candidate.hostname === currentHost
-    if (pointsBackToFrontend && (isHostedFrontend || !isLocalhost)) {
-      return DEFAULT_API_BASE_URL
+  return candidates.filter((candidate) => {
+    try {
+      const parsed = new URL(candidate)
+      const pointsBackToFrontend = parsed.hostname === currentHost
+      if (pointsBackToFrontend && (isHostedFrontend || !isLocalhost)) {
+        return false
+      }
+      return true
+    } catch {
+      return false
     }
-  } catch {
-    return DEFAULT_API_BASE_URL
-  }
+  })
+}
 
-  return configured
+export const getAdminApiBaseUrl = () => {
+  const [primaryCandidate] = getAdminApiBaseUrlCandidates()
+  return primaryCandidate || DEFAULT_API_BASE_URL
+}
+
+export const getNextAdminApiBaseUrl = (currentValue) => {
+  const candidates = getAdminApiBaseUrlCandidates()
+  const normalizedCurrent = normalizeBaseUrl(currentValue, { ensureApi: true })
+  const currentIndex = candidates.findIndex((candidate) => candidate === normalizedCurrent)
+
+  if (currentIndex === -1) return candidates[0] || null
+
+  return candidates[currentIndex + 1] || null
 }
 
 export const getAdminSocketUrl = () => {
