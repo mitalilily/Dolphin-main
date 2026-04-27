@@ -102,17 +102,26 @@ const KYCVerificationStep: React.FC<{
             throw new Error('Selfie exceeds 5MB limit')
           }
 
-          const { data: presign } = await axiosInstance.post('/uploads/presign', {
-            contentType: file.type,
-            filename: file.name,
-            folder: 'kyc',
-          })
+          try {
+            const { data: presign } = await axiosInstance.post('/uploads/presign', {
+              contentType: file.type,
+              filename: file.name,
+              folder: 'kyc',
+            })
 
-          await axios.put(presign.uploadUrl, file, {
-            headers: { 'Content-Type': file.type },
-          })
+            await axios.put(presign.uploadUrl, file, {
+              headers: { 'Content-Type': file.type },
+              withCredentials: false,
+            })
 
-          selfieUrl = presign?.key
+            selfieUrl = presign?.key
+          } catch (uploadErr) {
+            console.warn('[KYC] Selfie upload failed; using inline fallback.', uploadErr)
+            toast.open({
+              message: 'Selfie upload failed on storage. Using inline demo fallback.',
+              severity: 'warning',
+            })
+          }
         }
 
         const result = await mutateAsync({

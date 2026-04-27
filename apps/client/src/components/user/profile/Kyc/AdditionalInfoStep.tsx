@@ -204,6 +204,7 @@ export default function AdditionalDetailsStep({
                       <FileUploader
                         required={isRequired}
                         folderKey="kyc"
+                        allowInlineFallback
                         fullWidth
                         showAccept={Boolean(filePlaceholder(field)) === false}
                         accept={allowedMimeTypes[field]}

@@ -230,6 +230,11 @@ export const presignDownload = async (
         }
       }
 
+      // Allow inline demo uploads (data URLs) to pass through without presigning
+      if (/^data:/i.test(value)) {
+        return value
+      }
+
       // It's already a key, presign it
       const cacheKey = presignCacheKey(bucket, value, options)
       const cached = presignDownloadCache.get(cacheKey)
@@ -285,6 +290,11 @@ export const presignDownload = async (
             console.warn(`⚠️ Could not extract S3 key from URL, returning as-is: ${value}`)
             return value
           }
+        }
+
+        // Allow inline demo uploads (data URLs) to pass through without presigning
+        if (/^data:/i.test(value)) {
+          return value
         }
 
         // It's already a key, presign it

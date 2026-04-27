@@ -56,6 +56,7 @@ interface FileUploaderProps {
   label?: string
   fullWidth?: boolean
   required?: boolean
+  allowInlineFallback?: boolean
 }
 
 /* ---------------------------------------------------------------- style */
@@ -144,6 +145,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   fullWidth,
   showAccept = false,
   required = false,
+  allowInlineFallback = false,
   showPlaceholderImgByDefault = false,
   loadingPreview = false,
 }) => {
@@ -200,6 +202,14 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     ) : (
       placeholder
     )
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve(String(reader.result || ''))
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
   /* --------------- upload logic --------------- */
   const uploadFiles = useCallback(
     async (files: File[] | FileList) => {
@@ -255,15 +265,43 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         onUploaded(uploaded)
       } catch (err) {
         console.error(err)
-        toast.open({
-          message: 'Upload failed - check console.',
-          severity: 'error',
-        })
+        if (allowInlineFallback) {
+          try {
+            const inlineFiles = await Promise.all(
+              arr.map(async (file) => {
+                const dataUrl = await fileToDataUrl(file)
+                return {
+                  url: dataUrl,
+                  key: dataUrl,
+                  originalName: file.name,
+                  size: file.size,
+                  mime: file.type || 'application/octet-stream',
+                }
+              }),
+            )
+            onUploaded(inlineFiles)
+            toast.open({
+              message: 'Storage upload failed. Using inline demo upload fallback.',
+              severity: 'warning',
+            })
+          } catch (fallbackErr) {
+            console.error('Inline fallback failed:', fallbackErr)
+            toast.open({
+              message: 'Upload failed - check console.',
+              severity: 'error',
+            })
+          }
+        } else {
+          toast.open({
+            message: 'Upload failed - check console.',
+            severity: 'error',
+          })
+        }
       } finally {
         resetUploadState()
       }
     },
-    [maxSizeMb, folderKey, multiple, onUploaded],
+    [allowInlineFallback, maxSizeMb, folderKey, multiple, onUploaded],
   )
   const removeFile = (index: number) => {
     setPreviewFiles((prev) => {
