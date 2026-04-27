@@ -565,7 +565,7 @@ const B2COrdersList = () => {
     const status = (row.order_status || '').toLowerCase()
     const cancellableStatuses = new Set(['pending', 'booked', 'pickup_initiated'])
     const provider = (row.integration_type || '').toLowerCase()
-    const providerSupports = ['delhivery', 'ekart', 'xpressbees'].includes(provider)
+    const providerSupports = ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].includes(provider)
     return providerSupports && cancellableStatuses.has(status)
   }
 
@@ -735,7 +735,7 @@ const B2COrdersList = () => {
         if (
           actions.length === 0 &&
           String(row.order_status || '').toLowerCase() !== 'manifest_failed' &&
-          ['delhivery', 'ekart', 'xpressbees'].includes(
+          ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].includes(
             String(row.integration_type || '').toLowerCase(),
           )
         ) {

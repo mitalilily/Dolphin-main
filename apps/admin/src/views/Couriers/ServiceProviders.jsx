@@ -1,25 +1,58 @@
 import {
+  Badge,
   Flex,
   HStack,
   Spinner,
   Switch,
   Table,
+  TableContainer,
   Tbody,
   Td,
+  Text,
   Th,
   Thead,
   Tr,
-  Text,
   useToast,
+  Wrap,
+  WrapItem,
 } from '@chakra-ui/react'
-import { useServiceProviders, useUpdateServiceProviderStatus } from 'hooks/useCouriers'
+import { useMemo } from 'react'
+import { useCouriers, useServiceProviders, useUpdateServiceProviderStatus } from 'hooks/useCouriers'
+
+const toProviderLabel = (value = '') =>
+  value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ')
 
 const ServiceProviders = () => {
   const { data: providers = [], isLoading, error } = useServiceProviders()
+  const { data: couriers = [], isLoading: isCouriersLoading } = useCouriers()
   const updateStatus = useUpdateServiceProviderStatus()
   const toast = useToast()
 
-  if (isLoading) return <Spinner size="md" />
+  const couriersByProvider = useMemo(() => {
+    const grouped = couriers.reduce((acc, courier) => {
+      const providerKey = (courier?.serviceProvider || '').toLowerCase()
+      if (!providerKey) return acc
+      if (!acc[providerKey]) {
+        acc[providerKey] = []
+      }
+      acc[providerKey].push(courier?.name || `${courier?.id || ''}`.trim())
+      return acc
+    }, {})
+
+    Object.keys(grouped).forEach((provider) => {
+      grouped[provider] = grouped[provider]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+    })
+
+    return grouped
+  }, [couriers])
+
+  if (isLoading || isCouriersLoading) return <Spinner size="md" />
   if (error) return <Text color="red.500">Failed to load service providers</Text>
 
   const handleToggle = (provider) => {
@@ -48,51 +81,80 @@ const ServiceProviders = () => {
         Service Providers
       </Text>
       <Text fontSize="sm" color="gray.500">
-        Manage enabled courier providers for Delhivery, Ekart, and Xpressbees.
+        Manage provider status and review newly added couriers grouped under each provider.
       </Text>
-      <Table variant="simple">
-        <Thead>
-          <Tr>
-            <Th>Provider</Th>
-            <Th isNumeric>Total Couriers</Th>
-            <Th isNumeric>Enabled Couriers</Th>
-            <Th>Status</Th>
-            <Th textAlign="right">Toggle</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
-          {providers.length === 0 ? (
+
+      <TableContainer borderWidth="1px" borderRadius="lg">
+        <Table variant="simple">
+          <Thead>
             <Tr>
-              <Td colSpan={5} textAlign="center">
-                <Text color="gray.500">No service provider data found.</Text>
-              </Td>
+              <Th minW="160px">Provider</Th>
+              <Th minW="280px">Couriers</Th>
+              <Th isNumeric>Total Couriers</Th>
+              <Th isNumeric>Enabled Couriers</Th>
+              <Th>Status</Th>
+              <Th textAlign="right">Toggle</Th>
             </Tr>
-          ) : (
-            providers.map((p) => (
-              <Tr key={p.serviceProvider}>
-                <Td textTransform="capitalize">{p.serviceProvider}</Td>
-                <Td isNumeric>{p.totalCouriers}</Td>
-                <Td isNumeric>{p.enabledCouriers}</Td>
-                <Td>
-                  <Text fontWeight="semibold" color={p.isEnabled ? 'green.500' : 'red.500'}>
-                    {p.isEnabled ? 'Enabled' : 'Disabled'}
-                  </Text>
-                </Td>
-                <Td>
-                  <HStack justify="flex-end">
-                    <Switch
-                      colorScheme="green"
-                      isChecked={p.isEnabled}
-                      isDisabled={updateStatus.isPending}
-                      onChange={() => handleToggle(p)}
-                    />
-                  </HStack>
+          </Thead>
+          <Tbody>
+            {providers.length === 0 ? (
+              <Tr>
+                <Td colSpan={6} textAlign="center">
+                  <Text color="gray.500">No service provider data found.</Text>
                 </Td>
               </Tr>
-            ))
-          )}
-        </Tbody>
-      </Table>
+            ) : (
+              providers.map((provider) => {
+                const providerKey = (provider.serviceProvider || '').toLowerCase()
+                const names = couriersByProvider[providerKey] || []
+
+                return (
+                  <Tr key={provider.serviceProvider}>
+                    <Td>{toProviderLabel(provider.serviceProvider)}</Td>
+                    <Td>
+                      {names.length ? (
+                        <Wrap spacing={2}>
+                          {names.map((name) => (
+                            <WrapItem key={`${provider.serviceProvider}-${name}`}>
+                              <Badge colorScheme="blue" borderRadius="md" px={2} py={1}>
+                                {name}
+                              </Badge>
+                            </WrapItem>
+                          ))}
+                        </Wrap>
+                      ) : (
+                        <Text fontSize="sm" color="gray.500">
+                          No couriers mapped
+                        </Text>
+                      )}
+                    </Td>
+                    <Td isNumeric>{provider.totalCouriers}</Td>
+                    <Td isNumeric>{provider.enabledCouriers}</Td>
+                    <Td>
+                      <Text
+                        fontWeight="semibold"
+                        color={provider.isEnabled ? 'green.500' : 'red.500'}
+                      >
+                        {provider.isEnabled ? 'Enabled' : 'Disabled'}
+                      </Text>
+                    </Td>
+                    <Td>
+                      <HStack justify="flex-end">
+                        <Switch
+                          colorScheme="green"
+                          isChecked={provider.isEnabled}
+                          isDisabled={updateStatus.isPending}
+                          onChange={() => handleToggle(provider)}
+                        />
+                      </HStack>
+                    </Td>
+                  </Tr>
+                )
+              })
+            )}
+          </Tbody>
+        </Table>
+      </TableContainer>
     </Flex>
   )
 }

@@ -1,17 +1,99 @@
 // routes/shippingRateRoutes.ts
 import { Router } from 'express'
 import {
+  assignShipmozoCourierController,
+  autoAssignShipmozoOrderController,
+  cancelShipmozoOrderController,
+  icarryAddPickupAddressController,
+  icarryEditPickupAddressController,
+  checkShipmozoPincodeServiceabilityController,
+  createShipmozoWarehouseController,
+  getShipmozoInfoController,
+  getShipmozoOrderDetailController,
+  getShipmozoOrderLabelController,
+  getShipmozoRateCalculatorController,
+  getShipmozoReturnReasonsController,
+  getShipmozoWarehousesController,
   getCourierCredentialsController,
   deleteShippingRateController,
   fetchAvailableCouriersForAdmin,
   getAllCouriersController,
   getShippingRatesController,
   importShippingRatesController,
+  icarryBookInternationalShipmentController,
+  icarryCancelShipmentController,
+  icarryCheckPincodeServiceabilityController,
+  icarryCreateReverseShipmentController,
+  icarryLoginController,
+  icarryEstimateInternationalController,
+  icarryEstimateMultiBoxController,
+  icarryPrintShipmentLabelController,
+  icarryEstimateSingleController,
+  icarrySyncShipmentChargesController,
+  icarrySyncShipmentStatusController,
+  icarryTrackShipmentController,
+  pushShipmozoOrderController,
+  pushShipmozoReturnOrderController,
+  scheduleShipmozoPickupController,
+  shipmozoLoginController,
+  trackShipmozoOrderController,
   updateDelhiveryCredentialsController,
   updateEkartCredentialsController,
+  updateIcarryCredentialsController,
+  updateShiprocketCredentialsController,
+  updateShipmozoWarehouseForOrderController,
+  updateShipmozoCredentialsController,
   updateXpressbeesCredentialsController,
   updateShippingRateController,
 } from '../../controllers/admin/courier.controller'
+import {
+  actionShiprocketNdrController,
+  addShiprocketProductController,
+  addShiprocketPickupLocationController,
+  cancelShiprocketOrdersController,
+  cancelShiprocketShipmentAwbsController,
+  createShiprocketChannelOrderController,
+  createShiprocketExchangeOrderController,
+  createShiprocketReturnShipmentController,
+  createShiprocketCustomOrderController,
+  exportShiprocketOrdersController,
+  fulfillShiprocketOrderInventoryController,
+  getShiprocketChannelsController,
+  getShiprocketNdrShipmentDetailsController,
+  getShiprocketOrderDetailController,
+  getShiprocketOrdersController,
+  getShiprocketProductDetailController,
+  getShiprocketPickupLocationsController,
+  importShiprocketOrdersController,
+  mapShiprocketOrderProductsController,
+  shiprocketAssignAwbController,
+  shiprocketDiscrepancyController,
+  shiprocketExportCatalogSampleController,
+  shiprocketExportUnmappedProductsController,
+  shiprocketGenerateInvoiceController,
+  shiprocketGenerateLabelController,
+  shiprocketGenerateManifestController,
+  shiprocketGeneratePickupController,
+  shiprocketGetLocalityDetailsController,
+  shiprocketGetZonesController,
+  shiprocketImportResultController,
+  shiprocketLoginController,
+  shiprocketLogoutController,
+  shiprocketProxyController,
+  shiprocketPrintManifestController,
+  shiprocketProductsSampleController,
+  shiprocketServiceabilityController,
+  shiprocketTrackOrderController,
+  shiprocketTrackAwbsController,
+  shiprocketTrackAwbController,
+  shiprocketTrackShipmentController,
+  shiprocketUpdateInventoryController,
+  shiprocketAssignReturnAwbController,
+  updateShiprocketDeliveryAddressController,
+  updateShiprocketOrderController,
+  updateShiprocketOrderPickupController,
+  updateShiprocketReturnOrderController,
+} from '../../controllers/admin/shiprocket.controller'
 import { isAdminMiddleware } from '../../middlewares/isAdmin'
 import { requireAuth } from '../../middlewares/requireAuth'
 import { upload } from '../../middlewares/upload'
@@ -54,6 +136,442 @@ router.put(
   isAdminMiddleware,
   updateXpressbeesCredentialsController,
 )
+router.put(
+  '/credentials/shiprocket',
+  requireAuth,
+  isAdminMiddleware,
+  updateShiprocketCredentialsController,
+)
+router.put(
+  '/credentials/shipmozo',
+  requireAuth,
+  isAdminMiddleware,
+  updateShipmozoCredentialsController,
+)
+router.put(
+  '/credentials/icarry',
+  requireAuth,
+  isAdminMiddleware,
+  updateIcarryCredentialsController,
+)
+router.post('/shiprocket/login', requireAuth, isAdminMiddleware, shiprocketLoginController)
+router.post('/shiprocket/logout', requireAuth, isAdminMiddleware, shiprocketLogoutController)
+router.get(
+  '/shiprocket/billing/discrepancy',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketDiscrepancyController,
+)
+router.get(
+  '/shiprocket/errors/:importId/check',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketImportResultController,
+)
+router.get(
+  '/shiprocket/listings/export/unmapped',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketExportUnmappedProductsController,
+)
+router.get(
+  '/shiprocket/listings/sample',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketExportCatalogSampleController,
+)
+router.get(
+  '/shiprocket/countries/show/:countryId',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGetZonesController,
+)
+router.get(
+  '/shiprocket/open/postcode/details',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGetLocalityDetailsController,
+)
+router.post('/shiprocket/proxy', requireAuth, isAdminMiddleware, shiprocketProxyController)
+router.get('/shiprocket/channels', requireAuth, isAdminMiddleware, getShiprocketChannelsController)
+router.get('/shiprocket/orders', requireAuth, isAdminMiddleware, getShiprocketOrdersController)
+router.get(
+  '/shiprocket/orders/:orderId',
+  requireAuth,
+  isAdminMiddleware,
+  getShiprocketOrderDetailController,
+)
+router.get(
+  '/shiprocket/products/show/:productId',
+  requireAuth,
+  isAdminMiddleware,
+  getShiprocketProductDetailController,
+)
+router.get(
+  '/shiprocket/products/sample',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketProductsSampleController,
+)
+router.post('/shiprocket/products', requireAuth, isAdminMiddleware, addShiprocketProductController)
+router.post(
+  '/shiprocket/orders/export',
+  requireAuth,
+  isAdminMiddleware,
+  exportShiprocketOrdersController,
+)
+router.get(
+  '/shiprocket/pickup-locations',
+  requireAuth,
+  isAdminMiddleware,
+  getShiprocketPickupLocationsController,
+)
+router.get(
+  '/shiprocket/settings/company/pickup',
+  requireAuth,
+  isAdminMiddleware,
+  getShiprocketPickupLocationsController,
+)
+router.post(
+  '/shiprocket/pickup-locations',
+  requireAuth,
+  isAdminMiddleware,
+  addShiprocketPickupLocationController,
+)
+router.post(
+  '/shiprocket/settings/company/addpickup',
+  requireAuth,
+  isAdminMiddleware,
+  addShiprocketPickupLocationController,
+)
+router.post(
+  '/shiprocket/orders/create/adhoc',
+  requireAuth,
+  isAdminMiddleware,
+  createShiprocketCustomOrderController,
+)
+router.post(
+  '/shiprocket/orders/create',
+  requireAuth,
+  isAdminMiddleware,
+  createShiprocketChannelOrderController,
+)
+router.post(
+  '/shiprocket/orders/create/exchange',
+  requireAuth,
+  isAdminMiddleware,
+  createShiprocketExchangeOrderController,
+)
+router.post(
+  '/shiprocket/shipments/create/return-shipment',
+  requireAuth,
+  isAdminMiddleware,
+  createShiprocketReturnShipmentController,
+)
+router.post(
+  '/shiprocket/orders/update/adhoc',
+  requireAuth,
+  isAdminMiddleware,
+  updateShiprocketOrderController,
+)
+router.post(
+  '/shiprocket/orders/edit',
+  requireAuth,
+  isAdminMiddleware,
+  updateShiprocketReturnOrderController,
+)
+router.patch(
+  '/shiprocket/orders/address/pickup',
+  requireAuth,
+  isAdminMiddleware,
+  updateShiprocketOrderPickupController,
+)
+router.post(
+  '/shiprocket/orders/address/update',
+  requireAuth,
+  isAdminMiddleware,
+  updateShiprocketDeliveryAddressController,
+)
+router.post(
+  '/shiprocket/orders/cancel',
+  requireAuth,
+  isAdminMiddleware,
+  cancelShiprocketOrdersController,
+)
+router.patch(
+  '/shiprocket/orders/fulfill',
+  requireAuth,
+  isAdminMiddleware,
+  fulfillShiprocketOrderInventoryController,
+)
+router.patch(
+  '/shiprocket/orders/mapping',
+  requireAuth,
+  isAdminMiddleware,
+  mapShiprocketOrderProductsController,
+)
+router.post(
+  '/shiprocket/orders/import',
+  requireAuth,
+  isAdminMiddleware,
+  upload.single('file'),
+  importShiprocketOrdersController,
+)
+router.post(
+  '/shiprocket/courier/serviceability',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketServiceabilityController,
+)
+router.get(
+  '/shiprocket/courier/serviceability',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketServiceabilityController,
+)
+router.post(
+  '/shiprocket/courier/assign-awb',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketAssignAwbController,
+)
+router.post(
+  '/shiprocket/courier/assign-awb/return',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketAssignReturnAwbController,
+)
+router.post(
+  '/shiprocket/courier/generate-pickup',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGeneratePickupController,
+)
+router.post(
+  '/shiprocket/courier/generate/pickup',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGeneratePickupController,
+)
+router.post(
+  '/shiprocket/manifests/generate',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGenerateManifestController,
+)
+router.post(
+  '/shiprocket/manifests/print',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketPrintManifestController,
+)
+router.post(
+  '/shiprocket/courier/generate-label',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGenerateLabelController,
+)
+router.post(
+  '/shiprocket/orders/print-invoice',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketGenerateInvoiceController,
+)
+router.get(
+  '/shiprocket/courier/track/:awb',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketTrackAwbController,
+)
+router.get(
+  '/shiprocket/courier/track/shipment/:shipmentId',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketTrackShipmentController,
+)
+router.post(
+  '/shiprocket/courier/track/awbs',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketTrackAwbsController,
+)
+router.get(
+  '/shiprocket/courier/track',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketTrackOrderController,
+)
+router.get(
+  '/shiprocket/ndr/:awb',
+  requireAuth,
+  isAdminMiddleware,
+  getShiprocketNdrShipmentDetailsController,
+)
+router.post(
+  '/shiprocket/ndr/:awb/action',
+  requireAuth,
+  isAdminMiddleware,
+  actionShiprocketNdrController,
+)
+router.post(
+  '/shiprocket/orders/cancel-shipment-awbs',
+  requireAuth,
+  isAdminMiddleware,
+  cancelShiprocketShipmentAwbsController,
+)
+router.post(
+  '/shiprocket/orders/cancel/shipment/awbs',
+  requireAuth,
+  isAdminMiddleware,
+  cancelShiprocketShipmentAwbsController,
+)
+router.put(
+  '/shiprocket/inventory/:productId/update',
+  requireAuth,
+  isAdminMiddleware,
+  shiprocketUpdateInventoryController,
+)
+router.get('/shipmozo/info', requireAuth, isAdminMiddleware, getShipmozoInfoController)
+router.post('/shipmozo/login', requireAuth, isAdminMiddleware, shipmozoLoginController)
+router.post('/icarry/login', requireAuth, isAdminMiddleware, icarryLoginController)
+router.post('/icarry/estimate/single', requireAuth, isAdminMiddleware, icarryEstimateSingleController)
+router.post('/icarry/estimate/b2b', requireAuth, isAdminMiddleware, icarryEstimateMultiBoxController)
+router.post(
+  '/icarry/estimate/international',
+  requireAuth,
+  isAdminMiddleware,
+  icarryEstimateInternationalController,
+)
+router.post(
+  '/icarry/shipment/international',
+  requireAuth,
+  isAdminMiddleware,
+  icarryBookInternationalShipmentController,
+)
+router.post(
+  '/icarry/shipment/cancel',
+  requireAuth,
+  isAdminMiddleware,
+  icarryCancelShipmentController,
+)
+router.post(
+  '/icarry/shipment/reverse',
+  requireAuth,
+  isAdminMiddleware,
+  icarryCreateReverseShipmentController,
+)
+router.post('/icarry/shipment/track', requireAuth, isAdminMiddleware, icarryTrackShipmentController)
+router.post(
+  '/icarry/shipment/label',
+  requireAuth,
+  isAdminMiddleware,
+  icarryPrintShipmentLabelController,
+)
+router.post(
+  '/icarry/shipment/sync-charges',
+  requireAuth,
+  isAdminMiddleware,
+  icarrySyncShipmentChargesController,
+)
+router.post(
+  '/icarry/shipment/sync-status',
+  requireAuth,
+  isAdminMiddleware,
+  icarrySyncShipmentStatusController,
+)
+router.post(
+  '/icarry/pincode-serviceability',
+  requireAuth,
+  isAdminMiddleware,
+  icarryCheckPincodeServiceabilityController,
+)
+router.post(
+  '/icarry/pickup-address/add',
+  requireAuth,
+  isAdminMiddleware,
+  icarryAddPickupAddressController,
+)
+router.post(
+  '/icarry/pickup-address/edit',
+  requireAuth,
+  isAdminMiddleware,
+  icarryEditPickupAddressController,
+)
+router.get('/shipmozo/warehouses', requireAuth, isAdminMiddleware, getShipmozoWarehousesController)
+router.post(
+  '/shipmozo/warehouses',
+  requireAuth,
+  isAdminMiddleware,
+  createShipmozoWarehouseController,
+)
+router.post(
+  '/shipmozo/order/update-warehouse',
+  requireAuth,
+  isAdminMiddleware,
+  updateShipmozoWarehouseForOrderController,
+)
+router.get(
+  '/shipmozo/return-reasons',
+  requireAuth,
+  isAdminMiddleware,
+  getShipmozoReturnReasonsController,
+)
+router.post(
+  '/shipmozo/pincode-serviceability',
+  requireAuth,
+  isAdminMiddleware,
+  checkShipmozoPincodeServiceabilityController,
+)
+router.post(
+  '/shipmozo/rate-calculator',
+  requireAuth,
+  isAdminMiddleware,
+  getShipmozoRateCalculatorController,
+)
+router.post('/shipmozo/push-order', requireAuth, isAdminMiddleware, pushShipmozoOrderController)
+router.post(
+  '/shipmozo/push-return-order',
+  requireAuth,
+  isAdminMiddleware,
+  pushShipmozoReturnOrderController,
+)
+router.post(
+  '/shipmozo/assign-courier',
+  requireAuth,
+  isAdminMiddleware,
+  assignShipmozoCourierController,
+)
+router.post(
+  '/shipmozo/auto-assign-order',
+  requireAuth,
+  isAdminMiddleware,
+  autoAssignShipmozoOrderController,
+)
+router.post(
+  '/shipmozo/schedule-pickup',
+  requireAuth,
+  isAdminMiddleware,
+  scheduleShipmozoPickupController,
+)
+router.post(
+  '/shipmozo/cancel-order',
+  requireAuth,
+  isAdminMiddleware,
+  cancelShipmozoOrderController,
+)
+router.get(
+  '/shipmozo/orders/:orderId',
+  requireAuth,
+  isAdminMiddleware,
+  getShipmozoOrderDetailController,
+)
+router.get(
+  '/shipmozo/labels/:awbNumber',
+  requireAuth,
+  isAdminMiddleware,
+  getShipmozoOrderLabelController,
+)
+router.get('/shipmozo/track', requireAuth, isAdminMiddleware, trackShipmozoOrderController)
 router.delete(
   '/shipping-rates/:planId/:id',
   requireAuth,

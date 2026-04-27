@@ -117,7 +117,7 @@ export default function NdrList() {
         truncate: false,
         render: (_, row) => {
           const provider = String(row.integration_type || row.courier_partner || '').toLowerCase()
-          const supportsEdits = ['delhivery', 'ekart', 'xpressbees'].some((p) =>
+          const supportsEdits = ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].some((p) =>
             provider.includes(p),
           )
           const isNSL = String(row.status || '')

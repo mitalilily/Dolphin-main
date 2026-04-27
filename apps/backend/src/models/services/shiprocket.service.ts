@@ -61,6 +61,8 @@ import { b2bPincodes, b2bZoneToZoneRates, zones } from '../schema/zones'
 import { calculateB2BRate } from './b2bAdmin.service'
 import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
+import { ShiprocketCourierService } from './couriers/shiprocket.service'
+import { ShipmozoService } from './couriers/shipmozo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { calculateOrderWeights } from './courierWeightCalculation.service'
 import { generateLabelForOrder } from './generateCustomLabelService'
@@ -868,6 +870,12 @@ const normalizeServiceabilityWeightToGrams = (value: unknown) => {
   return numericValue > 50 ? Math.round(numericValue) : Math.round(numericValue * 1000)
 }
 
+const normalizeWeightToKg = (value: unknown) => {
+  const grams = normalizeServiceabilityWeightToGrams(value)
+  if (!grams) return 0
+  return Number((grams / 1000).toFixed(3))
+}
+
 //ADMIN CALCULATION
 export const fetchAvailableCouriersWithRatesAdmin = async (
   params: NimbusServiceabilityParams,
@@ -996,7 +1004,7 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Build registry of enabled couriers by service provider
     // Filter by business type: check if business_type JSONB array contains 'b2c'
-    const SUPPORTED_PROVIDERS = ['delhivery', 'ekart', 'xpressbees']
+    const SUPPORTED_PROVIDERS = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket']
     const systemCourierRows = await db
       .select({
         id: couriers.id,
@@ -1061,6 +1069,113 @@ export const fetchAvailableCouriersWithRates = async (
     const systemCourierMap = Object.fromEntries(
       [...providerCourierBuckets.entries()].map(([providerKey, bucket]) => [providerKey, bucket.idSet]),
     ) as Record<string, Set<number>>
+
+    const syncShipmozoCourierRows = async (records: any[]) => {
+      const normalizedRows = records
+        .map((record) => {
+          const courierId = Number(
+            record?.courier_id ?? record?.id ?? record?.service_id ?? record?.provider_id ?? NaN,
+          )
+          const courierName = String(
+            record?.courier_company_service ??
+              record?.courier_name ??
+              record?.courier_company ??
+              record?.courier ??
+              '',
+          ).trim()
+
+          if (!Number.isFinite(courierId) || !courierName) return null
+
+          return {
+            id: courierId,
+            name: courierName,
+            serviceProvider: 'shipmozo',
+            isEnabled: true,
+            businessType: ['b2c'],
+            updatedAt: new Date(),
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+
+      if (!normalizedRows.length) return
+
+      await db
+        .insert(couriers)
+        .values(normalizedRows as any)
+        .onConflictDoUpdate({
+          target: [couriers.id, couriers.serviceProvider],
+          set: {
+            name: sql`excluded.name`,
+            isEnabled: true,
+            businessType: sql`excluded.business_type`,
+            updatedAt: new Date(),
+          },
+        })
+
+      providerCourierBuckets.set('shipmozo', {
+        rows: normalizedRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          serviceProvider: row.serviceProvider,
+          createdAt: new Date(),
+        })),
+        idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),
+      })
+      systemCourierMap.shipmozo = new Set<number>(normalizedRows.map((row) => Number(row.id)))
+    }
+
+    const syncShiprocketCourierRows = async (records: any[]) => {
+      const normalizedRows = records
+        .map((record) => {
+          const courierId = Number(
+            record?.courier_company_id ?? record?.courier_id ?? record?.id ?? NaN,
+          )
+          const courierName = String(
+            record?.courier_name ??
+              record?.available_courier_company ??
+              record?.name ??
+              '',
+          ).trim()
+
+          if (!Number.isFinite(courierId) || !courierName) return null
+
+          return {
+            id: courierId,
+            name: courierName,
+            serviceProvider: 'shiprocket',
+            isEnabled: true,
+            businessType: ['b2c'],
+            updatedAt: new Date(),
+          }
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+
+      if (!normalizedRows.length) return
+
+      await db
+        .insert(couriers)
+        .values(normalizedRows as any)
+        .onConflictDoUpdate({
+          target: [couriers.id, couriers.serviceProvider],
+          set: {
+            name: sql`excluded.name`,
+            isEnabled: true,
+            businessType: sql`excluded.business_type`,
+            updatedAt: new Date(),
+          },
+        })
+
+      providerCourierBuckets.set('shiprocket', {
+        rows: normalizedRows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          serviceProvider: row.serviceProvider,
+          createdAt: new Date(),
+        })),
+        idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),
+      })
+      systemCourierMap.shiprocket = new Set<number>(normalizedRows.map((row) => Number(row.id)))
+    }
 
     interface ServiceableProviderMeta {
       providerKey: string
@@ -1351,6 +1466,161 @@ export const fetchAvailableCouriersWithRates = async (
       })
     }
 
+    let shiprocketAvailable = false
+    let shiprocketResp: any = null
+    let shiprocketRateRecords: any[] = []
+    if (enabledProviders.has('shiprocket')) {
+      const shiprocket = new ShiprocketCourierService()
+      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
+      const destinationPincode = normalizePincode(
+        params.destination ?? params.destination_pincode,
+      )?.toString()
+      const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
+      const weightKg = normalizeWeightToKg(params.weight)
+
+      if (originPincode && destinationPincode && weightKg > 0) {
+        try {
+          shiprocketResp = await shiprocket.checkCourierServiceability({
+            pickup_postcode: Number(originPincode),
+            delivery_postcode: Number(destinationPincode),
+            cod: params.payment_type === 'cod' ? 1 : 0,
+            weight: weightKg,
+            length: Number(params.length ?? 0) || undefined,
+            breadth: Number(params.breadth ?? 0) || undefined,
+            height: Number(params.height ?? 0) || undefined,
+            declared_value: orderAmountValue > 0 ? orderAmountValue : undefined,
+            is_return: params.payment_type === 'reverse' || params.isReverse === true ? 1 : 0,
+          })
+
+          shiprocketRateRecords = Array.isArray(shiprocketResp?.data?.available_courier_companies)
+            ? shiprocketResp.data.available_courier_companies
+            : Array.isArray(shiprocketResp?.available_courier_companies)
+              ? shiprocketResp.available_courier_companies
+              : []
+          shiprocketAvailable = shiprocketRateRecords.length > 0
+
+          console.log('[Serviceability] Shiprocket response', {
+            available: shiprocketAvailable,
+            records: shiprocketRateRecords.length,
+          })
+
+          if (shiprocketAvailable) {
+            await syncShiprocketCourierRows(shiprocketRateRecords)
+            registerServiceableProvider('shiprocket', {
+              providerId: 'shiprocket',
+              providerName: 'Shiprocket',
+              codAvailable: true,
+              prepaidAvailable: true,
+              edd: '3-5 Days',
+              raw: shiprocketResp,
+            })
+          }
+        } catch (err: any) {
+          console.error('❌ Shiprocket serviceability error:', err?.message || err)
+        }
+      }
+    }
+
+    if (shiprocketAvailable) {
+      console.log('[Serviceability] Shiprocket candidate couriers prepared', {
+        mode: isCalculator ? 'calculator' : 'standard',
+        destination: params.destination?.toString(),
+        available: shiprocketAvailable,
+        records: shiprocketRateRecords?.length ?? 0,
+        candidates: providerCourierBuckets.get('shiprocket')?.rows.length ?? 0,
+      })
+    }
+
+    let shipmozoAvailable = false
+    let shipmozoResp: any = null
+    let shipmozoRateRecords: any[] = []
+    if (enabledProviders.has('shipmozo')) {
+      const shipmozo = new ShipmozoService()
+      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
+      const destinationPincode = normalizePincode(
+        params.destination ?? params.destination_pincode,
+      )?.toString()
+      const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
+
+      if (originPincode && destinationPincode) {
+        try {
+          const serviceabilityResp = await shipmozo.checkPincodeServiceability({
+            pickup_pincode: originPincode,
+            delivery_pincode: destinationPincode,
+          })
+
+          shipmozoAvailable = serviceabilityResp?.data?.serviceable === true
+          console.log('[Serviceability] Shipmozo pincode response', {
+            serviceable: shipmozoAvailable,
+            originPincode,
+            destinationPincode,
+          })
+
+          if (
+            shipmozoAvailable &&
+            Number(params.weight ?? 0) > 0 &&
+            Number(params.length ?? 0) > 0 &&
+            Number(params.breadth ?? 0) > 0 &&
+            Number(params.height ?? 0) > 0
+          ) {
+            shipmozoResp = await shipmozo.rateCalculator({
+              order_id: '',
+              pickup_pincode: Number(originPincode),
+              delivery_pincode: Number(destinationPincode),
+              payment_type: params.payment_type === 'cod' ? 'COD' : 'PREPAID',
+              shipment_type:
+                params.payment_type === 'reverse' || params.isReverse === true ? 'RETURN' : 'FORWARD',
+              order_amount: orderAmountValue > 0 ? orderAmountValue : 1,
+              type_of_package: 'SPS',
+              rov_type: 'ROV_OWNER',
+              cod_amount: params.payment_type === 'cod' ? String(orderAmountValue) : '',
+              weight: Number(params.weight ?? 0),
+              dimensions: [
+                {
+                  no_of_box: '1',
+                  length: String(Number(params.length ?? 0)),
+                  width: String(Number(params.breadth ?? 0)),
+                  height: String(Number(params.height ?? 0)),
+                },
+              ],
+            })
+
+            shipmozoRateRecords = Array.isArray(shipmozoResp?.data)
+              ? shipmozoResp.data
+              : Array.isArray(shipmozoResp?.data?.rates)
+                ? shipmozoResp.data.rates
+                : Array.isArray(shipmozoResp?.data?.couriers)
+                  ? shipmozoResp.data.couriers
+                  : []
+
+            if (shipmozoRateRecords.length) {
+              await syncShipmozoCourierRows(shipmozoRateRecords)
+              registerServiceableProvider('shipmozo', {
+                providerId: 'shipmozo',
+                providerName: 'Shipmozo',
+                codAvailable: true,
+                prepaidAvailable: true,
+                edd: '3-7 Days',
+                raw: shipmozoResp,
+              })
+            }
+          }
+        } catch (err: any) {
+          console.error('❌ Shipmozo serviceability error:', err?.message || err)
+        }
+      }
+    }
+
+    if (shipmozoAvailable) {
+      console.log('[Serviceability] Shipmozo candidate couriers prepared', {
+        mode: isCalculator ? 'calculator' : 'standard',
+        destination: params.destination?.toString(),
+        available: shipmozoAvailable,
+        records: shipmozoRateRecords?.length ?? 0,
+        candidates: providerCourierBuckets.get('shipmozo')?.rows.length ?? 0,
+      })
+    }
+
     for (const [providerKey, bucket] of providerCourierBuckets.entries()) {
       const providerMeta = serviceableProviders.get(providerKey)
       if (!providerMeta) continue
@@ -1362,6 +1632,27 @@ export const fetchAvailableCouriersWithRates = async (
                 (record: any) => String(record?.id || '').trim() === String(courier.id).trim(),
               )
             : null
+        const shipmozoRecord =
+          providerKey === 'shipmozo'
+            ? shipmozoRateRecords?.find(
+                (record: any) =>
+                  String(
+                    record?.courier_id ??
+                      record?.id ??
+                      record?.service_id ??
+                      record?.provider_id ??
+                      '',
+                  ).trim() === String(courier.id).trim(),
+              )
+            : null
+        const shiprocketRecord =
+          providerKey === 'shiprocket'
+            ? shiprocketRateRecords?.find(
+                (record: any) =>
+                  String(record?.courier_company_id ?? record?.courier_id ?? record?.id ?? '').trim() ===
+                  String(courier.id).trim(),
+              )
+            : null
         providerMeta.matchedCourierIds.add(Number(courier.id))
         combinedCouriers.push({
           id: courier.id,
@@ -1370,18 +1661,56 @@ export const fetchAvailableCouriersWithRates = async (
           serviceProvider: courier.serviceProvider ?? providerKey,
           cod: providerMeta.codAvailable,
           prepaid: providerMeta.prepaidAvailable,
-          edd: providerMeta.edd,
+          edd:
+            shiprocketRecord?.etd ??
+            shipmozoRecord?.expected_delivery_date ??
+            (shipmozoRecord?.estimated_delivery_days
+              ? `${shipmozoRecord.estimated_delivery_days} Days`
+              : providerMeta.edd),
           approxZone: null,
           createdAt: courier.createdAt,
           courier_cost_estimate:
+            shiprocketRecord?.rate ??
+            shiprocketRecord?.freight_charge ??
+            shipmozoRecord?.total_charges ??
+            shipmozoRecord?.shipping_charges ??
+            shipmozoRecord?.amount ??
             xpressbeesRecord?.total_charges ??
             xpressbeesRecord?.freight_charges ??
             null,
-          freight_charges: xpressbeesRecord?.freight_charges ?? null,
-          cod_charges: xpressbeesRecord?.cod_charges ?? null,
-          total_charges: xpressbeesRecord?.total_charges ?? null,
+          rateEstimate:
+            shiprocketRecord?.rate ??
+            shiprocketRecord?.freight_charge ??
+            shipmozoRecord?.total_charges ??
+            shipmozoRecord?.shipping_charges ??
+            shipmozoRecord?.amount ??
+            null,
+          freight_charges:
+            shiprocketRecord?.freight_charge ?? xpressbeesRecord?.freight_charges ?? null,
+          cod_charges:
+            shiprocketRecord?.cod_charges ??
+            shipmozoRecord?.cod_charges ??
+            xpressbeesRecord?.cod_charges ??
+            null,
+          total_charges:
+            shiprocketRecord?.rate ??
+            shiprocketRecord?.freight_charge ??
+            shipmozoRecord?.total_charges ??
+            shipmozoRecord?.shipping_charges ??
+            shipmozoRecord?.amount ??
+            xpressbeesRecord?.total_charges ??
+            null,
           chargeable_weight: xpressbeesRecord?.chargeable_weight ?? null,
-          provider_serviceability: xpressbeesRecord ?? null,
+          provider_serviceability: shiprocketRecord ?? shipmozoRecord ?? xpressbeesRecord ?? null,
+          shipping_mode:
+            (shiprocketRecord?.is_surface === true || shiprocketRecord?.is_surface === 1
+              ? 'Surface'
+              : shiprocketRecord?.air_max_weight
+                ? 'Air'
+                : null) ??
+            shipmozoRecord?.courier_company_service ??
+            shipmozoRecord?.service_type ??
+            null,
         })
       }
     }
@@ -1618,6 +1947,66 @@ export const fetchAvailableCouriersWithRates = async (
         const rateType = isReverseShipment ? 'rto' : 'forward'
         const applicableRateCards = effectiveCourierRates.filter((r) => r.type === rateType)
         const applicableRateOptions = applicableRateCards.flatMap((r) => buildServiceabilityRateOptions(r))
+
+        if (
+          !applicableRateOptions.length &&
+          (providerKey === 'shipmozo' || providerKey === 'shiprocket') &&
+          courier?.provider_serviceability
+        ) {
+          const shipmozoForwardRate = Number(
+            courier?.provider_serviceability?.rate ??
+              courier?.provider_serviceability?.freight_charge ??
+              courier?.provider_serviceability?.total_charges ??
+              courier?.provider_serviceability?.shipping_charges ??
+              courier?.provider_serviceability?.amount ??
+              0,
+          )
+          const shipmozoCodCharges = Number(courier?.provider_serviceability?.cod_charges ?? 0)
+          const shipmozoEdd =
+            courier?.provider_serviceability?.etd ??
+            courier?.provider_serviceability?.expected_delivery_date ??
+            (courier?.provider_serviceability?.estimated_delivery_days
+              ? `${courier.provider_serviceability.estimated_delivery_days} Days`
+              : courier?.edd)
+          const shipmozoMode =
+            courier?.provider_serviceability?.courier_company_service ||
+            courier?.provider_serviceability?.service_type ||
+            (courier?.provider_serviceability?.is_surface === true ||
+            courier?.provider_serviceability?.is_surface === 1
+              ? 'Surface'
+              : courier?.provider_serviceability?.air_max_weight
+                ? 'Air'
+                : '')
+
+          return [
+            {
+              ...courier,
+              courier_option_key: makeCourierIdentityKey({
+                id: courier.id,
+                integration_type: courier.integration_type || courier.service_provider || null,
+                serviceProvider: courier.serviceProvider || null,
+                max_slab_weight: null,
+              }),
+              displayName: courier.name,
+              localRates: {
+                [rateType]: {
+                  rate: shipmozoForwardRate,
+                  cod_charges: shipmozoCodCharges,
+                  other_charges: 0,
+                  mode: shipmozoMode,
+                },
+              },
+              approxZone,
+              courier_cost_estimate: shipmozoForwardRate || courier?.courier_cost_estimate || null,
+              chargeable_weight: chargeableWeight,
+              volumetric_weight: null,
+              slabs: null,
+              rate: shipmozoForwardRate || null,
+              edd: shipmozoEdd || courier?.edd,
+              max_slab_weight: null,
+            },
+          ]
+        }
 
         if (!applicableRateOptions.length) {
           return [
@@ -2548,10 +2937,25 @@ export const createB2CShipmentService = async (
           console.log(
             `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
+        } else if (serviceProvider === 'shipmozo') {
+          params.integration_type = 'shipmozo'
+          console.log(
+            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+          )
+        } else if (serviceProvider === 'xpressbees') {
+          params.integration_type = 'xpressbees'
+          console.log(
+            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+          )
+        } else if (serviceProvider === 'shiprocket') {
+          params.integration_type = 'shiprocket'
+          console.log(
+            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+          )
         } else {
           throw new HttpError(
             400,
-            `Unsupported serviceProvider: ${serviceProvider}. Supported providers: delhivery, ekart.`,
+            `Unsupported serviceProvider: ${serviceProvider}. Supported providers: delhivery, ekart, xpressbees, shipmozo, shiprocket.`,
           )
         }
       } else {
@@ -3031,20 +3435,29 @@ export const createB2CShipmentService = async (
   try {
     // 1️⃣ CREATE SHIPMENT
     const requestedIntegrationType = String(params.integration_type || '').toLowerCase()
-    const allowedIntegrationTypes = ['delhivery', 'ekart', 'xpressbees']
+    const allowedIntegrationTypes = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket']
     if (!requestedIntegrationType || !allowedIntegrationTypes.includes(requestedIntegrationType)) {
       throw new Error(
-        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees.`,
+        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees, shipmozo, shiprocket.`,
       )
     }
 
-    const integrationType = requestedIntegrationType as 'delhivery' | 'ekart' | 'xpressbees'
+    const integrationType = requestedIntegrationType as
+      | 'delhivery'
+      | 'ekart'
+      | 'xpressbees'
+      | 'shipmozo'
+      | 'shiprocket'
     const providerName =
       integrationType === 'delhivery'
         ? 'Delhivery'
         : integrationType === 'ekart'
           ? 'Ekart Logistics'
-          : 'Xpressbees'
+          : integrationType === 'xpressbees'
+            ? 'Xpressbees'
+            : integrationType === 'shipmozo'
+              ? 'Shipmozo'
+              : 'Shiprocket'
 
     let manifestFailure: DelhiveryManifestError | null = null
     let shipmentSuccessPackage: any = null
@@ -3325,6 +3738,299 @@ export const createB2CShipmentService = async (
             : null,
         label: xpressbeesPackage?.label ?? undefined,
         manifest: xpressbeesPackage?.manifest ?? undefined,
+        courier_cost: providerCourierCost,
+        sort_code: providerSortCode,
+      }
+    } else if (integrationType === 'shipmozo') {
+      if (isReverseShipment) {
+        const shipmozo = new ShipmozoService()
+        shipmentData = await shipmozo.pushReturnOrder({
+          order_id: params.order_number,
+          order_date:
+            params.invoice_date || new Date(params.order_date || new Date()).toISOString().slice(0, 10),
+          order_type: 'ESSENTIALS',
+          pickup_name: params.pickup?.name || params.pickup?.warehouse_name,
+          pickup_phone: Number(params.pickup?.phone || 0),
+          pickup_email: params.company?.name ? undefined : params.consignee?.email,
+          pickup_address_line_one: params.pickup?.address,
+          pickup_address_line_two: params.pickup?.address_2 || '',
+          pickup_pin_code: Number(params.pickup?.pincode || 0),
+          pickup_city: params.pickup?.city,
+          pickup_state: params.pickup?.state,
+          product_detail: (params.order_items || []).map((item) => ({
+            name: item.name,
+            sku_number: item.sku || '',
+            quantity: item.qty || item.quantity || 1,
+            discount: String(item.discount ?? ''),
+            hsn: item.hsn || item.hsnCode || '',
+            unit_price: item.price,
+            product_category: 'Other',
+          })),
+          payment_type: 'PREPAID',
+          weight: Number(params.package_weight ?? params.weight ?? 0) / 1000,
+          length: Number(params.package_length ?? params.length ?? 0),
+          width: Number(params.package_breadth ?? params.breadth ?? 0),
+          height: Number(params.package_height ?? params.height ?? 0),
+          warehouse_id: '',
+          return_reason_id: 14,
+          customer_request: 'REFUND',
+          reason_comment: '',
+        })
+        shipmentSuccessPackage = shipmentData?.data || shipmentData
+        shipmentMeta = {
+          shipment_id: shipmentSuccessPackage?.reference_id ?? params.order_number,
+          awb_number: undefined,
+          courier_name: 'Shipmozo Return',
+          courier_id: params.courier_id ? Number(params.courier_id) : null,
+          label: undefined,
+          manifest: undefined,
+          courier_cost: null,
+          sort_code: null,
+        }
+      } else {
+        const shipmozo = new ShipmozoService()
+        const warehouseId = params.pickup_location_id
+          ? null
+          : shipmozo.getDefaultWarehouseId()
+
+        if (!warehouseId) {
+          throw new HttpError(
+            400,
+            'Shipmozo default warehouse ID is missing. Save it in courier credentials before booking.',
+          )
+        }
+
+        const pushPayload = {
+          order_id: params.order_number,
+          order_date:
+            params.invoice_date || new Date(params.order_date || new Date()).toISOString().slice(0, 10),
+          order_type: 'ESSENTIALS',
+          consignee_name: params.consignee?.name,
+          consignee_phone: Number(params.consignee?.phone || 0),
+          consignee_alternate_phone: Number(params.consignee?.phone || 0),
+          consignee_email: params.consignee?.email || '',
+          consignee_address_line_one: params.consignee?.address,
+          consignee_address_line_two: params.consignee?.address_2 || '',
+          consignee_pin_code: Number(params.consignee?.pincode || 0),
+          consignee_city: params.consignee?.city,
+          consignee_state: params.consignee?.state,
+          product_detail: (params.order_items || []).map((item) => ({
+            name: item.name,
+            sku_number: item.sku || '',
+            quantity: item.qty || item.quantity || 1,
+            discount: String(item.discount ?? ''),
+            hsn: item.hsn || item.hsnCode || '',
+            unit_price: item.price,
+            product_category: 'Other',
+          })),
+          payment_type: params.payment_type === 'cod' ? 'COD' : 'PREPAID',
+          cod_amount: params.payment_type === 'cod' ? String(params.order_amount ?? 0) : '',
+          weight: Number(params.package_weight ?? params.weight ?? 0),
+          length: Number(params.package_length ?? params.length ?? 0),
+          width: Number(params.package_breadth ?? params.breadth ?? 0),
+          height: Number(params.package_height ?? params.height ?? 0),
+          warehouse_id: warehouseId,
+          gst_ewaybill_number: params.ewbn_number || params.ewaybill_number || '',
+          gstin_number: params.company?.gst || '',
+        }
+
+        await shipmozo.pushOrder(pushPayload)
+
+        const assignResp = await shipmozo.assignCourier({
+          order_id: params.order_number,
+          courier_id: Number(params.courier_id || 0),
+        })
+
+        const pickedCourierName =
+          assignResp?.data?.courier || params.courier_partner || params.integration_type || 'Shipmozo'
+
+        const scheduleResp = await shipmozo.schedulePickup({
+          order_id: params.order_number,
+        })
+        const detailResp = await shipmozo.getOrderDetail(params.order_number)
+
+        const awbNumber =
+          scheduleResp?.data?.awb_number ||
+          detailResp?.data?.awb_number ||
+          detailResp?.data?.awb ||
+          detailResp?.data?.tracking_id ||
+          undefined
+
+        let labelDataUrl: string | undefined
+        if (awbNumber) {
+          try {
+            const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
+            labelDataUrl = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : undefined
+          } catch (labelError: any) {
+            console.warn('⚠️ Shipmozo label fetch failed:', labelError?.message || labelError)
+          }
+        }
+
+        shipmentData = {
+          push: true,
+          assign: assignResp?.data,
+          schedule: scheduleResp?.data,
+          detail: detailResp?.data,
+        }
+        shipmentSuccessPackage = shipmentData?.schedule || shipmentData?.detail || {}
+        providerCourierCost = Number(params?.courier_cost ?? 0) || null
+        shipmentMeta = {
+          shipment_id:
+            shipmentSuccessPackage?.reference_id ??
+            shipmentSuccessPackage?.order_id ??
+            params.order_number,
+          awb_number: awbNumber,
+          courier_name: pickedCourierName,
+          courier_id: params.courier_id ? Number(params.courier_id) : null,
+          label: labelDataUrl,
+          manifest: undefined,
+          courier_cost: providerCourierCost,
+          sort_code: null,
+        }
+      }
+    } else if (integrationType === 'shiprocket') {
+      if (isReverseShipment) {
+        throw new HttpError(400, 'Shiprocket reverse shipments are not supported in this flow yet')
+      }
+
+      const shiprocket = new ShiprocketCourierService()
+      const pickupLocation =
+        String(
+          params.pickup_location_alias ||
+            params.pickup?.warehouse_name ||
+            shiprocket.getDefaultPickupLocation() ||
+            '',
+        ).trim() || null
+
+      if (!pickupLocation) {
+        throw new HttpError(
+          400,
+          'Shiprocket default pickup location is missing. Save it in courier credentials before booking.',
+        )
+      }
+
+      const defaultChannelId = shiprocket.getDefaultChannelId()
+      const shipmentWeightKg = normalizeWeightToKg(params.package_weight ?? params.weight ?? 0)
+      const orderItems = (params.order_items || []).map((item) => ({
+        name: item.name,
+        sku: item.sku || item.name || 'SKU',
+        units: Number(item.qty || item.quantity || 1),
+        selling_price: Number(item.price || 0),
+        discount: Number(item.discount || 0),
+        tax: Number(item.tax_rate || 0),
+        hsn: item.hsn || item.hsnCode || '',
+      }))
+      const subTotal = orderItems.reduce(
+        (sum, item) => sum + Number(item.selling_price || 0) * Number(item.units || 0),
+        0,
+      )
+
+      const createOrderPayload = {
+        order_id: params.order_number,
+        order_date:
+          params.invoice_date ||
+          new Date(params.order_date || new Date()).toISOString().slice(0, 16).replace('T', ' '),
+        pickup_location: pickupLocation,
+        channel_id: defaultChannelId ? Number(defaultChannelId) : undefined,
+        comment: '',
+        billing_customer_name: params.consignee?.name || 'Customer',
+        billing_last_name: '',
+        billing_address: params.consignee?.address || '',
+        billing_address_2: params.consignee?.address_2 || '',
+        billing_city: params.consignee?.city || '',
+        billing_pincode: Number(params.consignee?.pincode || 0),
+        billing_state: params.consignee?.state || '',
+        billing_country: 'India',
+        billing_email: params.consignee?.email || 'no-reply@example.com',
+        billing_phone: Number(params.consignee?.phone || 0),
+        shipping_is_billing: true,
+        order_items: orderItems,
+        payment_method: params.payment_type === 'cod' ? 'COD' : 'Prepaid',
+        shipping_charges: 0,
+        giftwrap_charges: 0,
+        transaction_charges: 0,
+        total_discount: 0,
+        sub_total: Number(params.order_amount ?? subTotal ?? 0),
+        length: Number(params.package_length ?? params.length ?? 1),
+        breadth: Number(params.package_breadth ?? params.breadth ?? 1),
+        height: Number(params.package_height ?? params.height ?? 1),
+        weight: shipmentWeightKg > 0 ? shipmentWeightKg : 0.5,
+      }
+
+      const createOrderResp = defaultChannelId
+        ? await shiprocket.createChannelSpecificOrder(createOrderPayload)
+        : await shiprocket.createCustomOrder(createOrderPayload)
+
+      const shiprocketOrderId =
+        createOrderResp?.order_id ?? createOrderResp?.data?.order_id ?? createOrderResp?.id
+      const shiprocketShipmentId =
+        createOrderResp?.shipment_id ?? createOrderResp?.data?.shipment_id ?? null
+
+      if (!shiprocketOrderId || !shiprocketShipmentId) {
+        throw new HttpError(500, 'Shiprocket order creation did not return order_id/shipment_id')
+      }
+
+      const assignResp = await shiprocket.assignAwb({
+        shipment_id: Number(shiprocketShipmentId),
+        courier_id: params.courier_id ? Number(params.courier_id) : undefined,
+      })
+
+      const awbNumber =
+        assignResp?.response?.data?.awb_code ??
+        assignResp?.awb_code ??
+        assignResp?.data?.awb_code ??
+        undefined
+
+      const courierName =
+        assignResp?.response?.data?.courier_name ??
+        assignResp?.courier_name ??
+        assignResp?.data?.courier_name ??
+        'Shiprocket'
+
+      const pickupResp = await shiprocket.generatePickup({
+        shipment_id: [Number(shiprocketShipmentId)],
+      })
+      const manifestResp = await shiprocket.generateManifest({
+        shipment_id: [Number(shiprocketShipmentId)],
+      })
+      const printManifestResp = await shiprocket.printManifest({
+        order_ids: [Number(shiprocketOrderId)],
+      })
+      const labelResp = await shiprocket.generateLabel({
+        shipment_id: [Number(shiprocketShipmentId)],
+      })
+      const invoiceResp = await shiprocket.generateInvoice({
+        ids: [Number(shiprocketOrderId)],
+      })
+
+      shipmentData = {
+        create: createOrderResp,
+        assign: assignResp,
+        pickup: pickupResp,
+        manifest: manifestResp,
+        print_manifest: printManifestResp,
+        label: labelResp,
+        invoice: invoiceResp,
+      }
+      shipmentSuccessPackage = assignResp?.response?.data || assignResp?.data || assignResp || {}
+      providerCourierCost = Number(params?.courier_cost ?? 0) || null
+      providerSortCode =
+        assignResp?.response?.data?.routing_code ??
+        assignResp?.routing_code ??
+        assignResp?.data?.routing_code ??
+        null
+
+      shipmentMeta = {
+        shipment_id: String(shiprocketShipmentId),
+        awb_number: awbNumber,
+        courier_name: courierName,
+        courier_id: params.courier_id ? Number(params.courier_id) : null,
+        label: labelResp?.label_url ?? labelResp?.data?.label_url ?? undefined,
+        manifest:
+          manifestResp?.manifest_url ??
+          printManifestResp?.manifest_url ??
+          manifestResp?.data?.manifest_url ??
+          undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -6470,6 +7176,83 @@ const mapDelhiveryTracking = (raw: any, order: OrderSummary): ProviderNormalized
   }
 }
 
+const mapShipmozoTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const data = raw?.data ?? raw ?? {}
+  const scans = Array.isArray(data?.scan_detail) ? data.scan_detail : []
+
+  scans.forEach((scan: any) => {
+    pushHistoryEvent(history, {
+      statusCode: scan?.status_code ?? scan?.current_status ?? scan?.status,
+      message: scan?.message ?? scan?.status ?? scan?.current_status,
+      location: scan?.location ?? scan?.city ?? '',
+      time: scan?.scan_time ?? scan?.event_time ?? scan?.created_at ?? scan?.time,
+    })
+  })
+
+  if (!history.length) {
+    pushHistoryEvent(history, {
+      statusCode: data?.current_status ?? order.order_status ?? 'Status Update',
+      message: data?.current_status ?? order.order_status ?? 'Status Update',
+      location: '',
+      time: data?.status_time ?? order.updated_at ?? order.created_at ?? new Date(),
+    })
+  }
+
+  return {
+    history,
+    status: sanitizeString(data?.current_status ?? order.order_status, 'In Transit'),
+    edd: sanitizeString(data?.expected_delivery_date ?? '', '') || undefined,
+    courier_name: sanitizeString(data?.courier ?? order.courier_partner ?? 'Shipmozo', 'Shipmozo'),
+    shipment_info: sanitizeString(data?.reference_id ?? '', '') || undefined,
+  }
+}
+
+const mapShiprocketTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const data = raw?.tracking_data?.shipment_track?.[0] ?? raw?.tracking_data ?? raw?.data ?? raw ?? {}
+  const activities = Array.isArray(data?.shipment_track_activities)
+    ? data.shipment_track_activities
+    : Array.isArray(data?.tracking_activities)
+      ? data.tracking_activities
+      : []
+
+  activities.forEach((activity: any) => {
+    pushHistoryEvent(history, {
+      statusCode: activity?.sr_status ?? activity?.status_code ?? activity?.status,
+      message: activity?.activity ?? activity?.status ?? activity?.current_status,
+      location: activity?.location ?? activity?.city ?? '',
+      time: activity?.date ?? activity?.activity_date ?? activity?.event_time,
+    })
+  })
+
+  if (!history.length) {
+    pushHistoryEvent(history, {
+      statusCode: data?.shipment_status ?? order.order_status ?? 'Status Update',
+      message: data?.current_status ?? data?.shipment_status ?? order.order_status ?? 'Status Update',
+      location: '',
+      time: data?.etd ?? order.updated_at ?? order.created_at ?? new Date(),
+    })
+  }
+
+  return {
+    history,
+    status: sanitizeString(
+      data?.tracking_data?.shipment_track?.[0]?.current_status ??
+        data?.current_status ??
+        data?.shipment_status ??
+        order.order_status,
+      'In Transit',
+    ),
+    edd: sanitizeString(data?.etd ?? data?.estimated_delivery_date ?? '', '') || undefined,
+    courier_name: sanitizeString(
+      data?.courier_name ?? order.courier_partner ?? 'Shiprocket',
+      'Shiprocket',
+    ),
+    shipment_info: sanitizeString(data?.awb_code ?? order.awb_number ?? '', '') || undefined,
+  }
+}
+
 const buildTrackingResponse = (
   order: OrderSummary,
   providerData: ProviderNormalizedTracking,
@@ -6612,9 +7395,11 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
 
   let providerKey = sanitizeString(order.integration_type ?? 'delhivery').toLowerCase()
 
-  if (!['delhivery'].includes(providerKey) && order.courier_partner) {
+  if (!['delhivery', 'shipmozo', 'shiprocket'].includes(providerKey) && order.courier_partner) {
     const partner = order.courier_partner.toLowerCase()
     if (partner.includes('delhivery')) providerKey = 'delhivery'
+    if (partner.includes('shipmozo')) providerKey = 'shipmozo'
+    if (partner.includes('shiprocket')) providerKey = 'shiprocket'
   }
 
   let providerData: ProviderNormalizedTracking
@@ -6624,6 +7409,14 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
       const delhiveryService = new DelhiveryService()
       const raw = await delhiveryService.trackShipment(awb)
       providerData = mapDelhiveryTracking(raw, order)
+    } else if (providerKey === 'shipmozo') {
+      const shipmozoService = new ShipmozoService()
+      const raw = await shipmozoService.trackOrder(awb)
+      providerData = mapShipmozoTracking(raw, order)
+    } else if (providerKey === 'shiprocket') {
+      const shiprocketService = new ShiprocketCourierService()
+      const raw = await shiprocketService.trackByAwb(awb)
+      providerData = mapShiprocketTracking(raw, order)
     } else {
       throw new HttpError(400, 'Unsupported integration_type for tracking')
     }

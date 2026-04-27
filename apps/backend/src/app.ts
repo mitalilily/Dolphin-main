@@ -122,7 +122,9 @@ app.use(
         typeof origin === 'string' &&
         (origin.endsWith('.netlify.app') ||
           origin.endsWith('.netlify.live') ||
-          origin.endsWith('.onrender.com'))
+          origin.endsWith('.onrender.com') ||
+          origin.endsWith('.railway.app') ||
+          origin.endsWith('.up.railway.app'))
 
       if (!origin || isAllowedOrigin(origin) || isPlatformPreview) {
         callback(null, true)

@@ -1,6 +1,7 @@
 import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { Request, Response } from 'express'
 import Papa from 'papaparse'
+import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProviders'
 import { db } from '../../models/client'
 import {
   deleteCourierService,
@@ -15,6 +16,9 @@ import {
   normalizeEkartBaseUrl,
 } from '../../models/services/courierCredentials.service'
 import { EkartService } from '../../models/services/couriers/ekart.service'
+import { IcarryService } from '../../models/services/couriers/icarry.service'
+import { ShiprocketCourierService } from '../../models/services/couriers/shiprocket.service'
+import { ShipmozoService } from '../../models/services/couriers/shipmozo.service'
 import { XpressbeesService } from '../../models/services/couriers/xpressbees.service'
 import { fetchAvailableCouriersWithRatesAdmin } from '../../models/services/shiprocket.service'
 import { courier_credentials } from '../../models/schema/courierCredentials'
@@ -244,7 +248,7 @@ export const updateCourierStatusController = async (req: Request, res: Response)
 export const getServiceProvidersController = async (req: Request, res: Response) => {
   try {
     // Only expose the main integrated service providers in the enable/disable UI
-    const allowedProviders = ['delhivery', 'ekart', 'xpressbees']
+    const allowedProviders: string[] = [...ADMIN_SUPPORTED_COURIER_PROVIDERS]
 
     const rows = await db
       .select({
@@ -290,7 +294,7 @@ export const updateServiceProviderStatusController = async (req: Request, res: R
   const { isEnabled } = req.body
 
   try {
-    const allowedProviders = ['delhivery', 'ekart', 'xpressbees']
+    const allowedProviders: string[] = [...ADMIN_SUPPORTED_COURIER_PROVIDERS]
 
     if (!serviceProvider || typeof isEnabled !== 'boolean') {
       return res.status(400).json({
@@ -346,7 +350,7 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
         webhookSecret: courier_credentials.webhookSecret,
       })
       .from(courier_credentials)
-      .where(inArray(courier_credentials.provider, ['delhivery', 'ekart', 'xpressbees']))
+      .where(inArray(courier_credentials.provider, [...ADMIN_SUPPORTED_COURIER_PROVIDERS]))
 
     const defaults = {
       delhivery: {
@@ -372,6 +376,42 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
         apiKeyMasked: '',
         hasPassword: false,
         hasWebhookSecret: false,
+      },
+      shipmozo: {
+        provider: 'shipmozo',
+        apiBase: 'https://shipping-api.com/app/api/v1',
+        publicKey: '',
+        hasPrivateKey: false,
+        privateKeyMasked: '',
+        username: '',
+        hasPassword: false,
+        defaultWarehouseId: '',
+      },
+      shiprocket: {
+        provider: 'shiprocket',
+        apiBase: 'https://apiv2.shiprocket.in/v1/external',
+        username: '',
+        hasPassword: false,
+        defaultPickupLocation: '',
+        defaultChannelId: '',
+      },
+      juxcargo: {
+        provider: 'juxcargo',
+        apiBase: '',
+        username: '',
+        hasPassword: false,
+        hasApiKey: false,
+        apiKeyMasked: '',
+        clientId: '',
+      },
+      icarry: {
+        provider: 'icarry',
+        apiBase: '',
+        username: '',
+        hasPassword: false,
+        hasApiKey: false,
+        apiKeyMasked: '',
+        clientId: '',
       },
     }
 
@@ -414,6 +454,59 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
             : '',
           hasPassword,
           hasWebhookSecret,
+        }
+      } else if (provider === 'shipmozo') {
+        const privateKey = row.apiKey || ''
+        const hasPassword = Boolean((row.password || '').trim())
+        acc.shipmozo = {
+          provider: 'shipmozo',
+          apiBase: row.apiBase || 'https://shipping-api.com/app/api/v1',
+          publicKey: row.clientId || '',
+          hasPrivateKey: Boolean(privateKey.trim()),
+          privateKeyMasked: privateKey
+            ? `${privateKey.slice(0, 4)}${'*'.repeat(Math.max(privateKey.length - 8, 0))}${privateKey.slice(-4)}`
+            : '',
+          username: row.username || '',
+          hasPassword,
+          defaultWarehouseId: row.clientName || '',
+        }
+      } else if (provider === 'shiprocket') {
+        const hasPassword = Boolean((row.password || '').trim())
+        acc.shiprocket = {
+          provider: 'shiprocket',
+          apiBase: row.apiBase || 'https://apiv2.shiprocket.in/v1/external',
+          username: row.username || '',
+          hasPassword,
+          defaultPickupLocation: row.clientName || '',
+          defaultChannelId: row.clientId || '',
+        }
+      } else if (provider === 'juxcargo') {
+        const apiKey = row.apiKey || ''
+        const hasPassword = Boolean((row.password || '').trim())
+        acc.juxcargo = {
+          provider: 'juxcargo',
+          apiBase: row.apiBase || '',
+          username: row.username || '',
+          hasPassword,
+          hasApiKey: Boolean(apiKey.trim()),
+          apiKeyMasked: apiKey
+            ? `${apiKey.slice(0, 4)}${'*'.repeat(Math.max(apiKey.length - 8, 0))}${apiKey.slice(-4)}`
+            : '',
+          clientId: row.clientId || '',
+        }
+      } else if (provider === 'icarry') {
+        const apiKey = row.apiKey || ''
+        const hasPassword = Boolean((row.password || '').trim())
+        acc.icarry = {
+          provider: 'icarry',
+          apiBase: row.apiBase || '',
+          username: row.username || '',
+          hasPassword,
+          hasApiKey: Boolean(apiKey.trim()),
+          apiKeyMasked: apiKey
+            ? `${apiKey.slice(0, 4)}${'*'.repeat(Math.max(apiKey.length - 8, 0))}${apiKey.slice(-4)}`
+            : '',
+          clientId: row.clientId || '',
         }
       }
       return acc
@@ -675,6 +768,522 @@ export const updateXpressbeesCredentialsController = async (req: Request, res: R
     res.status(500).json({ success: false, message: 'Failed to update Xpressbees credentials' })
   }
 }
+
+export const updateShipmozoCredentialsController = async (req: Request, res: Response) => {
+  const { apiBase, publicKey, privateKey, username, password, defaultWarehouseId } = req.body || {}
+
+  try {
+    const nextApiBase = typeof apiBase === 'string' ? apiBase.trim() : undefined
+    const nextPublicKey = typeof publicKey === 'string' ? publicKey.trim() : undefined
+    const nextPrivateKey = typeof privateKey === 'string' ? privateKey.trim() : undefined
+    const nextUsername = typeof username === 'string' ? username.trim() : undefined
+    const nextPassword = typeof password === 'string' ? password.trim() : undefined
+    const nextDefaultWarehouseId =
+      typeof defaultWarehouseId === 'string' ? defaultWarehouseId.trim() : undefined
+    const hasPrivateKey = typeof nextPrivateKey === 'string' && nextPrivateKey.length > 0
+    const hasPassword = typeof nextPassword === 'string' && nextPassword.length > 0
+
+    const [existing] = await db
+      .select({ id: courier_credentials.id })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'shipmozo'))
+      .limit(1)
+
+    if (existing) {
+      const updatePayload: Record<string, any> = {
+        updatedAt: new Date(),
+      }
+      if (nextApiBase !== undefined) {
+        updatePayload.apiBase = nextApiBase || 'https://shipping-api.com/app/api/v1'
+      }
+      if (nextPublicKey !== undefined) {
+        updatePayload.clientId = nextPublicKey
+      }
+      if (hasPrivateKey) {
+        updatePayload.apiKey = nextPrivateKey
+      }
+      if (nextUsername !== undefined) {
+        updatePayload.username = nextUsername
+      }
+      if (hasPassword) {
+        updatePayload.password = nextPassword
+      }
+      if (nextDefaultWarehouseId !== undefined) {
+        updatePayload.clientName = nextDefaultWarehouseId
+      }
+
+      await db
+        .update(courier_credentials)
+        .set(updatePayload)
+        .where(eq(courier_credentials.provider, 'shipmozo'))
+    } else {
+      await db.insert(courier_credentials).values({
+        provider: 'shipmozo',
+        apiBase: nextApiBase || 'https://shipping-api.com/app/api/v1',
+        clientName: nextDefaultWarehouseId || '',
+        apiKey: hasPrivateKey ? nextPrivateKey : '',
+        clientId: nextPublicKey || '',
+        username: nextUsername || '',
+        password: hasPassword ? nextPassword : '',
+        webhookSecret: '',
+      })
+    }
+
+    ShipmozoService.clearCachedConfig()
+
+    const [saved] = await db
+      .select({
+        apiBase: courier_credentials.apiBase,
+        publicKey: courier_credentials.clientId,
+        privateKey: courier_credentials.apiKey,
+        username: courier_credentials.username,
+        password: courier_credentials.password,
+        defaultWarehouseId: courier_credentials.clientName,
+      })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'shipmozo'))
+      .limit(1)
+
+    res.json({
+      success: true,
+      message: 'Shipmozo credentials updated successfully',
+      data: {
+        provider: 'shipmozo',
+        apiBase: saved?.apiBase || 'https://shipping-api.com/app/api/v1',
+        publicKey: saved?.publicKey || '',
+        hasPrivateKey: Boolean((saved?.privateKey || '').trim()),
+        username: saved?.username || '',
+        hasPassword: Boolean((saved?.password || '').trim()),
+        defaultWarehouseId: saved?.defaultWarehouseId || '',
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to update Shipmozo credentials' })
+  }
+}
+
+export const updateShiprocketCredentialsController = async (req: Request, res: Response) => {
+  const { apiBase, username, password, defaultPickupLocation, defaultChannelId } = req.body || {}
+
+  try {
+    const nextApiBase = typeof apiBase === 'string' ? apiBase.trim() : undefined
+    const nextUsername = typeof username === 'string' ? username.trim() : undefined
+    const nextPassword = typeof password === 'string' ? password.trim() : undefined
+    const nextDefaultPickupLocation =
+      typeof defaultPickupLocation === 'string' ? defaultPickupLocation.trim() : undefined
+    const nextDefaultChannelId =
+      typeof defaultChannelId === 'string' ? defaultChannelId.trim() : undefined
+    const hasPassword = typeof nextPassword === 'string' && nextPassword.length > 0
+
+    const [existing] = await db
+      .select({ id: courier_credentials.id })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'shiprocket'))
+      .limit(1)
+
+    if (existing) {
+      const updatePayload: Record<string, any> = {
+        updatedAt: new Date(),
+      }
+      if (nextApiBase !== undefined) {
+        updatePayload.apiBase = nextApiBase || 'https://apiv2.shiprocket.in/v1/external'
+      }
+      if (nextUsername !== undefined) {
+        updatePayload.username = nextUsername
+      }
+      if (hasPassword) {
+        updatePayload.password = nextPassword
+      }
+      if (nextDefaultPickupLocation !== undefined) {
+        updatePayload.clientName = nextDefaultPickupLocation
+      }
+      if (nextDefaultChannelId !== undefined) {
+        updatePayload.clientId = nextDefaultChannelId
+      }
+
+      await db
+        .update(courier_credentials)
+        .set(updatePayload)
+        .where(eq(courier_credentials.provider, 'shiprocket'))
+    } else {
+      await db.insert(courier_credentials).values({
+        provider: 'shiprocket',
+        apiBase: nextApiBase || 'https://apiv2.shiprocket.in/v1/external',
+        clientName: nextDefaultPickupLocation || '',
+        clientId: nextDefaultChannelId || '',
+        apiKey: '',
+        username: nextUsername || '',
+        password: hasPassword ? nextPassword : '',
+        webhookSecret: '',
+      })
+    }
+
+    ShiprocketCourierService.clearCachedConfig()
+
+    const [saved] = await db
+      .select({
+        apiBase: courier_credentials.apiBase,
+        username: courier_credentials.username,
+        password: courier_credentials.password,
+        defaultPickupLocation: courier_credentials.clientName,
+        defaultChannelId: courier_credentials.clientId,
+      })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'shiprocket'))
+      .limit(1)
+
+    res.json({
+      success: true,
+      message: 'Shiprocket credentials updated successfully',
+      data: {
+        provider: 'shiprocket',
+        apiBase: saved?.apiBase || 'https://apiv2.shiprocket.in/v1/external',
+        username: saved?.username || '',
+        hasPassword: Boolean((saved?.password || '').trim()),
+        defaultPickupLocation: saved?.defaultPickupLocation || '',
+        defaultChannelId: saved?.defaultChannelId || '',
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to update Shiprocket credentials' })
+  }
+}
+
+export const updateIcarryCredentialsController = async (req: Request, res: Response) => {
+  const { apiBase, username, apiKey, password, clientId } = req.body || {}
+
+  try {
+    const nextApiBase = typeof apiBase === 'string' ? apiBase.trim() : undefined
+    const nextUsername = typeof username === 'string' ? username.trim() : undefined
+    const nextApiKey = typeof apiKey === 'string' ? apiKey.trim() : undefined
+    const nextPassword = typeof password === 'string' ? password.trim() : undefined
+    const nextClientId = typeof clientId === 'string' ? clientId.trim() : undefined
+    const hasApiKey = typeof nextApiKey === 'string' && nextApiKey.length > 0
+    const hasPassword = typeof nextPassword === 'string' && nextPassword.length > 0
+
+    const [existing] = await db
+      .select({ id: courier_credentials.id })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'icarry'))
+      .limit(1)
+
+    if (existing) {
+      const updatePayload: Record<string, any> = {
+        updatedAt: new Date(),
+      }
+      if (nextApiBase !== undefined) {
+        updatePayload.apiBase = nextApiBase || 'https://www.icarry.in'
+      }
+      if (nextUsername !== undefined) {
+        updatePayload.username = nextUsername
+      }
+      if (hasApiKey) {
+        updatePayload.apiKey = nextApiKey
+      }
+      if (hasPassword) {
+        updatePayload.password = nextPassword
+      }
+      if (nextClientId !== undefined) {
+        updatePayload.clientId = nextClientId
+      }
+
+      await db
+        .update(courier_credentials)
+        .set(updatePayload)
+        .where(eq(courier_credentials.provider, 'icarry'))
+    } else {
+      await db.insert(courier_credentials).values({
+        provider: 'icarry',
+        apiBase: nextApiBase || 'https://www.icarry.in',
+        clientName: '',
+        clientId: nextClientId || '',
+        apiKey: hasApiKey ? nextApiKey : '',
+        username: nextUsername || '',
+        password: hasPassword ? nextPassword : '',
+        webhookSecret: '',
+      })
+    }
+
+    IcarryService.clearCachedConfig()
+
+    const [saved] = await db
+      .select({
+        apiBase: courier_credentials.apiBase,
+        username: courier_credentials.username,
+        apiKey: courier_credentials.apiKey,
+        password: courier_credentials.password,
+        clientId: courier_credentials.clientId,
+      })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'icarry'))
+      .limit(1)
+
+    res.json({
+      success: true,
+      message: 'iCarry credentials updated successfully',
+      data: {
+        provider: 'icarry',
+        apiBase: saved?.apiBase || 'https://www.icarry.in',
+        username: saved?.username || '',
+        hasApiKey: Boolean((saved?.apiKey || '').trim()),
+        hasPassword: Boolean((saved?.password || '').trim()),
+        clientId: saved?.clientId || '',
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to update iCarry credentials' })
+  }
+}
+
+const handleShipmozoAdminAction = async (
+  res: Response,
+  action: () => Promise<any>,
+  errorMessage: string,
+) => {
+  try {
+    const data = await action()
+    return res.json({ success: true, data })
+  } catch (err: any) {
+    console.error(errorMessage, err)
+    return res.status(typeof err?.statusCode === 'number' ? err.statusCode : 500).json({
+      success: false,
+      message: err?.message || errorMessage,
+    })
+  }
+}
+
+const handleIcarryAdminAction = async (
+  res: Response,
+  action: () => Promise<any>,
+  errorMessage: string,
+) => {
+  try {
+    const data = await action()
+    return res.json({ success: true, data })
+  } catch (err: any) {
+    console.error(errorMessage, err)
+    return res.status(typeof err?.statusCode === 'number' ? err.statusCode : 500).json({
+      success: false,
+      message: err?.message || errorMessage,
+    })
+  }
+}
+
+export const icarryLoginController = async (_req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().login(true),
+    'Failed to login to iCarry',
+  )
+
+export const icarryEstimateSingleController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().getEstimateSingleShipment(req.body || {}),
+    'Failed to fetch iCarry single shipment estimate',
+  )
+
+export const icarryEstimateMultiBoxController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().getEstimateMultiBoxShipment(req.body || {}),
+    'Failed to fetch iCarry multi-box shipment estimate',
+  )
+
+export const icarryEstimateInternationalController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().getEstimateInternationalShipment(req.body || {}),
+    'Failed to fetch iCarry international shipment estimate',
+  )
+
+export const icarryBookInternationalShipmentController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().bookInternationalShipment(req.body || {}),
+    'Failed to book iCarry international shipment',
+  )
+
+export const icarryCancelShipmentController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().cancelShipment(req.body || {}),
+    'Failed to cancel iCarry shipment',
+  )
+
+export const icarryCreateReverseShipmentController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().createReverseShipment(req.body || {}),
+    'Failed to create iCarry reverse shipment',
+  )
+
+export const icarryTrackShipmentController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().trackShipment(req.body || {}),
+    'Failed to track iCarry shipment',
+  )
+
+export const icarryPrintShipmentLabelController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().printShipmentLabel(req.body || {}),
+    'Failed to print iCarry shipment label',
+  )
+
+export const icarrySyncShipmentChargesController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().syncShipmentCharges(req.body || {}),
+    'Failed to sync iCarry shipment charges',
+  )
+
+export const icarrySyncShipmentStatusController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().syncShipmentStatus(req.body || {}),
+    'Failed to sync iCarry shipment status',
+  )
+
+export const icarryCheckPincodeServiceabilityController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().checkPincodeServiceability(req.body || {}),
+    'Failed to check iCarry pincode serviceability',
+  )
+
+export const icarryAddPickupAddressController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().addPickupAddress(req.body || {}),
+    'Failed to add iCarry pickup address',
+  )
+
+export const icarryEditPickupAddressController = async (req: Request, res: Response) =>
+  handleIcarryAdminAction(
+    res,
+    async () => new IcarryService().editPickupAddress(req.body || {}),
+    'Failed to edit iCarry pickup address',
+  )
+
+export const getShipmozoInfoController = async (_req: Request, res: Response) =>
+  handleShipmozoAdminAction(res, async () => new ShipmozoService().info(), 'Failed to fetch Shipmozo info')
+
+export const shipmozoLoginController = async (_req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().login(),
+    'Failed to login to Shipmozo',
+  )
+
+export const getShipmozoWarehousesController = async (_req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().getWarehouses(),
+    'Failed to fetch Shipmozo warehouses',
+  )
+
+export const createShipmozoWarehouseController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().createWarehouse(req.body || {}),
+    'Failed to create Shipmozo warehouse',
+  )
+
+export const updateShipmozoWarehouseForOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().updateWarehouseForOrder(req.body || {}),
+    'Failed to update Shipmozo warehouse for order',
+  )
+
+export const getShipmozoReturnReasonsController = async (_req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().getReturnReasons(),
+    'Failed to fetch Shipmozo return reasons',
+  )
+
+export const checkShipmozoPincodeServiceabilityController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().checkPincodeServiceability(req.body || {}),
+    'Failed to check Shipmozo pincode serviceability',
+  )
+
+export const getShipmozoRateCalculatorController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().rateCalculator(req.body || {}),
+    'Failed to fetch Shipmozo rate calculation',
+  )
+
+export const pushShipmozoOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().pushOrder(req.body || {}),
+    'Failed to push Shipmozo order',
+  )
+
+export const pushShipmozoReturnOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().pushReturnOrder(req.body || {}),
+    'Failed to push Shipmozo return order',
+  )
+
+export const assignShipmozoCourierController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().assignCourier(req.body || {}),
+    'Failed to assign Shipmozo courier',
+  )
+
+export const autoAssignShipmozoOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().autoAssignOrder(req.body || {}),
+    'Failed to auto-assign Shipmozo order',
+  )
+
+export const scheduleShipmozoPickupController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().schedulePickup(req.body || {}),
+    'Failed to schedule Shipmozo pickup',
+  )
+
+export const cancelShipmozoOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().cancelOrder(req.body || {}),
+    'Failed to cancel Shipmozo order',
+  )
+
+export const getShipmozoOrderDetailController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().getOrderDetail(String(req.params.orderId || '')),
+    'Failed to fetch Shipmozo order detail',
+  )
+
+export const getShipmozoOrderLabelController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().getOrderLabel(String(req.params.awbNumber || '')),
+    'Failed to fetch Shipmozo order label',
+  )
+
+export const trackShipmozoOrderController = async (req: Request, res: Response) =>
+  handleShipmozoAdminAction(
+    res,
+    async () => new ShipmozoService().trackOrder(String(req.query.awb_number || req.query.awb || '')),
+    'Failed to track Shipmozo order',
+  )
 
 export interface RateType {
   forward?: string | number

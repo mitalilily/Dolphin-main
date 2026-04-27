@@ -237,7 +237,7 @@ export default function AdminNdr() {
             .includes('nsl')
           const attempts = row?.attempt_no ? parseInt(String(row.attempt_no), 10) || 0 : 0
           const provider = String(row?.integration_type || row?.courier_partner || '').toLowerCase()
-          const supportsEdits = ['delhivery', 'ekart', 'xpressbees'].includes(provider)
+          const supportsEdits = ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].includes(provider)
           return (
             <HStack spacing={1}>
               <IconButton

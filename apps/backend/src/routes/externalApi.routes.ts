@@ -7,6 +7,7 @@ import {
 } from '../controllers/externalApi/apiKey.controller'
 import { generateManifestController } from '../controllers/externalApi/manifest.controller'
 import { ekartWebhookHandler } from '../controllers/webhooks/ekart.webhook'
+import { icarryWebhookHandler } from '../controllers/webhooks/icarry.webhook'
 import {
   getNdrEventsController,
   getNdrTimelineController,
@@ -66,6 +67,7 @@ router.post('/webhooks/:id/regenerate-secret', requireAuth, regenerateWebhookSec
 
 // Provider webhook (Ekart) for partners who want to post directly
 router.post('/webhook/ekart/track', ekartWebhookHandler)
+router.post('/webhook/icarry/callback', icarryWebhookHandler)
 
 // ============================================================================
 // SHIPPING & SERVICEABILITY (Requires API Key)

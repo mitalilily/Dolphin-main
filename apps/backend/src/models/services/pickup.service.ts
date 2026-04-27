@@ -3,6 +3,8 @@ import { db } from '../client'
 import { b2c_orders } from '../schema/b2cOrders'
 import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
+import { ShiprocketCourierService } from './couriers/shiprocket.service'
+import { ShipmozoService } from './couriers/shipmozo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { applyCancellationRefundOnce } from './webhookProcessor'
 
@@ -26,9 +28,11 @@ export async function cancelOrderShipment(orderId: string) {
   })
 
   const integration = (order.integration_type || '').toLowerCase()
-  if (!['delhivery', 'ekart', 'xpressbees'].includes(integration)) {
+  if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket'].includes(integration)) {
     console.error('❌ Unsupported integration type:', { orderId, integration })
-    throw new Error('Only Delhivery, Ekart and Xpressbees are supported for cancellation')
+    throw new Error(
+      'Only Delhivery, Ekart, Xpressbees, Shipmozo and Shiprocket are supported for cancellation',
+    )
   }
 
   if (!order.awb_number) {
@@ -49,6 +53,15 @@ export async function cancelOrderShipment(orderId: string) {
   } else if (integration === 'ekart') {
     const svc = new EkartService()
     cancellationResult = await svc.cancelShipment(order.awb_number)
+  } else if (integration === 'shipmozo') {
+    const svc = new ShipmozoService()
+    cancellationResult = await svc.cancelOrder({
+      order_id: order.order_number || order.id,
+      awb_number: order.awb_number,
+    })
+  } else if (integration === 'shiprocket') {
+    const svc = new ShiprocketCourierService()
+    cancellationResult = await svc.cancelShipmentByAwbs({ awbs: [order.awb_number] })
   } else {
     const svc = new XpressbeesService()
     cancellationResult = await svc.cancelShipment(order.awb_number)

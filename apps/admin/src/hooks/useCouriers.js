@@ -12,6 +12,9 @@ import {
   fetchShippingRates,
   updateDelhiveryCredentials,
   updateEkartCredentials,
+  updateIcarryCredentials,
+  updateShiprocketCredentials,
+  updateShipmozoCredentials,
   updateXpressbeesCredentials,
   updateCourierStatus,
   updateServiceProviderStatus,
@@ -142,6 +145,39 @@ export const useUpdateXpressbeesCredentials = () => {
 
   return useMutation({
     mutationFn: updateXpressbeesCredentials,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['courierCredentials'])
+    },
+  })
+}
+
+export const useUpdateShipmozoCredentials = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateShipmozoCredentials,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['courierCredentials'])
+    },
+  })
+}
+
+export const useUpdateShiprocketCredentials = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateShiprocketCredentials,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['courierCredentials'])
+    },
+  })
+}
+
+export const useUpdateIcarryCredentials = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateIcarryCredentials,
     onSuccess: () => {
       queryClient.invalidateQueries(['courierCredentials'])
     },

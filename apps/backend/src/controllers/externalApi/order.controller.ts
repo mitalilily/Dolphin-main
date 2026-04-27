@@ -3,6 +3,8 @@ import { Response } from 'express'
 import { db } from '../../models/client'
 import { DelhiveryService } from '../../models/services/couriers/delhivery.service'
 import { EkartService } from '../../models/services/couriers/ekart.service'
+import { ShiprocketCourierService } from '../../models/services/couriers/shiprocket.service'
+import { ShipmozoService } from '../../models/services/couriers/shipmozo.service'
 import { XpressbeesService } from '../../models/services/couriers/xpressbees.service'
 import {
   createB2CShipmentService,
@@ -303,11 +305,11 @@ export const cancelOrderController = async (req: any, res: Response) => {
 
     let cancellationResult: any = null
     const provider = String(order.integration_type || '').toLowerCase()
-    if (!['delhivery', 'ekart', 'xpressbees'].includes(provider)) {
+    if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket'].includes(provider)) {
       return res.status(400).json({
         success: false,
         error: 'Unsupported provider',
-        message: `Only Delhivery, Ekart and Xpressbees are supported for cancellation. Found: ${order.integration_type}`,
+        message: `Only Delhivery, Ekart, Xpressbees, Shipmozo and Shiprocket are supported for cancellation. Found: ${order.integration_type}`,
       })
     }
 
@@ -326,6 +328,15 @@ export const cancelOrderController = async (req: any, res: Response) => {
       } else if (provider === 'ekart') {
         const ekart = new EkartService()
         cancellationResult = await ekart.cancelShipment(order.awb_number)
+      } else if (provider === 'shipmozo') {
+        const shipmozo = new ShipmozoService()
+        cancellationResult = await shipmozo.cancelOrder({
+          order_id: order.order_number || order.id,
+          awb_number: order.awb_number,
+        })
+      } else if (provider === 'shiprocket') {
+        const shiprocket = new ShiprocketCourierService()
+        cancellationResult = await shiprocket.cancelShipmentByAwbs({ awbs: [order.awb_number] })
       } else {
         const xpressbees = new XpressbeesService()
         cancellationResult = await xpressbees.cancelShipment(order.awb_number)

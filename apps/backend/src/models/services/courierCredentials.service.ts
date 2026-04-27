@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { db } from '../client'
 import { courierCredentials } from '../schema/courierCredentials'
+import { KNOWN_COURIER_PROVIDERS, type KnownCourierProvider } from '../../constants/courierProviders'
 
 export type BusinessType = 'b2b' | 'b2c'
-export type ServiceProviderId = 'delhivery' | 'shipway' | 'xpressbees' | 'ekart'
+export type ServiceProviderId = KnownCourierProvider
 
 export type DelhiveryConfig = {
   apiKey?: string
@@ -27,6 +28,41 @@ export type EkartConfig = {
   password?: string
   baseApi?: string
   baseAuth?: string
+}
+
+export type ShipmozoConfig = {
+  apiBase?: string
+  publicKey?: string
+  privateKey?: string
+  username?: string
+  password?: string
+  defaultWarehouseId?: string
+}
+
+export type ShiprocketConfig = {
+  apiBase?: string
+  username?: string
+  password?: string
+  defaultPickupLocation?: string
+  defaultChannelId?: string
+}
+
+export type JuxcargoConfig = {
+  apiBase?: string
+  apiBaseB2C?: string
+  apiBaseB2B?: string
+  username?: string
+  password?: string
+  apiKey?: string
+  clientId?: string
+}
+
+export type IcarryConfig = {
+  apiBase?: string
+  username?: string
+  apiKey?: string
+  password?: string
+  clientId?: string
 }
 
 export type SmartshipConfig = {
@@ -53,6 +89,10 @@ export type CourierConfig =
   | ShipwayConfig
   | XpressbeesConfig
   | EkartConfig
+  | ShipmozoConfig
+  | ShiprocketConfig
+  | JuxcargoConfig
+  | IcarryConfig
 
 export interface CourierCredentialsUpsertPayload {
   serviceProvider: ServiceProviderId
@@ -80,7 +120,7 @@ export interface CourierCredentialsMeta {
   }
 }
 
-const KNOWN_PROVIDERS: ServiceProviderId[] = ['delhivery', 'shipway', 'xpressbees', 'ekart']
+const KNOWN_PROVIDERS: ServiceProviderId[] = [...KNOWN_COURIER_PROVIDERS]
 export const DEFAULT_EKART_BASE_URL = 'https://app.elite.ekartlogistics.in'
 
 const hasEnvForProviderAndType = (provider: ServiceProviderId, _type: BusinessType): boolean => {
@@ -103,6 +143,43 @@ const hasEnvForProviderAndType = (provider: ServiceProviderId, _type: BusinessTy
       process.env.EKART_PASSWORD ||
       process.env.EKART_BASE_API ||
       process.env.EKART_BASE_AUTH
+    )
+  }
+  if (provider === 'shipmozo') {
+    return !!(
+      process.env.SHIPMOZO_PUBLIC_KEY ||
+      process.env.SHIPMOZO_PRIVATE_KEY ||
+      process.env.SHIPMOZO_USERNAME ||
+      process.env.SHIPMOZO_PASSWORD ||
+      process.env.SHIPMOZO_API_BASE ||
+      process.env.SHIPMOZO_DEFAULT_WAREHOUSE_ID
+    )
+  }
+  if (provider === 'shiprocket') {
+    return !!(
+      process.env.SHIPROCKET_API_BASE ||
+      process.env.SHIPROCKET_EMAIL ||
+      process.env.SHIPROCKET_PASSWORD
+    )
+  }
+  if (provider === 'juxcargo') {
+    return !!(
+      process.env.JUXCARGO_API_BASE ||
+      process.env.JUXCARGO_API_BASE_B2C ||
+      process.env.JUXCARGO_API_BASE_B2B ||
+      process.env.JUXCARGO_USERNAME ||
+      process.env.JUXCARGO_PASSWORD ||
+      process.env.JUXCARGO_API_KEY ||
+      process.env.JUXCARGO_CLIENT_ID
+    )
+  }
+  if (provider === 'icarry') {
+    return !!(
+      process.env.ICARRY_API_BASE ||
+      process.env.ICARRY_USERNAME ||
+      process.env.ICARRY_API_KEY ||
+      process.env.ICARRY_PASSWORD ||
+      process.env.ICARRY_CLIENT_ID
     )
   }
   return false
@@ -150,6 +227,51 @@ const buildConfigFromRow = (provider: ServiceProviderId, row: typeof courierCred
     return cfg
   }
 
+  if (provider === 'shipmozo') {
+    const cfg: ShipmozoConfig = {
+      apiBase: normalize(row.apiBase),
+      publicKey: normalize(row.clientId),
+      privateKey: normalize(row.apiKey),
+      username: normalize(row.username),
+      password: normalize(row.password),
+      defaultWarehouseId: normalize(row.clientName),
+    }
+    return cfg
+  }
+
+  if (provider === 'shiprocket') {
+    const cfg: ShiprocketConfig = {
+      apiBase: normalize(row.apiBase),
+      username: normalize(row.username),
+      password: normalize(row.password),
+      defaultPickupLocation: normalize(row.clientName),
+      defaultChannelId: normalize(row.clientId),
+    }
+    return cfg
+  }
+
+  if (provider === 'juxcargo') {
+    const cfg: JuxcargoConfig = {
+      apiBase: normalize(row.apiBase),
+      username: normalize(row.username),
+      password: normalize(row.password),
+      apiKey: normalize(row.apiKey),
+      clientId: normalize(row.clientId),
+    }
+    return cfg
+  }
+
+  if (provider === 'icarry') {
+    const cfg: IcarryConfig = {
+      apiBase: normalize(row.apiBase),
+      username: normalize(row.username),
+      apiKey: normalize(row.apiKey),
+      password: normalize(row.password),
+      clientId: normalize(row.clientId),
+    }
+    return cfg
+  }
+
   const cfg: XpressbeesConfig = {
     apiBase: normalize(row.apiBase),
     apiToken: normalize(row.apiKey),
@@ -157,6 +279,27 @@ const buildConfigFromRow = (provider: ServiceProviderId, row: typeof courierCred
     password: normalize(row.password),
   }
   return cfg
+}
+
+const rowHasUsableCredentials = (
+  provider: ServiceProviderId,
+  row: typeof courierCredentials.$inferSelect,
+) => {
+  const username = normalize(row.username)
+  const password = normalize(row.password)
+  const apiKey = normalize(row.apiKey)
+  const clientId = normalize(row.clientId)
+  const apiBase = normalize(row.apiBase)
+
+  if (provider === 'shiprocket') {
+    return Boolean(username && password)
+  }
+
+  if (provider === 'shipmozo') {
+    return Boolean((clientId && apiKey) || (username && password))
+  }
+
+  return Boolean(apiBase || apiKey || clientId || username || password)
 }
 
 export const getEffectiveCourierConfig = async <T extends CourierConfig>(
@@ -175,6 +318,7 @@ export const getEffectiveCourierConfig = async <T extends CourierConfig>(
   }
 
   if (!row) return null
+  if (!rowHasUsableCredentials(provider, row)) return null
   return buildConfigFromRow(provider, row) as T
 }
 
@@ -190,9 +334,18 @@ export const upsertCourierCredentials = async (
   const values: Partial<typeof courierCredentials.$inferInsert> = {
     provider: serviceProvider,
     apiBase: normalizedApiBase,
-    clientName: normalize((mergedConfig?.clientName as string) || ''),
-    apiKey: normalize((mergedConfig?.apiKey as string) || (mergedConfig?.apiToken as string) || ''),
-    clientId: normalize((mergedConfig?.clientId as string) || ''),
+    clientName: normalize(
+      (mergedConfig?.clientName as string) || (mergedConfig?.defaultWarehouseId as string) || '',
+    ),
+    apiKey: normalize(
+      (mergedConfig?.apiKey as string) ||
+        (mergedConfig?.apiToken as string) ||
+        (mergedConfig?.privateKey as string) ||
+        '',
+    ),
+    clientId: normalize(
+      (mergedConfig?.clientId as string) || (mergedConfig?.publicKey as string) || '',
+    ),
     username: normalize((mergedConfig?.username as string) || (mergedConfig?.email as string) || ''),
     password: normalize((mergedConfig?.password as string) || ''),
     webhookSecret: normalize((mergedConfig?.webhookSecret as string) || ''),
