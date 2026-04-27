@@ -265,6 +265,18 @@ const FileUploader: React.FC<FileUploaderProps> = ({
             folder: folderKey,
           })
 
+          if (data?.inlineOnly) {
+            const dataUrl = await fileToDataUrl(file)
+            uploaded.push({
+              url: dataUrl,
+              key: dataUrl,
+              originalName: file.name,
+              size: file.size,
+              mime: file.type || 'application/octet-stream',
+            })
+            continue
+          }
+
           // Upload directly to R2 using presigned URL - no credentials needed
           await axios.put(data.uploadUrl, file, {
             withCredentials: false, // Don't send credentials for presigned URL uploads
