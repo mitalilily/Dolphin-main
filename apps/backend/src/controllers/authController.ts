@@ -47,6 +47,7 @@ const maskEmailForLog = (email: string) => {
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const allowInlineOtp = parseBooleanEnv(process.env.ALLOW_INLINE_OTP, false)
+const showDemoOtpOnScreen = parseBooleanEnv(process.env.SHOW_DEMO_OTP_ON_SCREEN, true)
 const exposeAuthCodes = parseBooleanEnv(process.env.EXPOSE_AUTH_CODES, env !== 'production') || allowInlineOtp
 
 export const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString()
@@ -179,6 +180,7 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
       email: maskEmailForLog(normalizedEmail),
       exposeAuthCodes,
       allowInlineOtp,
+      showDemoOtpOnScreen,
       env,
     })
 
@@ -242,7 +244,9 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
         exposeAuthCodes || emailConfigError
           ? 'Verification code generated successfully'
           : 'OTP sent successfully to your email',
-      ...(exposeAuthCodes || env === 'development' || allowInlineOtp ? { otp } : {}),
+      ...(exposeAuthCodes || env === 'development' || allowInlineOtp || showDemoOtpOnScreen
+        ? { otp }
+        : {}),
     })
   } catch (err) {
     console.error('[Auth OTP] Error in requestOtp', {
