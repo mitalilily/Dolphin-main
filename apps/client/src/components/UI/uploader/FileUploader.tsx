@@ -57,6 +57,7 @@ interface FileUploaderProps {
   fullWidth?: boolean
   required?: boolean
   allowInlineFallback?: boolean
+  forceInlineUpload?: boolean
 }
 
 /* ---------------------------------------------------------------- style */
@@ -146,6 +147,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
   showAccept = false,
   required = false,
   allowInlineFallback = false,
+  forceInlineUpload = false,
   showPlaceholderImgByDefault = false,
   loadingPreview = false,
 }) => {
@@ -220,6 +222,37 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           alert(`${file.name} exceeds ${maxSizeMb} MB limit`)
           return
         }
+      }
+
+      if (forceInlineUpload) {
+        try {
+          const inlineFiles = await Promise.all(
+            arr.map(async (file) => {
+              const dataUrl = await fileToDataUrl(file)
+              return {
+                url: dataUrl,
+                key: dataUrl,
+                originalName: file.name,
+                size: file.size,
+                mime: file.type || 'application/octet-stream',
+              }
+            }),
+          )
+          onUploaded(inlineFiles)
+          toast.open({
+            message: 'Using inline demo upload mode.',
+            severity: 'info',
+          })
+        } catch (inlineErr) {
+          console.error('Inline upload failed:', inlineErr)
+          toast.open({
+            message: 'Upload failed - check console.',
+            severity: 'error',
+          })
+        } finally {
+          resetUploadState()
+        }
+        return
       }
 
       setUploading(true)
@@ -301,7 +334,7 @@ const FileUploader: React.FC<FileUploaderProps> = ({
         resetUploadState()
       }
     },
-    [allowInlineFallback, maxSizeMb, folderKey, multiple, onUploaded],
+    [allowInlineFallback, forceInlineUpload, maxSizeMb, folderKey, multiple, onUploaded],
   )
   const removeFile = (index: number) => {
     setPreviewFiles((prev) => {

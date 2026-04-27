@@ -14,6 +14,7 @@ import { BusinessStructureStep } from './BusinessStructureStep'
 import ImageCaptureStep from './ImageCaptureStep'
 
 const steps = ['Business Structure', 'Selfie', 'Additional Details']
+const KYC_INLINE_UPLOAD_ONLY = true
 
 const KYCVerificationStep: React.FC<{
   editing?: boolean
@@ -95,7 +96,7 @@ const KYCVerificationStep: React.FC<{
 
         let selfieUrl = data?.selfieUrl ?? ''
 
-        if (selfieUrl.startsWith('data:image')) {
+        if (selfieUrl.startsWith('data:image') && !KYC_INLINE_UPLOAD_ONLY) {
           const file = dataUrlToFile(selfieUrl, 'selfie.jpg')
 
           if (file.size / 1024 / 1024 > 5) {
@@ -122,6 +123,13 @@ const KYCVerificationStep: React.FC<{
               severity: 'warning',
             })
           }
+        }
+
+        if (selfieUrl.startsWith('data:image') && KYC_INLINE_UPLOAD_ONLY) {
+          toast.open({
+            message: 'Using inline demo upload mode for selfie.',
+            severity: 'info',
+          })
         }
 
         const result = await mutateAsync({

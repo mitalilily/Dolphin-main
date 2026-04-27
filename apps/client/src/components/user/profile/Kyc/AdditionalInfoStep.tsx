@@ -205,6 +205,7 @@ export default function AdditionalDetailsStep({
                         required={isRequired}
                         folderKey="kyc"
                         allowInlineFallback
+                        forceInlineUpload
                         fullWidth
                         showAccept={Boolean(filePlaceholder(field)) === false}
                         accept={allowedMimeTypes[field]}
