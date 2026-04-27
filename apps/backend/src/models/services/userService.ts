@@ -655,16 +655,29 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
     })
 
     // 6) create default invoice preferences
-    await tx.insert(schema.invoicePreferences).values({
-      userId: user.id,
-      prefix: 'INV',
-      suffix: '',
-      template: 'classic',
-      includeLogo: true,
-      includeSignature: true,
-      logoFile: null,
-      signatureFile: null,
-    })
+    try {
+      await tx.insert(schema.invoicePreferences).values({
+        userId: user.id,
+        prefix: 'INV',
+        suffix: '',
+        template: 'classic',
+        includeLogo: true,
+        includeSignature: true,
+        logoFile: null,
+        signatureFile: null,
+      })
+    } catch (err: any) {
+      // Backward-compatible fallback for legacy DBs that don't have recently added columns yet.
+      if (err?.cause?.code !== '42703') {
+        throw err
+      }
+      await tx.execute(sql`
+        INSERT INTO "invoice_preferences"
+          ("user_id", "prefix", "suffix", "template", "include_logo", "include_signature", "logo_file", "signature_file", "created_at", "updated_at")
+        VALUES
+          (${user.id}, 'INV', '', 'classic', true, true, NULL, NULL, NOW(), NOW())
+      `)
+    }
 
     const companyInfo = {
       ...DEFAULT_PROFILE.companyInfo, // keeps required fields

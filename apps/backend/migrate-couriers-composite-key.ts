@@ -17,11 +17,16 @@ async function runMigration() {
   try {
     console.log('🔄 Starting courier composite key migration...\n')
 
-    // Step 1: Drop FK constraint
-    console.log('Step 1: Dropping FK constraint from DelExpress_zones...')
+    // Step 1: Drop FK constraint (legacy table may not exist in all DBs)
+    console.log('Step 1: Dropping FK constraint from DelExpress_zones (if present)...')
     await db.execute(sql`
-      ALTER TABLE "DelExpress_zones" 
-      DROP CONSTRAINT IF EXISTS "DelExpress_zones_courier_id_couriers_id_fk"
+      DO $$
+      BEGIN
+        IF to_regclass('"DelExpress_zones"') IS NOT NULL THEN
+          ALTER TABLE "DelExpress_zones"
+          DROP CONSTRAINT IF EXISTS "DelExpress_zones_courier_id_couriers_id_fk";
+        END IF;
+      END $$;
     `)
     console.log('  ✓ Done\n')
 
