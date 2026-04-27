@@ -24,7 +24,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '../models/client'
 import { changeAdminPassword, loginAdmin } from '../models/services/adminAuth.service'
 import { employees } from '../schema/schema'
-import { sendVerificationEmail } from '../utils/emailSender'
+import { getEmailServiceConfigError, sendVerificationEmail } from '../utils/emailSender'
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../utils/jwt'
 
 const env = process.env.NODE_ENV || 'development'
@@ -169,6 +169,8 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
   }
 
   const normalizedEmail = email.trim().toLowerCase()
+  const emailConfigError = !exposeAuthCodes ? getEmailServiceConfigError() : null
+
   const otp = generateOtp()
   const expiry = new Date(Date.now() + OTP_EXPIRY)
 
@@ -217,11 +219,18 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
       })
     }
 
-    if (!exposeAuthCodes) {
+    if (!exposeAuthCodes && !emailConfigError) {
       console.log('[Auth OTP] Sending OTP email', {
         email: maskEmailForLog(normalizedEmail),
       })
       await sendVerificationEmail(normalizedEmail, otp)
+    } else if (!exposeAuthCodes && emailConfigError) {
+      console.warn('[Auth OTP] Email service not configured. Using console OTP for demo mode.', {
+        email: maskEmailForLog(normalizedEmail),
+        otp,
+        env,
+        emailConfigError,
+      })
     } else {
       console.log('[Auth OTP] Skipping OTP email because auth codes are exposed inline', {
         email: maskEmailForLog(normalizedEmail),
@@ -229,9 +238,10 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
     }
 
     return res.json({
-      message: exposeAuthCodes
-        ? 'Verification code generated successfully'
-        : 'OTP sent successfully to your email',
+      message:
+        exposeAuthCodes || emailConfigError
+          ? 'Verification code generated successfully'
+          : 'OTP sent successfully to your email',
       ...(exposeAuthCodes || env === 'development' || allowInlineOtp ? { otp } : {}),
     })
   } catch (err) {

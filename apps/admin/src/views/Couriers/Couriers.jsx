@@ -307,6 +307,9 @@ const Couriers = () => {
             <option value="ekart">Ekart</option>
             <option value="xpressbees">Xpressbees</option>
             <option value="shipmozo">Shipmozo</option>
+            <option value="shiprocket">Shiprocket</option>
+            <option value="icarry">iCarry</option>
+            <option value="juxcargo">Juxcargo</option>
           </Select>
           {(filters.search || filters.serviceProvider) && (
             <Button

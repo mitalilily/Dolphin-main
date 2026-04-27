@@ -19,6 +19,16 @@ import {
 import { useMemo } from 'react'
 import { useCouriers, useServiceProviders, useUpdateServiceProviderStatus } from 'hooks/useCouriers'
 
+const DEFAULT_ADMIN_PROVIDERS = [
+  'delhivery',
+  'ekart',
+  'xpressbees',
+  'shipmozo',
+  'shiprocket',
+  'icarry',
+  'juxcargo',
+]
+
 const toProviderLabel = (value = '') =>
   value
     .split(/[_\s-]+/)
@@ -31,6 +41,38 @@ const ServiceProviders = () => {
   const { data: couriers = [], isLoading: isCouriersLoading } = useCouriers()
   const updateStatus = useUpdateServiceProviderStatus()
   const toast = useToast()
+
+  const normalizedProviders = useMemo(() => {
+    const providerMap = new Map(
+      providers.map((provider) => [
+        (provider?.serviceProvider || '').toLowerCase(),
+        {
+          ...provider,
+          serviceProvider: (provider?.serviceProvider || '').toLowerCase(),
+          totalCouriers: Number(provider?.totalCouriers || 0),
+          enabledCouriers: Number(provider?.enabledCouriers || 0),
+          isEnabled: Boolean(provider?.isEnabled),
+        },
+      ]),
+    )
+
+    DEFAULT_ADMIN_PROVIDERS.forEach((providerKey) => {
+      if (!providerMap.has(providerKey)) {
+        providerMap.set(providerKey, {
+          serviceProvider: providerKey,
+          totalCouriers: 0,
+          enabledCouriers: 0,
+          isEnabled: false,
+        })
+      }
+    })
+
+    return Array.from(providerMap.values()).sort((a, b) =>
+      (a?.serviceProvider || '').localeCompare(b?.serviceProvider || '', undefined, {
+        sensitivity: 'base',
+      }),
+    )
+  }, [providers])
 
   const couriersByProvider = useMemo(() => {
     const grouped = couriers.reduce((acc, courier) => {
@@ -97,14 +139,14 @@ const ServiceProviders = () => {
             </Tr>
           </Thead>
           <Tbody>
-            {providers.length === 0 ? (
+            {normalizedProviders.length === 0 ? (
               <Tr>
                 <Td colSpan={6} textAlign="center">
                   <Text color="gray.500">No service provider data found.</Text>
                 </Td>
               </Tr>
             ) : (
-              providers.map((provider) => {
+              normalizedProviders.map((provider) => {
                 const providerKey = (provider.serviceProvider || '').toLowerCase()
                 const names = couriersByProvider[providerKey] || []
 

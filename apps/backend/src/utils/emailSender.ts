@@ -10,7 +10,7 @@ dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
 
 const EMAIL_FROM = process.env.EMAIL_FROM || process.env.GOOGLE_SMTP_USER || ''
 const GOOGLE_SMTP_USER = process.env.GOOGLE_SMTP_USER || EMAIL_FROM
-const GOOGLE_SMTP_PASSWORD = process.env.GOOGLE_SMTP_PASSWORD!
+const GOOGLE_SMTP_PASSWORD = process.env.GOOGLE_SMTP_PASSWORD || ''
 const SMTP_HOST = process.env.SMTP_HOST
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true'
@@ -33,14 +33,25 @@ type AttachmentInput = {
   mimeType?: string
 }
 
-// Create SMTP transporter (Hostinger/custom SMTP if provided, else Gmail service)
-const createTransporter = () => {
+export const getEmailServiceConfigError = () => {
   if (!EMAIL_FROM || !GOOGLE_SMTP_USER) {
-    throw new Error('Email service is not configured. Missing EMAIL_FROM or GOOGLE_SMTP_USER.')
+    return 'Email service is not configured. Missing EMAIL_FROM or GOOGLE_SMTP_USER.'
   }
 
   if (!GOOGLE_SMTP_PASSWORD) {
-    throw new Error('Email service is not configured. Missing GOOGLE_SMTP_PASSWORD.')
+    return 'Email service is not configured. Missing GOOGLE_SMTP_PASSWORD.'
+  }
+
+  return null
+}
+
+export const isEmailServiceConfigured = () => getEmailServiceConfigError() === null
+
+// Create SMTP transporter (Hostinger/custom SMTP if provided, else Gmail service)
+const createTransporter = () => {
+  const configError = getEmailServiceConfigError()
+  if (configError) {
+    throw new Error(configError)
   }
 
   console.log('[Email] Creating transporter', {
