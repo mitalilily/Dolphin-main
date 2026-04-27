@@ -45,7 +45,23 @@ export const presignUpload = async ({
   userId,
   folderKey = 'userPp',
 }: PresignParams) => {
+  const endpoint = process.env.R2_ENDPOINT?.trim()
+  const accessKeyId = process.env.R2_ACCESS_KEY_ID?.trim()
+  const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY?.trim()
   const bucket = getBucketName()
+
+  if (!endpoint || !/^https?:\/\//i.test(endpoint)) {
+    throw new Error('Storage is not configured. Missing or invalid R2_ENDPOINT.')
+  }
+
+  if (!bucket) {
+    throw new Error('Storage is not configured. Missing bucket for current environment.')
+  }
+
+  if (!accessKeyId || !secretAccessKey) {
+    throw new Error('Storage is not configured. Missing R2 credentials.')
+  }
+
   const key = `${folderKey}/${userId}/${Date.now()}-${filename}`
 
   const command = new PutObjectCommand({
@@ -56,7 +72,7 @@ export const presignUpload = async ({
 
   const uploadUrl = await getSignedUrl(r2, command, { expiresIn: 60 * 5 }) // 5 min
 
-  const publicUrl = `${process.env.R2_ENDPOINT}/${bucket}/${key}`
+  const publicUrl = `${endpoint.replace(/\/+$/, '')}/${bucket}/${key}`
   return { uploadUrl, key, publicUrl, bucket }
 }
 

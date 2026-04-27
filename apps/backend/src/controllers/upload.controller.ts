@@ -27,8 +27,11 @@ export const createPresignedUrl = async (
       folderKey: folder,
     });
     return res.status(200).json(data);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Presign error:", err);
+    if (String(err?.message || "").includes("Storage is not configured")) {
+      return res.status(503).json({ message: err.message });
+    }
     return res.status(500).json({ message: "Failed to presign URL" });
   }
 };
