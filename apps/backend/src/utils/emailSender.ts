@@ -51,7 +51,11 @@ export const isEmailServiceConfigured = () => getEmailServiceConfigError() === n
 const createTransporter = () => {
   const configError = getEmailServiceConfigError()
   if (configError) {
-    throw new Error(configError)
+    console.warn('[Email] Email service not configured. Skipping SMTP delivery.', {
+      configError,
+      env,
+    })
+    return null
   }
 
   console.log('[Email] Creating transporter', {
@@ -94,6 +98,15 @@ const sendEmail = async (
 ) => {
   const transporter = createTransporter()
   const maskedRecipient = maskEmailForLog(to)
+
+  if (!transporter) {
+    console.log('[Email] Demo mode email skipped', {
+      to: maskedRecipient,
+      subject,
+      attachments: attachments?.length ?? 0,
+    })
+    return
+  }
 
   const mailOptions: any = {
     from: `"Dolphin Enterprise" <${EMAIL_FROM}>`,
