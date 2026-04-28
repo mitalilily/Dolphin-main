@@ -4036,9 +4036,59 @@ export const createB2CShipmentService = async (
         weight: shipmentWeightKg > 0 ? shipmentWeightKg : 0.5,
       }
 
-      const createOrderResp = defaultChannelId
-        ? await shiprocket.createChannelSpecificOrder(createOrderPayload)
-        : await shiprocket.createCustomOrder(createOrderPayload)
+      const extractShiprocketSuggestedPickupNames = (providerResponse: any): string[] => {
+        const candidates: any[] = []
+        const rawArray = providerResponse?.data?.data
+        if (Array.isArray(rawArray)) candidates.push(...rawArray)
+        if (Array.isArray(providerResponse?.data)) candidates.push(...providerResponse.data)
+
+        return candidates
+          .map((entry) =>
+            String(
+              entry?.pickup_location ||
+                entry?.pickup_location_name ||
+                entry?.warehouse_name ||
+                entry?.address_title ||
+                entry?.location_name ||
+                entry?.name ||
+                '',
+            ).trim(),
+          )
+          .filter(Boolean)
+      }
+
+      let createOrderResp: any
+      try {
+        createOrderResp = defaultChannelId
+          ? await shiprocket.createChannelSpecificOrder(createOrderPayload)
+          : await shiprocket.createCustomOrder(createOrderPayload)
+      } catch (shiprocketCreateErr: any) {
+        const providerMessage = String(shiprocketCreateErr?.message || '').toLowerCase()
+        const providerResponse = shiprocketCreateErr?.response ?? null
+        const looksLikeWrongPickup = providerMessage.includes('wrong pickup location')
+        const suggestedPickupNames = extractShiprocketSuggestedPickupNames(providerResponse)
+        const retryPickupName =
+          suggestedPickupNames.find((name) =>
+            availablePickupNames.some((available) => available.toLowerCase() === name.toLowerCase()),
+          ) ||
+          availablePickupNames.find((name) =>
+            suggestedPickupNames.some((suggested) => suggested.toLowerCase() === name.toLowerCase()),
+          ) ||
+          null
+
+        if (looksLikeWrongPickup && retryPickupName) {
+          console.warn(
+            `⚠️ Shiprocket rejected pickup "${pickupLocation}". Retrying once with suggested pickup "${retryPickupName}".`,
+          )
+          createOrderPayload.pickup_location = retryPickupName
+          pickupLocation = retryPickupName
+          createOrderResp = defaultChannelId
+            ? await shiprocket.createChannelSpecificOrder(createOrderPayload)
+            : await shiprocket.createCustomOrder(createOrderPayload)
+        } else {
+          throw shiprocketCreateErr
+        }
+      }
 
       const shiprocketOrderId =
         createOrderResp?.order_id ?? createOrderResp?.data?.order_id ?? createOrderResp?.id

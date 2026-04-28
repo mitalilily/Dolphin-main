@@ -240,10 +240,19 @@ export class ShiprocketCourierService {
       message: lastError?.message || lastError,
     })
 
-    throw new HttpError(
+    const httpError: any = new HttpError(
       Number(lastError?.response?.status || 502),
       this.extractErrorMessage(lastError, `Shiprocket API request failed for ${path}`),
     )
+    httpError.response = lastError?.response?.data ?? null
+    httpError.status = lastError?.response?.status ?? null
+    httpError.requestMeta = {
+      method,
+      path,
+      params,
+      payload: this.sanitizeForLogs(data),
+    }
+    throw httpError
   }
 
   getDefaultPickupLocation() {
