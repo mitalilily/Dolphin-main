@@ -1,4 +1,4 @@
-// services/pickupAddresses.service.ts
+﻿// services/pickupAddresses.service.ts
 import { and, asc, desc, eq, ilike, ne, or, sql } from 'drizzle-orm'
 import { CreatePickupDto, HydratedPickupAddress, UpdatePickupDto } from '../../types/generic.types'
 import { db } from '../client'
@@ -9,6 +9,10 @@ import { EkartService } from './couriers/ekart.service'
 function parseCoordinate(value: string | null | undefined, fallback: number) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function getDelhiveryErrorText(rawError: any): string {
+  return String(rawError?.error?.[0] || rawError?.detail || rawError?.message || '').toLowerCase()
 }
 
 /**
@@ -23,7 +27,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
 
     const isPrimary = !existing
 
-    // 🔹 Reset existing primary if new one is requested
+    // ðŸ”¹ Reset existing primary if new one is requested
     if (data.isPrimary && existing) {
       await txn
         .update(pickupAddresses)
@@ -31,7 +35,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
         .where(eq(pickupAddresses.userId, userId))
     }
 
-    // 🔹 Insert pickup address
+    // ðŸ”¹ Insert pickup address
     const [pickupAddr] = await txn
       .insert(addresses)
       .values({
@@ -41,7 +45,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       })
       .returning()
 
-    // 🔹 Insert optional RTO address
+    // ðŸ”¹ Insert optional RTO address
     let rtoAddressId: string | null = null
     let isRTOSame = true
     let rtoAddressData = pickupAddr
@@ -62,7 +66,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       rtoAddressId = pickupAddr.id
     }
 
-    // 🔹 Link in pickup_addresses
+    // ðŸ”¹ Link in pickup_addresses
     const [created] = await txn
       .insert(pickupAddresses)
       .values({
@@ -75,7 +79,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       })
       .returning()
 
-    // 🚚 Register pickup in Delhivery
+    // ðŸšš Register pickup in Delhivery
     try {
       const delhivery = new DelhiveryService()
       const delhiveryResp = await delhivery.createWarehouse({
@@ -95,20 +99,20 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       })
 
       if (!delhiveryResp || delhiveryResp.success === false) {
-        console.error('❌ Delhivery warehouse creation failed:', delhiveryResp)
+        console.error('âŒ Delhivery warehouse creation failed:', delhiveryResp)
         const errorToThrow: any = new Error('Delhivery warehouse registration failed')
         errorToThrow.code = 'DELHIVERY_WAREHOUSE_GENERAL_ERROR'
         throw errorToThrow
       }
 
-      console.log(`✅ Delhivery warehouse registered: ${pickupAddr.addressNickname}`)
+      console.log(`âœ… Delhivery warehouse registered: ${pickupAddr.addressNickname}`)
     } catch (err: any) {
       const rawError = err?.response?.data ?? err
-      console.error('❌ Error registering Delhivery warehouse:', rawError)
+      console.error('âŒ Error registering Delhivery warehouse:', rawError)
 
       // Detect duplicate-warehouse error from Delhivery and throw a typed error
       const delhiveryErrorText: string | undefined =
-        rawError?.error?.[0] || rawError?.message || rawError?.data?.message
+        rawError?.error?.[0] || rawError?.detail || rawError?.message || rawError?.data?.message
 
       if (typeof delhiveryErrorText === 'string') {
         if (
@@ -133,14 +137,12 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
         }
       }
 
-      const genericErr: any = new Error(
-        'Pickup location could not be verified. Please check the address details and try again.',
-      )
-      genericErr.code = 'DELHIVERY_WAREHOUSE_GENERAL_ERROR'
-      throw genericErr
+      // Do not rollback local address creation for provider auth/config/outage issues.
+      // We only block on user-correctable validation errors above.
+      console.warn('Skipping Delhivery warehouse registration; local pickup address has been saved.')
     }
 
-    // 🔹 Register pickup in Ekart (mirror our warehouse)
+    // ðŸ”¹ Register pickup in Ekart (mirror our warehouse)
     try {
       const ekart = new EkartService()
       const alias = pickupAddr.addressNickname || pickupAddr.contactName || `warehouse-${pickupAddr.id}`
@@ -175,9 +177,9 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
         },
       }
       await ekart.createWarehouse(payload)
-      console.log(`✅ Ekart warehouse registered: ${alias}`)
+      console.log(`âœ… Ekart warehouse registered: ${alias}`)
     } catch (err: any) {
-      console.warn('⚠️ Failed to register Ekart warehouse:', err?.response?.data || err?.message || err)
+      console.warn('âš ï¸ Failed to register Ekart warehouse:', err?.response?.data || err?.message || err)
     }
 
     return created
@@ -196,7 +198,7 @@ export async function updatePickupAddressService(
     const targetPickupId = pickupId ?? data.id
     if (!targetPickupId) throw new Error('Pickup ID is required')
 
-    // ✅ Handle primary switch (if making this the new primary)
+    // âœ… Handle primary switch (if making this the new primary)
     if (data.isPrimary) {
       await db
         .update(pickupAddresses)
@@ -204,7 +206,7 @@ export async function updatePickupAddressService(
         .where(and(eq(pickupAddresses.userId, userId), ne(pickupAddresses.id, targetPickupId)))
     }
 
-    // ✅ Update pickup record (flags only)
+    // âœ… Update pickup record (flags only)
     const [pickup] = await db
       .update(pickupAddresses)
       .set({
@@ -216,16 +218,16 @@ export async function updatePickupAddressService(
 
     if (!pickup) return null
 
-    // 🟡 If only flags are provided (no pickup or RTO details) — skip courier syncs
+    // ðŸŸ¡ If only flags are provided (no pickup or RTO details) â€” skip courier syncs
     const onlyFlagsChanged = !data.pickup && !data.rtoAddress
     if (onlyFlagsChanged) {
-      console.log('⚙️ Only flags updated (isPrimary/isPickupEnabled). Skipping courier syncs.')
+      console.log('âš™ï¸ Only flags updated (isPrimary/isPickupEnabled). Skipping courier syncs.')
       return pickup
     }
 
-    // ✅ Start transaction for atomic updates
+    // âœ… Start transaction for atomic updates
     return await db.transaction(async (txn) => {
-      // ✅ Update pickup address itself
+      // âœ… Update pickup address itself
       let updatedPickup: any = null
       if (data.pickup && pickup.addressId) {
         const { createdAt, ...safeData } = data.pickup
@@ -240,7 +242,7 @@ export async function updatePickupAddressService(
         updatedPickup = addr
       }
 
-      // ✅ Update / Create RTO address
+      // âœ… Update / Create RTO address
       if (data.rtoAddress) {
         if (pickup.rtoAddressId) {
           const { createdAt, ...safeData } = data?.rtoAddress
@@ -275,7 +277,7 @@ export async function updatePickupAddressService(
         }
       }
 
-      // 🟢 Sync with Delhivery (only if pickup address actually changed)
+      // ðŸŸ¢ Sync with Delhivery (only if pickup address actually changed)
       try {
         if (updatedPickup) {
           const delhivery = new DelhiveryService()
@@ -288,23 +290,38 @@ export async function updatePickupAddressService(
           })
 
           if (!delhiveryResp || delhiveryResp.success === false) {
-            console.error('❌ Failed to update warehouse in Delhivery:', delhiveryResp)
+            console.error('âŒ Failed to update warehouse in Delhivery:', delhiveryResp)
             throw new Error('Warehouse update failed')
           }
 
-          console.log(`✅ Warehouse updated in Delhivery: ${updatedPickup?.addressNickname}`)
+          console.log(`âœ… Warehouse updated in Delhivery: ${updatedPickup?.addressNickname}`)
         } else {
-          console.log('ℹ️ No pickup address change detected — skipped Delhivery update.')
+          console.log('â„¹ï¸ No pickup address change detected â€” skipped Delhivery update.')
         }
       } catch (err: any) {
-        console.error('❌ Delhivery warehouse update error:', err.message)
-        throw new Error('Failed to update warehouse')
+        const rawError = err?.response?.data ?? err
+        const errorText = getDelhiveryErrorText(rawError)
+
+        if (
+          errorText.includes('invalid token') ||
+          errorText.includes('unauthorized') ||
+          errorText.includes('forbidden') ||
+          errorText.includes('token') ||
+          errorText.includes('auth')
+        ) {
+          console.warn(
+            'Delhivery warehouse update skipped due to auth/config issue; local pickup update saved.',
+            rawError,
+          )
+        } else {
+          console.warn('Delhivery warehouse update failed; local pickup update saved.', rawError)
+        }
       }
 
       return pickup
     })
   } catch (error) {
-    console.error('❌ Failed to update pickup address:', error)
+    console.error('âŒ Failed to update pickup address:', error)
     throw new Error('Failed to update pickup address')
   }
 }
@@ -321,7 +338,7 @@ export async function getPickupAddressesService(
 ): Promise<{ data: HydratedPickupAddress[]; totalCount: number }> {
   const conditions: any[] = [eq(pickupAddresses.userId, userId)]
 
-  // ✅ Pickup status filters
+  // âœ… Pickup status filters
   if (filters.isPickupEnabled === 'active')
     conditions.push(eq(pickupAddresses.isPickupEnabled, true))
   if (filters.isPickupEnabled === 'inactive')
@@ -329,7 +346,7 @@ export async function getPickupAddressesService(
   if (filters.isPrimary !== undefined && filters.isPrimary !== '')
     conditions.push(eq(pickupAddresses.isPrimary, filters.isPrimary === 'true'))
 
-  // ✅ Helper for pickup OR rto field
+  // âœ… Helper for pickup OR rto field
   const pickupOrRto = (field: string, value: string) => {
     const search = `%${value}%`
     return or(
@@ -342,13 +359,13 @@ export async function getPickupAddressesService(
     )
   }
 
-  // ✅ Field-specific filters
+  // âœ… Field-specific filters
   if (filters.name) conditions.push(pickupOrRto('addressNickname', filters.name))
   if (filters.city) conditions.push(pickupOrRto('city', filters.city))
   if (filters.state) conditions.push(pickupOrRto('state', filters.state))
   if (filters.pincode) conditions.push(pickupOrRto('pincode', filters.pincode))
 
-  // ✅ Sorting
+  // âœ… Sorting
   let sortByClause = desc(addresses.createdAt)
   switch (filters.sortBy) {
     case 'oldest':
@@ -364,7 +381,7 @@ export async function getPickupAddressesService(
 
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
-  // ✅ Count query
+  // âœ… Count query
   const totalCountResult = await db
     .select({ count: sql<number>`count(*)` })
     .from(pickupAddresses)
@@ -375,7 +392,7 @@ export async function getPickupAddressesService(
 
   const offset = (page - 1) * limit
 
-  // ✅ Data query
+  // âœ… Data query
   const data = await db
     .select({
       pickupId: pickupAddresses.id,
@@ -423,3 +440,4 @@ export async function getPickupAddressesService(
 
   return { data: data as unknown as HydratedPickupAddress[], totalCount }
 }
+
