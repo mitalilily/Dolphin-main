@@ -3913,7 +3913,7 @@ export const createB2CShipmentService = async (
       }
 
       const shiprocket = new ShiprocketCourierService()
-      const pickupLocation =
+      let pickupLocation =
         String(
           params.pickup_location_alias ||
             params.pickup?.warehouse_name ||
@@ -3926,6 +3926,66 @@ export const createB2CShipmentService = async (
           400,
           'Shiprocket default pickup location is missing. Save it in courier credentials before booking.',
         )
+      }
+
+      // Validate pickup location against Shiprocket saved pickup addresses to avoid
+      // generic downstream failures like missing order_id/shipment_id.
+      let availablePickupNames: string[] = []
+      try {
+        const pickupLocationsResp: any = await shiprocket.getPickupLocations()
+        const rawList =
+          pickupLocationsResp?.data ||
+          pickupLocationsResp?.pickup_address ||
+          pickupLocationsResp?.pickup_locations ||
+          pickupLocationsResp?.shipping_address ||
+          []
+
+        if (Array.isArray(rawList)) {
+          availablePickupNames = rawList
+            .map((entry: any) =>
+              String(
+                entry?.pickup_location ||
+                  entry?.pickup_location_name ||
+                  entry?.warehouse_name ||
+                  entry?.address_title ||
+                  entry?.location_name ||
+                  '',
+              ).trim(),
+            )
+            .filter(Boolean)
+        }
+      } catch (pickupListErr: any) {
+        console.warn(
+          '⚠️ Unable to fetch Shiprocket pickup locations before booking:',
+          pickupListErr?.message || pickupListErr,
+        )
+      }
+
+      if (availablePickupNames.length) {
+        const matchedPickup = availablePickupNames.find(
+          (name) => name.toLowerCase() === String(pickupLocation).toLowerCase(),
+        )
+        if (!matchedPickup) {
+          const fallbackDefault = String(shiprocket.getDefaultPickupLocation() || '').trim()
+          const matchedDefault = availablePickupNames.find(
+            (name) => name.toLowerCase() === fallbackDefault.toLowerCase(),
+          )
+          if (matchedDefault) {
+            console.warn(
+              `⚠️ Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to default "${matchedDefault}".`,
+            )
+            pickupLocation = matchedDefault
+          } else {
+            throw new HttpError(
+              400,
+              `Invalid Shiprocket pickup location "${pickupLocation}". Available locations: ${availablePickupNames
+                .slice(0, 8)
+                .join(', ')}${availablePickupNames.length > 8 ? ' ...' : ''}`,
+            )
+          }
+        } else {
+          pickupLocation = matchedPickup
+        }
       }
 
       const defaultChannelId = shiprocket.getDefaultChannelId()
@@ -3986,7 +4046,26 @@ export const createB2CShipmentService = async (
         createOrderResp?.shipment_id ?? createOrderResp?.data?.shipment_id ?? null
 
       if (!shiprocketOrderId || !shiprocketShipmentId) {
-        throw new HttpError(500, 'Shiprocket order creation did not return order_id/shipment_id')
+        const providerMessage = String(
+          createOrderResp?.message ||
+            createOrderResp?.error ||
+            createOrderResp?.data?.message ||
+            '',
+        )
+        if (providerMessage.toLowerCase().includes('wrong pickup location')) {
+          throw new HttpError(
+            400,
+            availablePickupNames.length
+              ? `Shiprocket rejected pickup location "${pickupLocation}". Available locations: ${availablePickupNames
+                  .slice(0, 8)
+                  .join(', ')}${availablePickupNames.length > 8 ? ' ...' : ''}`
+              : `Shiprocket rejected pickup location "${pickupLocation}". Please choose a valid Shiprocket pickup location from your account settings.`,
+          )
+        }
+        throw new HttpError(
+          500,
+          providerMessage || 'Shiprocket order creation did not return order_id/shipment_id',
+        )
       }
 
       const assignResp = await shiprocket.assignAwb({
