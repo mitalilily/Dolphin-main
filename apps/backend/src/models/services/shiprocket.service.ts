@@ -784,10 +784,26 @@ export const computeB2CFreightForOrder = async (params: {
   const [userPlan] = await db
     .select({ planId: userPlans.plan_id })
     .from(userPlans)
-    .where(and(eq(userPlans.userId, params.userId), eq(userPlans.is_active, true)))
+    .where(
+      and(
+        eq(userPlans.userId, params.userId),
+        or(eq(userPlans.is_active, true), isNull(userPlans.is_active)),
+      ),
+    )
     .limit(1)
 
-  if (!userPlan?.planId) {
+  const resolvedPlanId =
+    userPlan?.planId ??
+    (
+      await db
+        .select({ planId: userPlans.plan_id })
+        .from(userPlans)
+        .where(eq(userPlans.userId, params.userId))
+        .limit(1)
+    )[0]?.planId ??
+    null
+
+  if (!resolvedPlanId) {
     throw new HttpError(400, 'No active plan found for user to compute freight')
   }
 
@@ -827,7 +843,7 @@ export const computeB2CFreightForOrder = async (params: {
       : null)
 
   const [rateCard] = await fetchResolvedB2CRateCards({
-    planId: userPlan.planId,
+    planId: resolvedPlanId,
     zoneId: resolvedZoneRow.id,
     courierId: Number(params.courierId),
     serviceProvider: resolvedServiceProvider,
@@ -856,7 +872,7 @@ export const computeB2CFreightForOrder = async (params: {
     slab_weight: freightCalc.slab_weight,
     base_price: freightCalc.base_price,
     zone_id: resolvedZoneRow.id,
-    plan_id: userPlan.planId,
+    plan_id: resolvedPlanId,
     selected_slab: freightCalc.selected_slab,
   }
 }
