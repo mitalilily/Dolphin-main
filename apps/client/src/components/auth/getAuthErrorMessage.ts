@@ -37,7 +37,6 @@ export const getAuthErrorMessage = (err: unknown, fallback: string) => {
   const isNetwork = errObj.code === 'ERR_NETWORK' || !errObj.response
   if (!isNetwork) return message
 
-  const base =
-    import.meta.env.VITE_API_URL || 'https://dolphin-main-production-4236.up.railway.app/api'
+      const base = import.meta.env.VITE_API_URL || '/api'
   return `Cannot reach API (${base}). Start backend or set VITE_API_URL.`
 }

@@ -3,7 +3,7 @@ import axios from 'axios'
 import { clearAuthTokens, getAuthTokens, setAuthTokens } from './tokenVault'
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL
-const DEFAULT_API_BASE_URL = 'https://dolphin-main-production-4236.up.railway.app/api'
+const DEFAULT_API_BASE_URL = '/api'
 
 const getApiBaseUrl = () => {
   const fallback = DEFAULT_API_BASE_URL.replace(/\/+$/, '')
@@ -12,22 +12,6 @@ const getApiBaseUrl = () => {
     if (!RAW_API_BASE_URL) return fallback
 
     const candidate = new URL(RAW_API_BASE_URL, window.location.origin)
-    const currentHost = window.location.hostname
-    const isHostedFrontend =
-      currentHost.endsWith('netlify.app') ||
-      currentHost.endsWith('vercel.app')
-    const isLocalhost =
-      currentHost === 'localhost' ||
-      currentHost === '127.0.0.1' ||
-      currentHost === '0.0.0.0'
-    const pointsBackToFrontend = candidate.hostname === currentHost
-
-    // In preview/prod frontend hosting, sending API calls back to the same
-    // frontend origin often causes 405s on POST auth routes like request-otp.
-    if (pointsBackToFrontend && (isHostedFrontend || !isLocalhost)) {
-      return fallback
-    }
-
     const normalized = candidate.href.replace(/\/+$/, '')
     if (normalized.endsWith('/api') || normalized.includes('/api/')) return normalized
     return `${normalized}/api`

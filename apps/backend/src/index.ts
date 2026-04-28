@@ -56,7 +56,7 @@ async function startServer() {
   server.listen(PORT, '0.0.0.0', () => {
     const url =
       env === 'production'
-        ? process.env.API_URL || 'https://dolphin-main-production-4236.up.railway.app'
+        ? process.env.API_URL || `http://0.0.0.0:${PORT}`
         : `http://localhost:${PORT}`
     console.log(`🚀 Server running on port ${PORT} in ${env} mode at ${url}`)
   })

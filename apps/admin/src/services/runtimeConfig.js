@@ -1,6 +1,6 @@
-const DEFAULT_API_BASE_URL = 'https://dolphin-main-production-4236.up.railway.app/api'
-const DEFAULT_SOCKET_URL = 'https://dolphin-main-production-4236.up.railway.app'
-const FALLBACK_API_BASE_URLS = [DEFAULT_API_BASE_URL]
+const DEFAULT_API_BASE_URL = '/api'
+const DEFAULT_SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : ''
+const FALLBACK_API_BASE_URLS = []
 const ACTIVE_ADMIN_API_BASE_URL_KEY = 'activeAdminApiBaseUrl'
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {

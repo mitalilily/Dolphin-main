@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client'
 
-const DEFAULT_SOCKET_URL = 'https://dolphin-main-production-4236.up.railway.app'
+const DEFAULT_SOCKET_URL = window.location.origin
 
 const getSocketUrl = () => {
   const rawSocketUrl = import.meta.env.VITE_APP_SOCKET_URL
@@ -9,14 +9,6 @@ const getSocketUrl = () => {
     if (!rawSocketUrl) return DEFAULT_SOCKET_URL
 
     const candidate = new URL(rawSocketUrl, window.location.origin)
-    const currentHost = window.location.hostname
-    const isNetlifyPreview = currentHost.endsWith('netlify.app')
-    const pointsBackToFrontend = candidate.hostname === currentHost
-
-    if (isNetlifyPreview && pointsBackToFrontend) {
-      return DEFAULT_SOCKET_URL
-    }
-
     return candidate.origin
   } catch {
     return DEFAULT_SOCKET_URL
