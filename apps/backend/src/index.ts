@@ -1,5 +1,4 @@
 import * as dotenv from 'dotenv'
-import path from 'path'
 import { server } from './app'
 import './crons'
 import { testDatabaseConnection } from './models/client'
@@ -8,11 +7,12 @@ import { testDatabaseConnection } from './models/client'
 const env = process.env.NODE_ENV || 'development'
 console.log('node env', env)
 
-// Load correct .env file
-dotenv.config({ path: path.resolve(__dirname, `../.env.${env}`) })
+// Load environment variables (platform-injected in production).
+dotenv.config()
+console.log('PORT from env:', process.env.PORT)
 
-// Render provides PORT as a string env var, so coerce it to a real TCP port number.
-const PORT = Number(process.env.PORT) || 5002
+// Platforms like Railway/Render provide PORT as a string env var.
+const PORT = Number(process.env.PORT) || 8080
 let isShuttingDown = false
 
 const shutdownGracefully = (signal: NodeJS.Signals) => {

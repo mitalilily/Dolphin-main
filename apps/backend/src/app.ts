@@ -3,7 +3,6 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
 import http from 'http'
-import path from 'path'
 import { initSocketServer } from './config/socketServer'
 import { shopifyOrderWebhookController } from './controllers/shopify.controller'
 import {
@@ -66,8 +65,8 @@ import weightReconciliationRoutes from './routes/weightReconciliation.routes'
 // Determine environment
 const env = process.env.NODE_ENV || 'development'
 
-// Load correct .env file
-dotenv.config({ path: path.resolve(__dirname, `../.env.${env}`) })
+// Load environment variables (platform-injected in production).
+dotenv.config()
 
 const app = express()
 const server = http.createServer(app) // âœ… HTTP server for socket.io
@@ -144,6 +143,20 @@ app.get('/', (_req, res) => {
 })
 
 app.get('/health', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'Dolphin Enterprise backend',
+  })
+})
+
+app.get('/api/health', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'Dolphin Enterprise backend',
+  })
+})
+
+app.get('/api/healthz', (_req, res) => {
   res.status(200).json({
     ok: true,
     service: 'Dolphin Enterprise backend',

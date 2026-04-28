@@ -1,19 +1,15 @@
-import * as dotenv from 'dotenv'
+﻿import * as dotenv from 'dotenv'
 import { drizzle } from 'drizzle-orm/node-postgres'
-import * as path from 'path' // ✅ use this instead of `import path from 'path'`
 import { Pool } from 'pg'
 import * as schema from '../schema/schema'
 
-// Load environment file based on NODE_ENV
+// Load environment variables (platform-injected in production).
 const env = process.env.NODE_ENV || 'development'
 console.log('ENVIRONMENT', env)
-const envFilePath = path.resolve(__dirname, `../../.env.${env}`)
-
-console.log(`🔍 Loading env file: ${envFilePath}`)
-dotenv.config({ path: envFilePath })
+dotenv.config()
 
 if (!process.env.DATABASE_URL) {
-  throw new Error('❌ DATABASE_URL is missing')
+  throw new Error('âŒ DATABASE_URL is missing')
 }
 
 const databaseUrl = process.env.DATABASE_URL as string
@@ -33,15 +29,15 @@ export const db = drizzle(pool, {
   schema: schema,
 })
 
-// ✅ New function you can call explicitly in scripts
+// âœ… New function you can call explicitly in scripts
 export function initPool() {
-  console.log('ℹ️ initPool called')
+  console.log('â„¹ï¸ initPool called')
   return { pool, db }
 }
 
 // Surface unexpected pool-level errors
 pool.on('error', (err) => {
-  console.error('❌ PG Pool error:', {
+  console.error('âŒ PG Pool error:', {
     message: err?.message,
     stack: err?.stack,
   })
@@ -57,7 +53,7 @@ export const testDatabaseConnection = async (): Promise<boolean> => {
     try {
       const result = await client.query('SELECT NOW() as current_time, version() as pg_version')
       const { current_time, pg_version } = result.rows[0]
-      console.log('✅ Database connection succeeded')
+      console.log('âœ… Database connection succeeded')
       
       // Parse PostgreSQL version (format: "PostgreSQL 15.3 on x86_64...")
       const versionMatch = pg_version.match(/PostgreSQL\s+([\d.]+)/)
@@ -70,7 +66,7 @@ export const testDatabaseConnection = async (): Promise<boolean> => {
       client.release()
     }
   } catch (err: any) {
-    console.error('❌ Database connection failed:')
+    console.error('âŒ Database connection failed:')
     console.error(`   Error: ${err.message}`)
     if (err.code) {
       console.error(`   Code: ${err.code}`)
@@ -87,3 +83,4 @@ export const testDatabaseConnection = async (): Promise<boolean> => {
     return false
   }
 }
+
