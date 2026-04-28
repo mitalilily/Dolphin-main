@@ -341,6 +341,7 @@ export const upsertZoneRateController = async (req: Request, res: Response) => {
       originZoneId: body.originZoneId ?? body.origin_zone_id,
       destinationZoneId: body.destinationZoneId ?? body.destination_zone_id,
       ratePerKg: Number(body.ratePerKg ?? body.rate_per_kg ?? 0),
+      planId: (body.plan_id as string) ?? (body.planId as string) ?? undefined,
       courierScope: parseCourierScope(req),
     })
 
@@ -396,6 +397,7 @@ export const importZoneRatesController = async (req: Request, res: Response) => 
 
     const result = await importZoneRatesFromCsv(req.file.buffer, {
       courierScope: parseCourierScope(req),
+      planId: (req.body.plan_id as string) ?? (req.body.planId as string) ?? undefined,
     })
 
     res.json({ success: true, ...result })

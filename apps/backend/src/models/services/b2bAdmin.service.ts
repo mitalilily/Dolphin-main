@@ -948,6 +948,7 @@ export const importZoneRatesFromCsv = async (
   fileBuffer: Buffer,
   options: {
     courierScope?: CourierScope
+    planId?: string
   },
 ) => {
   const csv = fileBuffer.toString('utf8')
@@ -992,6 +993,7 @@ export const importZoneRatesFromCsv = async (
         destinationZoneId,
         ratePerKg: Number(row.rate_per_kg),
         courierScope: options.courierScope,
+        planId: options.planId,
       })
 
       inserted += 1

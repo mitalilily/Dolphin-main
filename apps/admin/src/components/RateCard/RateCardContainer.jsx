@@ -406,7 +406,7 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
             data={selectedRate}
             existingRates={data}
             zones={zones}
-            planId={filters?.planId}
+            planId={selectedPlanId || filters?.planId}
             couriers={courierList || []}
             businessType={selectedBusinessType}
           />

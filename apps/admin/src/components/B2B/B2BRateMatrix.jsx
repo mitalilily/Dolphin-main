@@ -290,6 +290,7 @@ const B2BRateMatrix = ({ planId }) => {
       originZoneId: formData.originZoneId || selectedCell?.originZone?.id,
       destinationZoneId: formData.destinationZoneId || selectedCell?.destZone?.id,
       ratePerKg: formData.ratePerKg, // Only rate per kg needed
+      plan_id: planId || undefined,
       courier_id: formData.courier_id || courierId || undefined,
       service_provider: formData.service_provider || serviceProvider || undefined,
     }
