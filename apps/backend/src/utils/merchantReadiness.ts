@@ -73,7 +73,15 @@ export async function getMerchantOrderReadiness(userId: string) {
   }
 }
 
-export async function requireMerchantOrderReadiness(userId: string): Promise<void> {
+type MerchantReadinessOptions = {
+  requireApproval?: boolean
+}
+
+export async function requireMerchantOrderReadinessWithOptions(
+  userId: string,
+  options: MerchantReadinessOptions = {},
+): Promise<void> {
+  const { requireApproval = true } = options
   const readiness = await getMerchantOrderReadiness(userId)
 
   if (!readiness.onboardingComplete) {
@@ -90,7 +98,7 @@ export async function requireMerchantOrderReadiness(userId: string): Promise<voi
     )
   }
 
-  if (!readiness.approved) {
+  if (requireApproval && !readiness.approved) {
     throw new HttpError(
       403,
       'Your merchant account is pending approval. Please contact support if this is taking longer than expected.',
@@ -117,4 +125,8 @@ export async function requireMerchantOrderReadiness(userId: string): Promise<voi
       `Add wallet balance before creating orders. Minimum required balance is Rs ${readiness.requiredWalletBalance}.`,
     )
   }
+}
+
+export async function requireMerchantOrderReadiness(userId: string): Promise<void> {
+  return requireMerchantOrderReadinessWithOptions(userId, { requireApproval: true })
 }

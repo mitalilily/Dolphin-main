@@ -48,7 +48,10 @@ import * as dotenv from 'dotenv'
 import { PgTransaction } from 'drizzle-orm/pg-core'
 import path from 'path'
 import PdfPrinter from 'pdfmake'
-import { requireMerchantOrderReadiness } from '../../utils/merchantReadiness'
+import {
+  requireMerchantOrderReadiness,
+  requireMerchantOrderReadinessWithOptions,
+} from '../../utils/merchantReadiness'
 import { courierPriorityProfiles } from '../schema/courierPriority'
 import { couriers } from '../schema/couriers'
 import { locations } from '../schema/locations'
@@ -2774,7 +2777,7 @@ export const createB2CShipmentService = async (
   userId: string,
   is_external_api: boolean = false,
 ) => {
-  await requireMerchantOrderReadiness(userId)
+  await requireMerchantOrderReadinessWithOptions(userId, { requireApproval: false })
 
   // 🔹 Handle provider_code: Convert provider_code to integration_type if provided
   // Users can send either integration_type (direct) or provider_code (opaque code from serviceability API)
