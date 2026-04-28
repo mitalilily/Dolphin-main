@@ -80,7 +80,10 @@ const Couriers = () => {
   const { data, isLoading } = useCouriers({
     page,
     limit: rowsPerPage,
-    filters,
+    filters: {
+      ...filters,
+      serviceProviders: ['icarry', 'shipmozo'],
+    },
   })
 
   const appliedCount = Object.entries(filters).filter(

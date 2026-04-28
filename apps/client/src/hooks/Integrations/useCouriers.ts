@@ -12,7 +12,7 @@ import {
 interface UseCouriersParams {
   page?: number
   limit?: number
-  filters?: Record<string, string | boolean | number>
+  filters?: Record<string, string | boolean | number | string[]>
 }
 
 export const useCouriers = ({ page, limit, filters = {} }: UseCouriersParams = {}) => {

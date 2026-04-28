@@ -115,6 +115,11 @@ export const getCouriers = async (req: Request, res: Response) => {
     const podAvailable = req.query.podAvailable?.toString() // "yes" | "no"
     const realtimeTracking = req.query.realtimeTracking?.toString()
     const isHyperlocal = req.query.isHyperlocal
+    const serviceProviders = req.query.serviceProviders
+      ?.toString()
+      .split(',')
+      .map((provider) => provider.trim().toLowerCase())
+      .filter(Boolean)
 
     // ✅ Validate and map sortBy
     const rawSortBy = req.query.sortBy?.toString()
@@ -128,6 +133,7 @@ export const getCouriers = async (req: Request, res: Response) => {
       podAvailable,
       realtimeTracking,
       isHyperlocal: isHyperlocal === 'true' ? true : isHyperlocal === 'false' ? false : undefined,
+      serviceProviders: serviceProviders?.length ? serviceProviders : undefined,
     }
 
     const [couriers, summary, totalCount] = await Promise.all([

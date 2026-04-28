@@ -27,6 +27,7 @@ export interface CourierFilters {
   podAvailable?: string // "yes" | "no" | ""
   realtimeTracking?: string
   isHyperlocal?: boolean
+  serviceProviders?: string[]
 }
 
 export interface GetAllCouriersPaginatedParams {
@@ -42,6 +43,7 @@ export interface GetAllCouriersPaginatedParams {
 
 export interface CourierFilters {
   name?: string
+  serviceProviders?: string[]
 }
 
 export const buildCourierWhereClause = (filters: CourierFilters = {}) => {
@@ -49,6 +51,15 @@ export const buildCourierWhereClause = (filters: CourierFilters = {}) => {
 
   if (filters.name) {
     conditions.push(ilike(couriers.name, `%${filters.name}%`))
+  }
+
+  if (Array.isArray(filters.serviceProviders) && filters.serviceProviders.length > 0) {
+    const normalizedProviders = filters.serviceProviders
+      .map((provider) => String(provider || '').trim().toLowerCase())
+      .filter(Boolean)
+    if (normalizedProviders.length > 0) {
+      conditions.push(inArray(sql`LOWER(${couriers.serviceProvider})`, normalizedProviders))
+    }
   }
 
   return conditions.length ? and(...conditions) : undefined
