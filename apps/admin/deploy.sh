@@ -44,8 +44,12 @@ set -e
 echo "ðŸ”¨ Running build with production environment variables..."
 
 # Set production API URL
-# React apps need REACT_APP_ prefix for environment variables
-export REACT_APP_API_BASE_URL="https://dolphin-main-production-4236.up.railway.app/api"
+# React apps need REACT_APP_ prefix for environment variables.
+# Require explicit value to avoid deploying with stale/dead hardcoded domains.
+if [ -z "${REACT_APP_API_BASE_URL}" ]; then
+  echo "Error: REACT_APP_API_BASE_URL is required. Example: https://<your-backend-domain>/api"
+  exit 1
+fi
 
 echo "ðŸ“¡ Using production API URL: ${REACT_APP_API_BASE_URL}"
 echo ""

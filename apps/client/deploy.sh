@@ -45,8 +45,16 @@ echo "ðŸ”¨ Running build with production environment variables..."
 
 # Set production environment variables
 # Vite uses VITE_ prefix for environment variables
-export VITE_API_URL="https://dolphin-main-production-4236.up.railway.app/api"
-export VITE_APP_SOCKET_URL="https://dolphin-main-production-4236.up.railway.app"
+# Require explicit values to avoid deploying with stale/dead hardcoded domains.
+if [ -z "${VITE_API_URL}" ]; then
+  echo "Error: VITE_API_URL is required. Example: https://<your-backend-domain>/api"
+  exit 1
+fi
+
+if [ -z "${VITE_APP_SOCKET_URL}" ]; then
+  echo "Error: VITE_APP_SOCKET_URL is required. Example: https://<your-backend-domain>"
+  exit 1
+fi
 
 # Keep other environment variables from .env if needed (Shopify, Google OAuth, etc.)
 # These can be overridden here if you have different production values

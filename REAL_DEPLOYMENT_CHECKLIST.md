@@ -1,8 +1,7 @@
 # Real Deployment Checklist
 
-This checklist is based on your current setup:
-- Client URL: `https://agile-mercy-production-beef.up.railway.app`
-- Backend URL: `https://dolphin-main-production-4236.up.railway.app`
+Use this checklist with your CURRENT active domains from Railway project settings.
+Do not use stale/old preview domains.
 
 ## 1) Backend env vars (Railway/Render)
 Set these on backend hosting:
@@ -18,12 +17,12 @@ REFRESH_TOKEN_SECRET=<strong-random>
 JWT_SECRET=<strong-random>
 COURIER_SECRET_KEY=<strong-random>
 
-API_URL=https://dolphin-main-production-4236.up.railway.app
-FRONTEND_URL=https://agile-mercy-production-beef.up.railway.app
+API_URL=https://<your-active-backend-domain>
+FRONTEND_URL=https://<your-active-client-domain>
 
 # IMPORTANT: include your real admin URL too when available
-CORS_ALLOWED_ORIGINS=https://agile-mercy-production-beef.up.railway.app,https://<your-admin-domain>
-CORS_ORIGINS=https://agile-mercy-production-beef.up.railway.app,https://<your-admin-domain>
+CORS_ALLOWED_ORIGINS=https://<your-active-client-domain>,https://<your-active-admin-domain>
+CORS_ORIGINS=https://<your-active-client-domain>,https://<your-active-admin-domain>
 
 # Shiprocket
 SHIPROCKET_API_BASE=https://apiv2.shiprocket.in/v1/external
@@ -54,8 +53,8 @@ ICARRY_WEBHOOK_TOKEN=<recommended-secret-token>
 Set these on client hosting:
 
 ```env
-VITE_API_URL=https://dolphin-main-production-4236.up.railway.app/api
-VITE_APP_SOCKET_URL=https://dolphin-main-production-4236.up.railway.app
+VITE_API_URL=https://<your-active-backend-domain>/api
+VITE_APP_SOCKET_URL=https://<your-active-backend-domain>
 VITE_GOOGLE_OAUTH_CLIENT_ID=<if used>
 ```
 
@@ -63,8 +62,8 @@ VITE_GOOGLE_OAUTH_CLIENT_ID=<if used>
 Set these on admin hosting:
 
 ```env
-REACT_APP_API_BASE_URL=https://dolphin-main-production-4236.up.railway.app/api
-REACT_APP_SOCKET_URL=https://dolphin-main-production-4236.up.railway.app
+REACT_APP_API_BASE_URL=https://<your-active-backend-domain>/api
+REACT_APP_SOCKET_URL=https://<your-active-backend-domain>
 ```
 
 ## 4) Database migration
@@ -79,7 +78,7 @@ No new DB migration is required specifically for the latest iCarry feature addit
 ## 5) Webhook setup in iCarry dashboard
 Set callback URL to:
 
-`https://dolphin-main-production-4236.up.railway.app/api/v1/webhook/icarry/callback`
+`https://<your-active-backend-domain>/api/v1/webhook/icarry/callback`
 
 Token to configure in iCarry panel should match:
 - `ICARRY_WEBHOOK_TOKEN` (preferred), or
