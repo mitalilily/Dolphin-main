@@ -1,0 +1,14 @@
+{
+  "nickname": "QAHUB",
+  "name": "QA Warehouse Main",
+  "email": "warehouse.qa@example.com",
+  "phone": "9876543210",
+  "alt_phone": "9876543211",
+  "street1": "12 Test Street",
+  "street2": "Near QA Circle",
+  "locality": "MG Road",
+  "city": "Bengaluru",
+  "pincode": "560001",
+  "zone_id": 1,
+  "country_id": "99"
+}

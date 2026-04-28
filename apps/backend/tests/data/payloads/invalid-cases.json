@@ -1,0 +1,20 @@
+{
+  "invalidWarehouse": {
+    "nickname": "QAHUB",
+    "name": "Bad Pincode Hub",
+    "email": "warehouse.qa@example.com",
+    "phone": "9876543210",
+    "street1": "12 Test Street",
+    "city": "Bengaluru",
+    "pincode": "12",
+    "zone_id": 1,
+    "country_id": "99"
+  },
+  "invalidOrder": {
+    "order_number": "",
+    "weight": -1,
+    "length": 0,
+    "breadth": 0,
+    "height": 0
+  }
+}

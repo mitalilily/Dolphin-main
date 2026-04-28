@@ -1,0 +1,37 @@
+{
+  "order_number": "QA-B2C-1001",
+  "payment_type": "prepaid",
+  "integration_type": "manual",
+  "order_amount": 1299,
+  "weight": 0.8,
+  "length": 10,
+  "breadth": 8,
+  "height": 5,
+  "courier_id": 100,
+  "pickup_location": {
+    "name": "QA Warehouse Main",
+    "phone": "9876543210",
+    "email": "warehouse.qa@example.com",
+    "address": "12 Test Street",
+    "city": "Bengaluru",
+    "state": "Karnataka",
+    "pincode": "560001"
+  },
+  "consignee": {
+    "name": "Test Receiver",
+    "phone": "9123456789",
+    "email": "receiver@example.com",
+    "address": "45 Delivery Lane",
+    "city": "Mumbai",
+    "state": "Maharashtra",
+    "pincode": "400001"
+  },
+  "order_items": [
+    {
+      "name": "QA T-Shirt",
+      "sku": "QA-TSHIRT-1",
+      "quantity": 1,
+      "price": 1299
+    }
+  ]
+}

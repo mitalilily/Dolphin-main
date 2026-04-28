@@ -1,0 +1,11 @@
+[
+  {
+    "nickname": "QAHUB",
+    "name": "QA Warehouse",
+    "phone": "9876543210",
+    "email": "warehouse@example.com",
+    "street1": "Plot 10, Sector 5",
+    "city": "Bengaluru",
+    "pincode": "560001"
+  }
+]

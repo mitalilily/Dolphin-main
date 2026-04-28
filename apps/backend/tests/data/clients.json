@@ -1,0 +1,12 @@
+[
+  {
+    "name": "QA Client 1",
+    "email": "qa-client-1@example.com",
+    "expectedRole": "customer"
+  },
+  {
+    "name": "QA Client 2",
+    "email": "qa-client-2@example.com",
+    "expectedRole": "customer"
+  }
+]
