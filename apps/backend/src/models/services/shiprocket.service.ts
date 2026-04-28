@@ -4007,19 +4007,11 @@ export const createB2CShipmentService = async (
           const matchedDefault = availablePickupNames.find(
             (name) => name.toLowerCase() === fallbackDefault.toLowerCase(),
           )
-          if (matchedDefault) {
-            console.warn(
-              `âš ï¸ Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to default "${matchedDefault}".`,
-            )
-            pickupLocation = matchedDefault
-          } else {
-            throw new HttpError(
-              400,
-              `Invalid Shiprocket pickup location "${pickupLocation}". Available locations: ${availablePickupNames
-                .slice(0, 8)
-                .join(', ')}${availablePickupNames.length > 8 ? ' ...' : ''}`,
-            )
-          }
+          const fallbackPickup = matchedDefault || availablePickupNames[0]
+          console.warn(
+            `Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to "${fallbackPickup}".`,
+          )
+          pickupLocation = fallbackPickup
         } else {
           pickupLocation = matchedPickup
         }
