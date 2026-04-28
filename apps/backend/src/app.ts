@@ -157,8 +157,10 @@ app.post(
   shopifyOrderWebhookController,
 )
 
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// KYC demo mode can send inline base64 documents in one request.
+// Keep limits high enough to avoid "payload too large" failures.
+app.use(express.json({ limit: '50mb' }))
+app.use(express.urlencoded({ extended: true, limit: '50mb' }))
 
 app.use('/api/user', userRoutes)
 app.use('/api/profile', profileRoutes)

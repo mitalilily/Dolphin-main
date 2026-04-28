@@ -50,7 +50,7 @@ export const kyc = pgTable("kyc", {
   cancelledChequeUrl: text("cancelledChequeUrl"),
   boardResolutionUrl: text("boardResolutionUrl"),
   partnershipDeedUrl: text("partnershipDeedUrl"),
-  llpAgreementUrl: text("  llpAgreementUrl"),
+  llpAgreementUrl: text("llpAgreementUrl"),
 
   // ─── Field Status ─────────────────────────────────────────────
   selfieStatus: kycDocStatusEnum("selfieStatus").default("pending").notNull(),
@@ -68,9 +68,7 @@ export const kyc = pgTable("kyc", {
   companyAddressProofStatus: kycDocStatusEnum("companyAddressProofStatus")
     .default("pending")
     .notNull(),
-  cancelledChequeRejectionReason: text("cancelledChequeRejectionReason")
-    .default("pending")
-    .notNull(),
+  cancelledChequeRejectionReason: text("cancelledChequeRejectionReason"),
 
   boardResolutionStatus: kycDocStatusEnum("boardResolutionStatus")
     .default("pending")
