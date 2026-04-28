@@ -87,11 +87,27 @@ export const createOrderController = async (req: any, res: Response) => {
       },
     })
   } catch (error: any) {
+    const isShiprocketKycError =
+      error?.code === 'SHIPROCKET_KYC_REQUIRED' ||
+      String(error?.message || '')
+        .toLowerCase()
+        .includes('kyc verification is mandated')
+    const statusCode =
+      typeof error?.statusCode === 'number'
+        ? error.statusCode
+        : typeof error?.status === 'number'
+          ? error.status
+          : 500
+    const message = isShiprocketKycError
+      ? 'Shipment cannot be created because Shiprocket account KYC is incomplete. Complete KYC in your Shiprocket panel and retry.'
+      : error.message || 'Internal server error'
+
     console.error('Error creating order via API:', error)
-    res.status(typeof error?.statusCode === 'number' ? error.statusCode : 500).json({
+    res.status(statusCode).json({
       success: false,
       error: 'Failed to create order',
-      message: error.message || 'Internal server error',
+      message,
+      ...(isShiprocketKycError ? { error_code: 'SHIPROCKET_KYC_REQUIRED' } : {}),
     })
   }
 }

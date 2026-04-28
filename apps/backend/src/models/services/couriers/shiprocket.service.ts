@@ -240,10 +240,24 @@ export class ShiprocketCourierService {
       message: lastError?.message || lastError,
     })
 
-    const httpError: any = new HttpError(
-      Number(lastError?.response?.status || 502),
-      this.extractErrorMessage(lastError, `Shiprocket API request failed for ${path}`),
+    const upstreamStatus = Number(lastError?.response?.status || 502)
+    const extractedMessage = this.extractErrorMessage(
+      lastError,
+      `Shiprocket API request failed for ${path}`,
     )
+    const normalizedMessage = String(extractedMessage || '').toLowerCase()
+    const isKycBlocked = normalizedMessage.includes('kyc verification is mandated')
+
+    const httpError: any = new HttpError(
+      upstreamStatus,
+      isKycBlocked
+        ? 'Shiprocket account KYC is incomplete. Complete KYC in Shiprocket panel to create shipments.'
+        : extractedMessage,
+    )
+    if (isKycBlocked) {
+      httpError.code = 'SHIPROCKET_KYC_REQUIRED'
+      httpError.integration_type = 'shiprocket'
+    }
     httpError.response = lastError?.response?.data ?? null
     httpError.status = lastError?.response?.status ?? null
     httpError.requestMeta = {

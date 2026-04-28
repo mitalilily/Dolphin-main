@@ -34,12 +34,31 @@ export const createB2CShipmentController = async (req: any, res: Response) => {
 
     res.status(200).json({ success: true, shipment })
   } catch (error: any) {
+    const isShiprocketKycError =
+      error?.code === 'SHIPROCKET_KYC_REQUIRED' ||
+      String(error?.message || '')
+        .toLowerCase()
+        .includes('kyc verification is mandated')
+
+    const statusCode =
+      typeof error?.statusCode === 'number'
+        ? error.statusCode
+        : typeof error?.status === 'number'
+          ? error.status
+          : 500
+
+    const errorMessage = isShiprocketKycError
+      ? 'Shipment cannot be created because Shiprocket account KYC is incomplete. Complete KYC in your Shiprocket panel and retry.'
+      : error.message?.includes('timeout') || error.code === 'ECONNABORTED'
+        ? 'Order creation is taking longer than expected. Please try again or contact support if the issue persists.'
+        : error.message || 'Failed to create order. Please try again.'
+
     console.error('Error creating B2C shipment:', {
-      message: error?.message || 'Unknown error',
-      statusCode: error?.statusCode ?? error?.response?.status ?? 500,
+      message: errorMessage,
+      statusCode,
       code: error?.code ?? null,
       stack: error?.stack || null,
-      response: error?.response?.data || null,
+      response: error?.response || null,
       request: {
         order_number: req.body?.order_number,
         integration_type: req.body?.integration_type,
@@ -47,12 +66,11 @@ export const createB2CShipmentController = async (req: any, res: Response) => {
         courier_id: req.body?.courier_id ?? null,
       },
     })
-    const statusCode = typeof error?.statusCode === 'number' ? error.statusCode : 500
-    const errorMessage =
-      error.message?.includes('timeout') || error.code === 'ECONNABORTED'
-        ? 'Order creation is taking longer than expected. Please try again or contact support if the issue persists.'
-        : error.message || 'Failed to create order. Please try again.'
-    res.status(statusCode).json({ success: false, message: errorMessage })
+    res.status(statusCode).json({
+      success: false,
+      message: errorMessage,
+      ...(isShiprocketKycError ? { error_code: 'SHIPROCKET_KYC_REQUIRED' } : {}),
+    })
   }
 }
 
