@@ -1,4 +1,4 @@
-import axios from 'axios'
+﻿import axios from 'axios'
 import {
   and,
   asc,
@@ -587,7 +587,7 @@ const hasTag = (loc: LocRow | null, tag: string) =>
 /**
  * Determine B2C zone classification for a shipment
  *
- * Priority order (most specific → broadest):
+ * Priority order (most specific â†’ broadest):
  *  1. Special Zones
  *  2. Within City (city + state must both match)
  *  3. Within State (same state, different city)
@@ -636,7 +636,7 @@ const determineB2CZoneKey = (
     return { key: 'WITHIN_STATE', reason: 'same state (different city)' }
   }
 
-  // 4. Metro to Metro (different metro cities — cross-state or within same state)
+  // 4. Metro to Metro (different metro cities â€” cross-state or within same state)
   if (
     hasTag(origin, 'metros') &&
     hasTag(destination, 'metros') &&
@@ -962,7 +962,7 @@ async function filterCouriersByBusinessType(
     const hasBusinessType = Array.isArray(types) && types.includes(expectedBusinessType)
 
     if (!hasBusinessType) {
-      console.log('🚫 Removing courier - wrong business_type', {
+      console.log('ðŸš« Removing courier - wrong business_type', {
         courierId: c.id,
         courierName: c.name,
         businessType: types,
@@ -989,7 +989,7 @@ export const fetchAvailableCouriersWithRates = async (
   userOrOptions?: FetchCouriersOptions,
 ) => {
   try {
-    // ✅ B2C only - B2B should use fetchAvailableCouriersWithRatesB2B
+    // âœ… B2C only - B2B should use fetchAvailableCouriersWithRatesB2B
     if (params.shipment_type && params.shipment_type !== 'b2c') {
       throw new Error(
         `fetchAvailableCouriersWithRates is for B2C only. Use fetchAvailableCouriersWithRatesB2B for ${params.shipment_type}`,
@@ -1007,7 +1007,7 @@ export const fetchAvailableCouriersWithRates = async (
 
     const isCalculator = params.isCalculator === true
 
-    // 🔹 Cache key (per user + params)
+    // ðŸ”¹ Cache key (per user + params)
     const normalizePincode = (value: unknown): number | undefined => {
       if (typeof value === 'number' && !Number.isNaN(value)) {
         return Number(value)
@@ -1235,10 +1235,10 @@ export const fetchAvailableCouriersWithRates = async (
     // Registry of enabled providers (by serviceProvider string)
     const enabledProviders = new Set(Object.keys(systemCourierMap))
 
-    // 🔹 Start with an empty list of candidate couriers
+    // ðŸ”¹ Start with an empty list of candidate couriers
     let combinedCouriers: any[] = []
 
-    // 🟢 Delhivery Serviceability (called for both calculator and non-calculator flows)
+    // ðŸŸ¢ Delhivery Serviceability (called for both calculator and non-calculator flows)
     let delhiveryAvailable = false
     let delhiveryOriginServiceable = false
     let delhiveryDestinationServiceable = false
@@ -1344,7 +1344,7 @@ export const fetchAvailableCouriersWithRates = async (
       candidates: providerCourierBuckets.get('delhivery')?.rows.length ?? 0,
     })
 
-    // 🟢 Ekart Serviceability V3
+    // ðŸŸ¢ Ekart Serviceability V3
     let ekartAvailable = false
     let ekartResp: any = null
     let ekartEDD = '3-5 Days'
@@ -1358,7 +1358,7 @@ export const fetchAvailableCouriersWithRates = async (
       const invoiceAmountAvailable = orderAmountValue > 0
 
       if (!invoiceAmountAvailable) {
-        console.warn('⚠️ Skipping Ekart serviceability: positive order_amount required', {
+        console.warn('âš ï¸ Skipping Ekart serviceability: positive order_amount required', {
           originPincode,
           destinationPincode,
           order_amount: params.order_amount ?? params.orderAmount ?? null,
@@ -1373,7 +1373,7 @@ export const fetchAvailableCouriersWithRates = async (
             length: String(params.length ?? 0),
             height: String(params.height ?? 0),
             width: String(params.breadth ?? 0),
-            weight: String(Number(params.weight ?? 0) / 1000), // grams → kg
+            weight: String(Number(params.weight ?? 0) / 1000), // grams â†’ kg
             paymentType: params.payment_type === 'cod' ? 'COD' : 'Prepaid',
             invoiceAmount: String(orderAmountValue),
             codAmount: params.payment_type === 'cod' ? String(orderAmountValue) : undefined,
@@ -1389,7 +1389,7 @@ export const fetchAvailableCouriersWithRates = async (
           }
         } catch (err: any) {
           console.error(
-            '❌ Ekart serviceability error:',
+            'âŒ Ekart serviceability error:',
             err?.response?.data || err?.message || err,
           )
         }
@@ -1459,7 +1459,7 @@ export const fetchAvailableCouriersWithRates = async (
           })
         } catch (err: any) {
           console.error(
-            '❌ Xpressbees serviceability error:',
+            'âŒ Xpressbees serviceability error:',
             err?.response?.data || err?.message || err,
           )
         }
@@ -1535,7 +1535,7 @@ export const fetchAvailableCouriersWithRates = async (
             })
           }
         } catch (err: any) {
-          console.error('❌ Shiprocket serviceability error:', err?.message || err)
+          console.error('âŒ Shiprocket serviceability error:', err?.message || err)
         }
       }
     }
@@ -1625,7 +1625,7 @@ export const fetchAvailableCouriersWithRates = async (
             }
           }
         } catch (err: any) {
-          console.error('❌ Shipmozo serviceability error:', err?.message || err)
+          console.error('âŒ Shipmozo serviceability error:', err?.message || err)
         }
       }
     }
@@ -1749,7 +1749,7 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Delhivery-only mode: no non-Delhivery live serviceability checks.
 
-    // ✅ Local rate & zone logic - Fetch for ALL service providers
+    // âœ… Local rate & zone logic - Fetch for ALL service providers
     let localRates: any[] = []
     let approxZone: { id: string; code: string; name?: string } | null = null
 
@@ -1795,7 +1795,7 @@ export const fetchAvailableCouriersWithRates = async (
       }
     }
 
-    // 🔹 Calculate chargeable weight if dimensions are provided
+    // ðŸ”¹ Calculate chargeable weight if dimensions are provided
     const serviceabilityWeightG = normalizeServiceabilityWeightToGrams(params.weight)
     let chargeableWeight: number | null = null
     if (
@@ -1816,24 +1816,24 @@ export const fetchAvailableCouriersWithRates = async (
           },
         })
         chargeableWeight = Math.round(weightCalc.chargedWeight * 1000) // Convert back to grams and round
-        console.log('✅ Calculated chargeable weight:', {
+        console.log('âœ… Calculated chargeable weight:', {
           actualWeight: serviceabilityWeightG,
           dimensions: { length: params.length, breadth: params.breadth, height: params.height },
           chargeableWeight,
           volumetricWeight: weightCalc.volumetricWeight * 1000,
         })
       } catch (error) {
-        console.error('❌ Error calculating chargeable weight:', error)
+        console.error('âŒ Error calculating chargeable weight:', error)
       }
     } else {
-      console.log('⚠️ Skipping chargeable weight calculation - missing dimensions:', {
+      console.log('âš ï¸ Skipping chargeable weight calculation - missing dimensions:', {
         length: params.length,
         breadth: params.breadth,
         height: params.height,
       })
     }
 
-    // 🔹 Merge local rates with couriers
+    // ðŸ”¹ Merge local rates with couriers
     // Match couriers with local rates by courier_id
     // Include ALL couriers (even if they don't have local rates) - they have service provider response data
     const isReverseShipment = params.isReverse === true || params.payment_type === 'reverse'
@@ -2093,7 +2093,7 @@ export const fetchAvailableCouriersWithRates = async (
       const localRatesAvailable = !requireLocalRates || Boolean(c.localRates?.[requiredRateType])
 
       if (!inSystem || !localRatesAvailable) {
-        console.log('🚫 Removing courier from final list', {
+        console.log('ðŸš« Removing courier from final list', {
           courierId: c.id,
           providerKey,
           inSystem,
@@ -2104,10 +2104,10 @@ export const fetchAvailableCouriersWithRates = async (
       return inSystem && localRatesAvailable
     })
 
-    // ✅ Final filter: Ensure all couriers have correct business_type
+    // âœ… Final filter: Ensure all couriers have correct business_type
     combined = await filterCouriersByBusinessType(combined, 'b2c')
 
-    // 🔹 Sorting and tagging
+    // ðŸ”¹ Sorting and tagging
     if (userId && combined?.length) {
       const [profile] = await db
         .select()
@@ -2207,7 +2207,7 @@ export const fetchAvailableCouriersWithRatesB2B = async (
   userOrOptions?: FetchCouriersOptions,
 ) => {
   try {
-    // ✅ B2B only
+    // âœ… B2B only
     if (params.shipment_type && params.shipment_type !== 'b2b') {
       throw new Error(
         `fetchAvailableCouriersWithRatesB2B is for B2B only. Use fetchAvailableCouriersWithRates for ${params.shipment_type}`,
@@ -2303,7 +2303,7 @@ export const fetchAvailableCouriersWithRatesB2B = async (
       )
     }
 
-    console.log('✅ B2B Zone lookup successful:', {
+    console.log('âœ… B2B Zone lookup successful:', {
       originPincode,
       originZoneId,
       destinationPincode,
@@ -2432,7 +2432,7 @@ export const fetchAvailableCouriersWithRatesB2B = async (
       (c) => c.localRates && Object.keys(c.localRates).length > 0,
     )
 
-    // ✅ Final filter: Ensure all couriers have correct business_type for B2B
+    // âœ… Final filter: Ensure all couriers have correct business_type for B2B
     combined = await filterCouriersByBusinessType(combined, 'b2b')
 
     // Step 8: Apply sorting and tagging (similar to B2C)
@@ -2665,7 +2665,7 @@ export async function createB2COrder({
       try {
         return JSON.parse(trimmed)
       } catch (err) {
-        console.warn('⚠️ Unable to parse JSON string in createB2COrder:', trimmed)
+        console.warn('âš ï¸ Unable to parse JSON string in createB2COrder:', trimmed)
         return null
       }
     }
@@ -2777,8 +2777,8 @@ export async function createB2COrder({
 
     return newOrder
   } catch (err: any) {
-    console.error('❌ Failed to insert B2C order:', err)
-    console.error('❌ Failed to insert B2C order (details):', {
+    console.error('âŒ Failed to insert B2C order:', err)
+    console.error('âŒ Failed to insert B2C order (details):', {
       message: err?.message,
       detail: err?.detail,
       code: err?.code,
@@ -2795,7 +2795,7 @@ export const createB2CShipmentService = async (
 ) => {
   await requireMerchantOrderReadinessWithOptions(userId, { requireApproval: false })
 
-  // 🔹 Handle provider_code: Convert provider_code to integration_type if provided
+  // ðŸ”¹ Handle provider_code: Convert provider_code to integration_type if provided
   // Users can send either integration_type (direct) or provider_code (opaque code from serviceability API)
   if (!params.integration_type && params.provider_code) {
     // Dynamic import to avoid circular dependencies
@@ -2805,7 +2805,7 @@ export const createB2CShipmentService = async (
     if (integrationTypeFromCode) {
       params.integration_type = integrationTypeFromCode
       console.log(
-        `✅ Converted provider_code: ${params.provider_code} to integration_type: ${params.integration_type}`,
+        `âœ… Converted provider_code: ${params.provider_code} to integration_type: ${params.integration_type}`,
       )
     } else {
       throw new HttpError(
@@ -2815,7 +2815,7 @@ export const createB2CShipmentService = async (
     }
   }
 
-  console.log('🚀 Creating shipment for integration_type:', params.integration_type)
+  console.log('ðŸš€ Creating shipment for integration_type:', params.integration_type)
 
   const normalizePincode = (value: unknown): string | undefined => {
     if (typeof value === 'number' && !Number.isNaN(value)) {
@@ -2886,7 +2886,7 @@ export const createB2CShipmentService = async (
       if (error instanceof HttpError) {
         throw error
       }
-      console.error('❌ Delhivery serviceability validation failed:', error?.message || error)
+      console.error('âŒ Delhivery serviceability validation failed:', error?.message || error)
       throw new HttpError(
         502,
         `Delhivery serviceability validation failed. ${error?.message || 'Please try again later.'}`,
@@ -2913,7 +2913,7 @@ export const createB2CShipmentService = async (
     return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : null
   }
 
-  // 🔹 Derive integration_type from courier_id if not provided
+  // ðŸ”¹ Derive integration_type from courier_id if not provided
   // IMPORTANT: courier_id and courier_name are NOT unique across service providers
   // The composite key in the database is (courier_id, serviceProvider)
   // Since both can be duplicated, we cannot accurately identify a courier without integration_type
@@ -2921,7 +2921,7 @@ export const createB2CShipmentService = async (
   if (!params.integration_type && params.courier_id) {
     try {
       console.log(
-        `⚠️ integration_type not provided, attempting to derive from courier_id: ${
+        `âš ï¸ integration_type not provided, attempting to derive from courier_id: ${
           params.courier_id
         }${params.courier_partner ? `, courier_partner: ${params.courier_partner}` : ''}`,
       )
@@ -2949,27 +2949,27 @@ export const createB2CShipmentService = async (
         if (serviceProvider === 'delhivery') {
           params.integration_type = 'delhivery'
           console.log(
-            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
         } else if (serviceProvider === 'ekart') {
           params.integration_type = 'ekart'
           console.log(
-            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
         } else if (serviceProvider === 'shipmozo') {
           params.integration_type = 'shipmozo'
           console.log(
-            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
         } else if (serviceProvider === 'xpressbees') {
           params.integration_type = 'xpressbees'
           console.log(
-            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+            `Ã¢Å“â€¦ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
         } else if (serviceProvider === 'shiprocket') {
           params.integration_type = 'shiprocket'
           console.log(
-            `âœ… Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+            `Ã¢Å“â€¦ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
         } else {
           throw new HttpError(
@@ -2999,7 +2999,7 @@ export const createB2CShipmentService = async (
         throw error
       }
       // Otherwise, log and throw a generic error requiring integration_type
-      console.error(`❌ Error looking up courier_id ${params.courier_id}:`, error.message)
+      console.error(`âŒ Error looking up courier_id ${params.courier_id}:`, error.message)
       throw new HttpError(
         500,
         `Error looking up courier: ${error.message}. Please provide integration_type or provider_code along with courier_id.`,
@@ -3012,7 +3012,7 @@ export const createB2CShipmentService = async (
   // When courier_id is provided without integration_type, an error is thrown above if it cannot be determined
   if (!params.integration_type) {
     console.warn(
-      `⚠️ integration_type not provided and courier_id not available, defaulting to 'delhivery'`,
+      `âš ï¸ integration_type not provided and courier_id not available, defaulting to 'delhivery'`,
     )
     params.integration_type = 'delhivery'
   }
@@ -3039,7 +3039,7 @@ export const createB2CShipmentService = async (
       )
     }
     selectedDelhiveryShippingMode = shippingMode
-    console.log('🧭 Delhivery service selected (panel)', {
+    console.log('ðŸ§­ Delhivery service selected (panel)', {
       order_number: params.order_number,
       courier_id: selectedDelhiveryCourierId,
       shipping_mode: selectedDelhiveryShippingMode,
@@ -3075,7 +3075,7 @@ export const createB2CShipmentService = async (
       params.pickup_pincode = resolvedPincode as any
     }
 
-    console.log('📍 Resolved pickup warehouse for Delhivery order', {
+    console.log('ðŸ“ Resolved pickup warehouse for Delhivery order', {
       order_number: params.order_number,
       pickup_location_id: params.pickup_location_id,
       pickup_id: resolvedPickupWarehouse.pickupId,
@@ -3086,7 +3086,7 @@ export const createB2CShipmentService = async (
     })
   }
 
-  // ✅ Ensure pickup details are present (especially for Delhivery)
+  // âœ… Ensure pickup details are present (especially for Delhivery)
   const isMissingPickupField = (val?: string) => !val || val.toString().trim().length === 0
   const pickup = params.pickup || ({} as ShipmentParams['pickup'])
   const pickupIncomplete =
@@ -3145,7 +3145,7 @@ export const createB2CShipmentService = async (
         }
       }
     } catch (err: any) {
-      console.warn('⚠️ Failed to resolve pickup address from DB:', err?.message || err)
+      console.warn('âš ï¸ Failed to resolve pickup address from DB:', err?.message || err)
     }
   }
 
@@ -3241,7 +3241,7 @@ export const createB2CShipmentService = async (
     }
   } catch (profileErr: any) {
     console.warn(
-      '⚠️ Failed to resolve company metadata for shipment:',
+      'âš ï¸ Failed to resolve company metadata for shipment:',
       profileErr?.message || profileErr,
     )
   }
@@ -3265,7 +3265,7 @@ export const createB2CShipmentService = async (
       `Pickup details incomplete. Missing fields: ${missingPickupFields.join(', ')}. Please select a valid pickup address and retry.`,
     )
   }
-  // 💰 PRE-CHECK: Validate wallet balance BEFORE creating shipments with service providers
+  // ðŸ’° PRE-CHECK: Validate wallet balance BEFORE creating shipments with service providers
   const bookingPickupPincode = normalizePincode(
     params.origin ??
       params.pickup?.pincode ??
@@ -3330,7 +3330,7 @@ export const createB2CShipmentService = async (
         freightCharges = Number(computedFreight.freight)
       }
     } catch (freightErr: any) {
-      console.error('❌ Failed to compute slab-based freight; aborting shipment creation', {
+      console.error('âŒ Failed to compute slab-based freight; aborting shipment creation', {
         order_number: params.order_number,
         error: freightErr?.message || freightErr,
         pickup_pincode: bookingPickupPincode,
@@ -3366,7 +3366,7 @@ export const createB2CShipmentService = async (
       }
       const walletBalance = Number(userWallet?.balance ?? 0)
 
-      console.log('💳 Pre-checking wallet balance before shipment creation:', {
+      console.log('ðŸ’³ Pre-checking wallet balance before shipment creation:', {
         order_number: params.order_number,
         payment_type: params.payment_type,
         wallet_balance: walletBalance,
@@ -3381,7 +3381,7 @@ export const createB2CShipmentService = async (
           params.payment_type === 'prepaid'
             ? 'Insufficient wallet balance for prepaid order'
             : 'Insufficient wallet balance for COD service charges'
-        console.error('❌ Wallet balance check failed:', {
+        console.error('âŒ Wallet balance check failed:', {
           wallet_balance: walletBalance,
           required_amount: estimatedWalletDebit,
           shortfall: estimatedWalletDebit - walletBalance,
@@ -3425,12 +3425,12 @@ export const createB2CShipmentService = async (
           shippingMode: selectedDelhiveryShippingMode ?? null,
           selectedMaxSlabWeight,
         })
-        console.log('⚠️ Delhivery manifest failure stored as order', {
+        console.log('âš ï¸ Delhivery manifest failure stored as order', {
           order_id: failureOrder?.id,
         })
       })
     } catch (err: any) {
-      console.error('❌ Failed to persist manifest failure order:', err?.message || err)
+      console.error('âŒ Failed to persist manifest failure order:', err?.message || err)
     }
   }
 
@@ -3452,7 +3452,7 @@ export const createB2CShipmentService = async (
   const originalOrderId = params.original_order_id || params.order_id
 
   try {
-    // 1️⃣ CREATE SHIPMENT
+    // 1ï¸âƒ£ CREATE SHIPMENT
     const requestedIntegrationType = String(params.integration_type || '').toLowerCase()
     const allowedIntegrationTypes = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket']
     if (!requestedIntegrationType || !allowedIntegrationTypes.includes(requestedIntegrationType)) {
@@ -3486,8 +3486,8 @@ export const createB2CShipmentService = async (
     if (integrationType === 'delhivery') {
       console.log(
         isReverseShipment
-          ? '→ Using Delhivery Reverse Shipment API...'
-          : '→ Using Delhivery API...',
+          ? 'â†’ Using Delhivery Reverse Shipment API...'
+          : 'â†’ Using Delhivery API...',
       )
       const delhivery = new DelhiveryService()
       delhiveryService = delhivery
@@ -3542,12 +3542,12 @@ export const createB2CShipmentService = async (
 
       if (isReverseShipment) {
         if (!shipmentData?.awb_number && !shipmentData?.packages?.length) {
-          console.error('❌ Invalid Delhivery reverse shipment:', shipmentData)
+          console.error('âŒ Invalid Delhivery reverse shipment:', shipmentData)
           throw new HttpError(500, 'Delhivery reverse shipment creation failed')
         }
       } else {
         if (!shipmentData?.success) {
-          console.error('❌ Invalid Delhivery shipment:', shipmentData)
+          console.error('âŒ Invalid Delhivery shipment:', shipmentData)
           throw new HttpError(500, 'Delhivery shipment creation failed')
         }
       }
@@ -3585,7 +3585,7 @@ export const createB2CShipmentService = async (
         throw new HttpError(400, 'Ekart reverse shipments are not supported')
       }
 
-      console.log('→ Using Ekart API...')
+      console.log('â†’ Using Ekart API...')
       const ekart = new EkartService()
       shipmentData = await ekart.createShipment(params)
 
@@ -3596,7 +3596,7 @@ export const createB2CShipmentService = async (
         null
 
       if (!ekartWaybill) {
-        console.error('❌ Invalid Ekart shipment:', shipmentData)
+        console.error('âŒ Invalid Ekart shipment:', shipmentData)
         throw new HttpError(500, 'Ekart shipment creation failed')
       }
 
@@ -3631,8 +3631,8 @@ export const createB2CShipmentService = async (
     } else if (integrationType === 'xpressbees') {
       console.log(
         isReverseShipment
-          ? '→ Using Xpressbees Reverse Shipment API...'
-          : '→ Using Xpressbees API...',
+          ? 'â†’ Using Xpressbees Reverse Shipment API...'
+          : 'â†’ Using Xpressbees API...',
       )
 
       const xpressbees = new XpressbeesService()
@@ -3720,12 +3720,12 @@ export const createB2CShipmentService = async (
       const xpressbeesWaybill = xpressbeesPackage?.awb_number ?? null
 
       if (!xpressbeesPackage?.status && shipmentData?.status !== true) {
-        console.error('❌ Invalid Xpressbees shipment:', shipmentData)
+        console.error('âŒ Invalid Xpressbees shipment:', shipmentData)
         throw new HttpError(500, 'Xpressbees shipment creation failed')
       }
 
       if (!xpressbeesWaybill) {
-        console.error('❌ Missing Xpressbees AWB:', shipmentData)
+        console.error('âŒ Missing Xpressbees AWB:', shipmentData)
         throw new HttpError(500, 'Xpressbees did not return an AWB number')
       }
 
@@ -3881,7 +3881,7 @@ export const createB2CShipmentService = async (
             const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
             labelDataUrl = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : undefined
           } catch (labelError: any) {
-            console.warn('⚠️ Shipmozo label fetch failed:', labelError?.message || labelError)
+            console.warn('âš ï¸ Shipmozo label fetch failed:', labelError?.message || labelError)
           }
         }
 
@@ -3928,38 +3928,75 @@ export const createB2CShipmentService = async (
         )
       }
 
+      const extractPickupLocationNames = (input: any): string[] => {
+        const queue: any[] = [input]
+        const discovered = new Set<string>()
+        const pickupKeys = [
+          'pickup_location',
+          'pickup_location_name',
+          'warehouse_name',
+          'address_title',
+          'location_name',
+          'name',
+        ]
+        const collectionKeys = [
+          'data',
+          'pickup_address',
+          'pickup_locations',
+          'shipping_address',
+          'addresses',
+          'locations',
+        ]
+
+        while (queue.length) {
+          const current = queue.shift()
+          if (current == null) continue
+
+          if (typeof current === 'string') {
+            const value = current.trim()
+            if (value) discovered.add(value)
+            continue
+          }
+
+          if (Array.isArray(current)) {
+            for (const item of current) queue.push(item)
+            continue
+          }
+
+          if (typeof current === 'object') {
+            const obj = current as Record<string, any>
+            for (const key of pickupKeys) {
+              const value = obj[key]
+              if (typeof value === 'string' && value.trim()) discovered.add(value.trim())
+            }
+            for (const [key, value] of Object.entries(obj)) {
+              if (value == null) continue
+              if (collectionKeys.includes(String(key).toLowerCase()) || typeof value === 'object') {
+                queue.push(value)
+              }
+            }
+          }
+        }
+
+        return Array.from(discovered)
+      }
+
+      const loadAvailablePickupNames = async (): Promise<string[]> => {
+        try {
+          const pickupLocationsResp: any = await shiprocket.getPickupLocations()
+          return extractPickupLocationNames(pickupLocationsResp)
+        } catch (pickupListErr: any) {
+          console.warn(
+            'Unable to fetch Shiprocket pickup locations before booking:',
+            pickupListErr?.message || pickupListErr,
+          )
+          return []
+        }
+      }
+
       // Validate pickup location against Shiprocket saved pickup addresses to avoid
       // generic downstream failures like missing order_id/shipment_id.
-      let availablePickupNames: string[] = []
-      try {
-        const pickupLocationsResp: any = await shiprocket.getPickupLocations()
-        const rawList =
-          pickupLocationsResp?.data ||
-          pickupLocationsResp?.pickup_address ||
-          pickupLocationsResp?.pickup_locations ||
-          pickupLocationsResp?.shipping_address ||
-          []
-
-        if (Array.isArray(rawList)) {
-          availablePickupNames = rawList
-            .map((entry: any) =>
-              String(
-                entry?.pickup_location ||
-                  entry?.pickup_location_name ||
-                  entry?.warehouse_name ||
-                  entry?.address_title ||
-                  entry?.location_name ||
-                  '',
-              ).trim(),
-            )
-            .filter(Boolean)
-        }
-      } catch (pickupListErr: any) {
-        console.warn(
-          '⚠️ Unable to fetch Shiprocket pickup locations before booking:',
-          pickupListErr?.message || pickupListErr,
-        )
-      }
+      let availablePickupNames: string[] = await loadAvailablePickupNames()
 
       if (availablePickupNames.length) {
         const matchedPickup = availablePickupNames.find(
@@ -3972,7 +4009,7 @@ export const createB2CShipmentService = async (
           )
           if (matchedDefault) {
             console.warn(
-              `⚠️ Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to default "${matchedDefault}".`,
+              `âš ï¸ Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to default "${matchedDefault}".`,
             )
             pickupLocation = matchedDefault
           } else {
@@ -4036,26 +4073,8 @@ export const createB2CShipmentService = async (
         weight: shipmentWeightKg > 0 ? shipmentWeightKg : 0.5,
       }
 
-      const extractShiprocketSuggestedPickupNames = (providerResponse: any): string[] => {
-        const candidates: any[] = []
-        const rawArray = providerResponse?.data?.data
-        if (Array.isArray(rawArray)) candidates.push(...rawArray)
-        if (Array.isArray(providerResponse?.data)) candidates.push(...providerResponse.data)
-
-        return candidates
-          .map((entry) =>
-            String(
-              entry?.pickup_location ||
-                entry?.pickup_location_name ||
-                entry?.warehouse_name ||
-                entry?.address_title ||
-                entry?.location_name ||
-                entry?.name ||
-                '',
-            ).trim(),
-          )
-          .filter(Boolean)
-      }
+      const extractShiprocketSuggestedPickupNames = (providerResponse: any): string[] =>
+        extractPickupLocationNames(providerResponse)
 
       let createOrderResp: any
       try {
@@ -4067,6 +4086,10 @@ export const createB2CShipmentService = async (
         const providerResponse = shiprocketCreateErr?.response ?? null
         const looksLikeWrongPickup = providerMessage.includes('wrong pickup location')
         const suggestedPickupNames = extractShiprocketSuggestedPickupNames(providerResponse)
+        if (!availablePickupNames.length) {
+          availablePickupNames = await loadAvailablePickupNames()
+        }
+
         const retryPickupName =
           suggestedPickupNames.find((name) =>
             availablePickupNames.some((available) => available.toLowerCase() === name.toLowerCase()),
@@ -4074,11 +4097,12 @@ export const createB2CShipmentService = async (
           availablePickupNames.find((name) =>
             suggestedPickupNames.some((suggested) => suggested.toLowerCase() === name.toLowerCase()),
           ) ||
+          availablePickupNames[0] ||
           null
 
         if (looksLikeWrongPickup && retryPickupName) {
           console.warn(
-            `⚠️ Shiprocket rejected pickup "${pickupLocation}". Retrying once with suggested pickup "${retryPickupName}".`,
+            `âš ï¸ Shiprocket rejected pickup "${pickupLocation}". Retrying once with suggested pickup "${retryPickupName}".`,
           )
           createOrderPayload.pickup_location = retryPickupName
           pickupLocation = retryPickupName
@@ -4186,7 +4210,7 @@ export const createB2CShipmentService = async (
       throw new Error(`Unsupported integration_type: ${integrationType}`)
     }
 
-    console.log(`📦 ${providerName} shipment response:`, shipmentData)
+    console.log(`ðŸ“¦ ${providerName} shipment response:`, shipmentData)
 
     if (integrationType === 'delhivery' && shipmentSuccessPackage) {
       const responseShippingMode =
@@ -4197,15 +4221,15 @@ export const createB2CShipmentService = async (
         shipmentSuccessPackage?.mode ??
         null
 
-      console.log('📤 Delhivery API response service', {
+      console.log('ðŸ“¤ Delhivery API response service', {
         order: params.order_number,
         requested_shipping_mode: selectedDelhiveryShippingMode,
         response_shipping_mode: responseShippingMode,
         response_package_keys: Object.keys(shipmentSuccessPackage || {}),
       })
 
-      console.log(`✅ Delhivery shipment created with AWB: ${shipmentSuccessPackage?.waybill}`)
-      console.log(`💰 Delhivery courier cost captured:`, {
+      console.log(`âœ… Delhivery shipment created with AWB: ${shipmentSuccessPackage?.waybill}`)
+      console.log(`ðŸ’° Delhivery courier cost captured:`, {
         awb: shipmentSuccessPackage?.waybill,
         cost: providerCourierCost,
         source: providerCourierCost
@@ -4225,7 +4249,7 @@ export const createB2CShipmentService = async (
     }
 
 
-    // 🔹 Recalculate freight using slab pricing (ignore incoming freight_charges)
+    // ðŸ”¹ Recalculate freight using slab pricing (ignore incoming freight_charges)
     const pickupPincode =
       (params.pickup as any)?.pincode ||
       (params.pickup_details as any)?.pincode ||
@@ -4261,7 +4285,7 @@ export const createB2CShipmentService = async (
       isReverse: params.isReverse === true || params.payment_type === 'reverse',
     })
 
-    // 2️⃣ INSERT LOCAL ORDER + WALLET TRANSACTION
+    // 2ï¸âƒ£ INSERT LOCAL ORDER + WALLET TRANSACTION
     const result = await db.transaction(async (tx) => {
       const userWallet = await walletOfUser(userId, tx)
       const walletBalance = Number(userWallet?.balance ?? 0)
@@ -4282,7 +4306,7 @@ export const createB2CShipmentService = async (
             ? Number(params.courier_cost)
             : null // Use estimated cost from serviceability if available
 
-      console.log('💰 Courier Cost Summary:', {
+      console.log('ðŸ’° Courier Cost Summary:', {
         order_number: params.order_number,
         integration_type: params.integration_type,
         from_shipment_response: shipmentMeta?.courier_cost,
@@ -4308,7 +4332,7 @@ export const createB2CShipmentService = async (
         discount -
         prepaidAmt
 
-      console.log('💰 Order Charges Summary:', {
+      console.log('ðŸ’° Order Charges Summary:', {
         order_number: params.order_number,
         payment_type: params.payment_type,
         order_amount: orderAmount,
@@ -4334,14 +4358,14 @@ export const createB2CShipmentService = async (
 
         // Validate that otherCharges are included
         if (otherCharges > 0) {
-          console.log('✅ Other charges included in wallet debit:', otherCharges)
+          console.log('âœ… Other charges included in wallet debit:', otherCharges)
         } else if (otherCharges === 0 && params?.other_charges === undefined) {
           console.warn(
-            '⚠️ other_charges not provided in params - defaulting to 0. Ensure other charges are included if applicable.',
+            'âš ï¸ other_charges not provided in params - defaulting to 0. Ensure other charges are included if applicable.',
           )
         }
 
-        console.log('💳 Prepaid Wallet Deduction:', {
+        console.log('ðŸ’³ Prepaid Wallet Deduction:', {
           order_number: params.order_number,
           wallet_balance: walletBalance,
           freight_charges: freightCharges,
@@ -4362,14 +4386,14 @@ export const createB2CShipmentService = async (
 
         // Validate that otherCharges are included
         if (otherCharges > 0) {
-          console.log('✅ Other charges included in wallet debit:', otherCharges)
+          console.log('âœ… Other charges included in wallet debit:', otherCharges)
         } else if (otherCharges === 0 && params?.other_charges === undefined) {
           console.warn(
-            '⚠️ other_charges not provided in params - defaulting to 0. Ensure other charges are included if applicable.',
+            'âš ï¸ other_charges not provided in params - defaulting to 0. Ensure other charges are included if applicable.',
           )
         }
 
-        console.log('💳 COD Wallet Deduction:', {
+        console.log('ðŸ’³ COD Wallet Deduction:', {
           order_number: params.order_number,
           wallet_balance: walletBalance,
           freight_charges: freightCharges,
@@ -4385,7 +4409,7 @@ export const createB2CShipmentService = async (
         }
       }
 
-      // 3️⃣ CREATE LOCAL ORDER ENTRY (no seller insurance for B2C – platform liability only)
+      // 3ï¸âƒ£ CREATE LOCAL ORDER ENTRY (no seller insurance for B2C â€“ platform liability only)
       const orderStatus = 'booked'
       const manifestErrorMessage = null
 
@@ -4413,7 +4437,7 @@ export const createB2CShipmentService = async (
       })
 
       if (selectedDelhiveryShippingMode && selectedDelhiveryCourierId !== null) {
-        console.log('💾 Delhivery service persisted with order record', {
+        console.log('ðŸ’¾ Delhivery service persisted with order record', {
           order_number: params.order_number,
           order_id: newOrder.id,
           courier_id: selectedDelhiveryCourierId,
@@ -4421,18 +4445,18 @@ export const createB2CShipmentService = async (
         })
       }
 
-      // 4️⃣ WALLET TRANSACTION
+      // 4ï¸âƒ£ WALLET TRANSACTION
       // Delhivery forward orders use deferred manifest generation, so charge only after manifest succeeds.
       const shouldDeferWalletDebit =
         integrationType === 'delhivery' && !isReverseShipment && shipmentData?.deferred_manifest === true
       const finalWalletDebit = walletDebit ?? 0
       if (shouldDeferWalletDebit) {
-        console.log('ℹ️ Deferring wallet debit until manifest success for Delhivery order', {
+        console.log('â„¹ï¸ Deferring wallet debit until manifest success for Delhivery order', {
           order_number: params.order_number,
           deferred_wallet_debit: finalWalletDebit,
         })
       } else if (finalWalletDebit <= 0) {
-        console.warn('⚠️ Wallet debit is 0 or negative, skipping wallet transaction')
+        console.warn('âš ï¸ Wallet debit is 0 or negative, skipping wallet transaction')
       } else {
         await createWalletTransaction({
           walletId: userWallet?.id,
@@ -4462,7 +4486,7 @@ export const createB2CShipmentService = async (
           },
           tx: tx as any,
         })
-        console.log('✅ Wallet transaction created:', {
+        console.log('âœ… Wallet transaction created:', {
           order_number: params.order_number,
           wallet_debit: finalWalletDebit,
           breakdown: {
@@ -4476,7 +4500,7 @@ export const createB2CShipmentService = async (
         })
       }
 
-      // 🧾 Download CourierCart label URL and save to R2, or generate platform label
+      // ðŸ§¾ Download CourierCart label URL and save to R2, or generate platform label
       if (params.integration_type === 'couriercart' || !params.integration_type) {
         try {
           const [freshOrder] = await tx
@@ -4494,7 +4518,7 @@ export const createB2CShipmentService = async (
               courierCartLabelUrl.startsWith('http')
             ) {
               try {
-                console.log(`📥 Downloading CourierCart label from URL: ${courierCartLabelUrl}`)
+                console.log(`ðŸ“¥ Downloading CourierCart label from URL: ${courierCartLabelUrl}`)
 
                 // Download label PDF from CourierCart URL
                 const labelResponse = await axios.get(courierCartLabelUrl, {
@@ -4528,13 +4552,13 @@ export const createB2CShipmentService = async (
                   })
                   .where(eq(b2c_orders.id, newOrder.id))
 
-                console.log(`✅ CourierCart label downloaded and saved to R2: ${labelKey}`)
+                console.log(`âœ… CourierCart label downloaded and saved to R2: ${labelKey}`)
               } catch (downloadErr: any) {
                 console.error(
-                  `❌ Failed to download CourierCart label from URL: ${courierCartLabelUrl}`,
+                  `âŒ Failed to download CourierCart label from URL: ${courierCartLabelUrl}`,
                   downloadErr?.message || downloadErr,
                 )
-                console.log(`🔄 Falling back to generating custom label for ${params.order_number}`)
+                console.log(`ðŸ”„ Falling back to generating custom label for ${params.order_number}`)
 
                 // Fallback to generating custom label
                 const labelKey = await generateLabelForOrder(freshOrder, userId, tx)
@@ -4546,13 +4570,13 @@ export const createB2CShipmentService = async (
                       updated_at: new Date(),
                     })
                     .where(eq(b2c_orders.id, newOrder.id))
-                  console.log(`✅ CourierCart custom label generated and saved: ${labelKey}`)
+                  console.log(`âœ… CourierCart custom label generated and saved: ${labelKey}`)
                 }
               }
             } else {
               // No CourierCart label URL - generate custom label
               console.log(
-                `🔄 No CourierCart label URL, generating custom label for ${params.order_number}`,
+                `ðŸ”„ No CourierCart label URL, generating custom label for ${params.order_number}`,
               )
               const labelKey = await generateLabelForOrder(freshOrder, userId, tx)
               if (labelKey) {
@@ -4563,26 +4587,26 @@ export const createB2CShipmentService = async (
                     updated_at: new Date(),
                   })
                   .where(eq(b2c_orders.id, newOrder.id))
-                console.log(`✅ CourierCart custom label generated and saved: ${labelKey}`)
+                console.log(`âœ… CourierCart custom label generated and saved: ${labelKey}`)
               } else {
                 console.warn(
-                  `⚠️ CourierCart label generator returned empty result for ${params.order_number}`,
+                  `âš ï¸ CourierCart label generator returned empty result for ${params.order_number}`,
                 )
               }
             }
           }
         } catch (labelErr: any) {
           console.error(
-            `❌ Failed to process CourierCart label for ${params.order_number}:`,
+            `âŒ Failed to process CourierCart label for ${params.order_number}:`,
             labelErr?.message || labelErr,
           )
         }
       }
       console.log(
-        `✅ Local order ${newOrder.id} created via ${params.integration_type} (AWB: ${shipmentMeta.awb_number})`,
+        `âœ… Local order ${newOrder.id} created via ${params.integration_type} (AWB: ${shipmentMeta.awb_number})`,
       )
 
-      // 🔔 Send webhook event for order creation (async, don't wait)
+      // ðŸ”” Send webhook event for order creation (async, don't wait)
       const webhookStatus = 'booked'
 
       sendWebhookEvent(userId, 'order.created', {
@@ -4609,7 +4633,7 @@ export const createB2CShipmentService = async (
   } catch (error) {
     for (const action of rollbackActions.reverse()) {
       await action().catch((err) => {
-        console.error('❌ Failed during rollback action:', err?.response?.data || err?.message)
+        console.error('âŒ Failed during rollback action:', err?.response?.data || err?.message)
       })
     }
 
@@ -4636,7 +4660,7 @@ export const createB2BShipmentService = async (
       try {
         return JSON.parse(trimmed)
       } catch (err) {
-        console.warn('⚠️ Unable to parse JSON string in createB2BShipmentService:', trimmed)
+        console.warn('âš ï¸ Unable to parse JSON string in createB2BShipmentService:', trimmed)
         return null
       }
     }
@@ -4676,7 +4700,7 @@ export const createB2BShipmentService = async (
       .where(eq(userPlans.userId, userId))
     activePlanId = userPlan?.planId ?? null
   } catch (planErr) {
-    console.error('⚠️ Failed to fetch B2B user plan for ROV:', planErr)
+    console.error('âš ï¸ Failed to fetch B2B user plan for ROV:', planErr)
   }
 
   const rovCharge =
@@ -4733,11 +4757,11 @@ export const createB2BShipmentService = async (
       }
     }
   } catch (err) {
-    console.error('⚠️ Failed to compute B2B charges breakdown for order', params.order_number, err)
+    console.error('âš ï¸ Failed to compute B2B charges breakdown for order', params.order_number, err)
     chargesBreakdown = null
   }
 
-  // 1️⃣ Insert local B2B order as 'pending'
+  // 1ï¸âƒ£ Insert local B2B order as 'pending'
   const [pendingOrder] = await db
     .insert(b2b_orders)
     .values({
@@ -4783,7 +4807,7 @@ export const createB2BShipmentService = async (
     } as any)
     .returning({ id: b2b_orders.id })
 
-  // 2️⃣ Calculate package weight and dimensions
+  // 2ï¸âƒ£ Calculate package weight and dimensions
   const boxes = params?.order_items ?? []
 
   const totalDeadWeight = boxes.reduce((sum: number, b: any) => sum + Number(b.weight ?? 0), 0)
@@ -4798,7 +4822,7 @@ export const createB2BShipmentService = async (
   const package_breadth = Math.max(...boxes.map((b: any) => Number(b.breadth ?? 0)))
   const package_height = Math.max(...boxes.map((b: any) => Number(b.height ?? 0)))
 
-  // 3️⃣ Prepare payload for Delhivery
+  // 3ï¸âƒ£ Prepare payload for Delhivery
   const payload: ShipmentParams = {
     ...params,
     payment_type: params.payment_type === 'prepaid' ? 'prepaid' : 'cod',
@@ -4825,7 +4849,7 @@ export const createB2BShipmentService = async (
   let shipmentData
 
   // try {
-  //   // 4️⃣ Call courier API
+  //   // 4ï¸âƒ£ Call courier API
   //   // const res = await axios.post(`${process.env.NIMBUSPOST_API_BASE}/shipments`, payload, {
   //   //   headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
   //   //   timeout: 15000,
@@ -4845,14 +4869,14 @@ export const createB2BShipmentService = async (
   // }
 
   // console.log('shipment dsata', shipmentData)
-  // 5️⃣ Update local order and deduct wallet in a transaction
+  // 5ï¸âƒ£ Update local order and deduct wallet in a transaction
   // await db.transaction(async (tx) => {
   //   const userWallet = await walletOfUser(userId, tx)
   //   if (!userWallet?.[0]) throw new Error('Wallet not found')
 
   //   const wallet = userWallet[0]
 
-  //   // 2️⃣ Check sufficient balance
+  //   // 2ï¸âƒ£ Check sufficient balance
   //   if ((wallet.balance ?? 0) < Number(params.order_amount)) {
   //     throw new Error('Insufficient wallet balance for prepaid B2B order')
   //   }
@@ -4903,13 +4927,13 @@ export const createB2BShipmentService = async (
 }
 
 export const getAllB2COrdersService = async () => {
-  const orders = await db.select().from(b2c_orders).orderBy(desc(b2c_orders.updated_at)) // ✅ FIX
+  const orders = await db.select().from(b2c_orders).orderBy(desc(b2c_orders.updated_at)) // âœ… FIX
   return orders
 }
 
-// ✅ Get all B2B orders
+// âœ… Get all B2B orders
 export const getAllB2BOrdersService = async () => {
-  const orders = await db.select().from(b2b_orders).orderBy(desc(b2b_orders.created_at)) // ✅ FIX
+  const orders = await db.select().from(b2b_orders).orderBy(desc(b2b_orders.created_at)) // âœ… FIX
   return orders
 }
 
@@ -4936,7 +4960,7 @@ export const getB2COrdersByUserService = async (
   // Build conditions array (explicit type)
   const conditions: SQL<unknown>[] = [eq(b2c_orders.user_id, userId)]
 
-  // 🔹 Status filter (single or multiple)
+  // ðŸ”¹ Status filter (single or multiple)
   if (filters.status) {
     if (Array.isArray(filters.status)) {
       conditions.push(inArray(b2c_orders.order_status, filters.status))
@@ -4945,12 +4969,12 @@ export const getB2COrdersByUserService = async (
     }
   }
 
-  // 🔹 Type filter (COD / Prepaid)
+  // ðŸ”¹ Type filter (COD / Prepaid)
   if (filters.type) {
     conditions.push(eq(b2c_orders.order_type, filters.type))
   }
 
-  // 🔹 Courier filter
+  // ðŸ”¹ Courier filter
   if (filters.courier) {
     const courierId = Number(filters.courier)
     if (!isNaN(courierId) && courierId > 0) {
@@ -4962,7 +4986,7 @@ export const getB2COrdersByUserService = async (
     }
   }
 
-  // 🔹 Warehouse filter - check both pickup_location_id and pickup_details JSONB
+  // ðŸ”¹ Warehouse filter - check both pickup_location_id and pickup_details JSONB
   if (filters.warehouse && filters.warehouse.trim()) {
     const warehouseFilter = `%${filters.warehouse.trim()}%`
     const warehouseConditions: any[] = [ilike(b2c_orders.pickup_location_id, warehouseFilter)]
@@ -4978,7 +5002,7 @@ export const getB2COrdersByUserService = async (
     conditions.push(or(...warehouseConditions) as any)
   }
 
-  // 🔹 Date filters
+  // ðŸ”¹ Date filters
   if (filters.fromDate) {
     // Start of day for fromDate
     const fromDate = new Date(filters.fromDate)
@@ -5138,7 +5162,7 @@ export const getB2BOrdersByUserService = async (
   }
 }
 
-// // 🔹 Get all B2B orders for a user
+// // ðŸ”¹ Get all B2B orders for a user
 // export const getB2BOrdersByUserService = async (userId: string) => {
 //   const orders = await db
 //     .select()
@@ -5546,7 +5570,7 @@ export const generateManifestService = async (params: {
 
             if (!freshOrder) {
               console.warn(
-                `⚠️ ${providerName} order ${order.order_number} not found in database, skipping label generation`,
+                `âš ï¸ ${providerName} order ${order.order_number} not found in database, skipping label generation`,
               )
               manifestWarnings.push(
                 `${order.order_number}: label could not be generated because the order was not found after manifesting.`,
@@ -5564,12 +5588,12 @@ export const generateManifestService = async (params: {
                 labelKey = await generateLabelForOrder(freshOrder, freshOrder.user_id, tx)
                 if (labelKey) {
                   console.log(
-                    `✅ [${providerName}] Custom label generated for order ${freshOrder.order_number}: ${labelKey}`,
+                    `âœ… [${providerName}] Custom label generated for order ${freshOrder.order_number}: ${labelKey}`,
                   )
                 }
               } catch (labelErr: any) {
                 console.error(
-                  `❌ [${providerName}] Failed to generate custom label for order ${freshOrder.order_number}:`,
+                  `âŒ [${providerName}] Failed to generate custom label for order ${freshOrder.order_number}:`,
                   labelErr?.message || labelErr,
                 )
                 manifestWarnings.push(
@@ -5609,7 +5633,7 @@ export const generateManifestService = async (params: {
 
               if (result.status !== 'fulfilled' || !result.value) {
                 console.warn(
-                  `⚠️ [Manifest] Invoice generation failed for ${providerName} order ${order.order_number}`,
+                  `âš ï¸ [Manifest] Invoice generation failed for ${providerName} order ${order.order_number}`,
                 )
                 manifestWarnings.push(`${order.order_number}: invoice could not be generated.`)
                 return
@@ -5630,7 +5654,7 @@ export const generateManifestService = async (params: {
               const normalizedInvoiceKey = normalizeToR2Key(invoiceKey.trim())
               if (!normalizedInvoiceKey) {
                 console.warn(
-                  `⚠️ [Manifest] Could not normalize invoice key for ${providerName} order ${order.order_number}: ${invoiceKey.trim()}`,
+                  `âš ï¸ [Manifest] Could not normalize invoice key for ${providerName} order ${order.order_number}: ${invoiceKey.trim()}`,
                 )
                 manifestWarnings.push(`${order.order_number}: invoice file could not be saved.`)
                 return
@@ -5651,7 +5675,7 @@ export const generateManifestService = async (params: {
                 .where(eq(b2c_orders.id, order.id))
 
               console.log(
-                `✅ [Manifest] Invoice link updated for ${providerName} order ${order.order_number}: ${normalizedInvoiceKey}`,
+                `âœ… [Manifest] Invoice link updated for ${providerName} order ${order.order_number}: ${normalizedInvoiceKey}`,
               )
             }),
           )
@@ -5660,7 +5684,7 @@ export const generateManifestService = async (params: {
             if (result.status === 'fulfilled') return
             const order = fetchedOrders[index]
             console.error(
-              `❌ [Manifest] Failed to update invoice_link for ${providerName} order ${order.order_number}:`,
+              `âŒ [Manifest] Failed to update invoice_link for ${providerName} order ${order.order_number}:`,
               result.reason?.message || result.reason,
             )
             manifestWarnings.push(`${order.order_number}: invoice could not be saved.`)
@@ -5687,7 +5711,7 @@ export const generateManifestService = async (params: {
             const signed = await presignDownload(value)
             return Array.isArray(signed) ? (signed[0] ?? null) : signed
           } catch (err) {
-            console.error('⚠️ Failed to presign manifest URL:', err)
+            console.error('âš ï¸ Failed to presign manifest URL:', err)
             return null
           }
         }
@@ -5717,7 +5741,7 @@ export const generateManifestService = async (params: {
               const bucketIndex = pathParts.indexOf(bucket)
               if (bucketIndex !== -1 && bucketIndex < pathParts.length - 1) {
                 const key = pathParts.slice(bucketIndex + 1).join('/')
-                console.log(`🔄 Extracted R2 key from URL: ${key}`)
+                console.log(`ðŸ”„ Extracted R2 key from URL: ${key}`)
                 return key
               }
             }
@@ -5727,18 +5751,18 @@ export const generateManifestService = async (params: {
               if (pathParts.length > 1) {
                 // Skip bucket name (first part) and get the rest as key
                 const key = pathParts.slice(1).join('/')
-                console.log(`🔄 Extracted R2 key from endpoint URL: ${key}`)
+                console.log(`ðŸ”„ Extracted R2 key from endpoint URL: ${key}`)
                 return key
               }
             }
 
             // If we can't extract a key, it's an external URL - log warning
             console.warn(
-              `⚠️ Could not extract R2 key from URL, treating as external URL: ${trimmed}`,
+              `âš ï¸ Could not extract R2 key from URL, treating as external URL: ${trimmed}`,
             )
             return null // Don't store external URLs as keys
           } catch (err) {
-            console.error(`❌ Failed to parse URL for key extraction: ${trimmed}`, err)
+            console.error(`âŒ Failed to parse URL for key extraction: ${trimmed}`, err)
             return null
           }
         }
@@ -5757,7 +5781,7 @@ export const generateManifestService = async (params: {
         > {
           try {
             console.log(
-              `🧾 [Manifest] Generating invoice for order ${order.order_number} (ID: ${order.id})`,
+              `ðŸ§¾ [Manifest] Generating invoice for order ${order.order_number} (ID: ${order.id})`,
             )
 
             // Use db instead of tx since this runs after transaction completes
@@ -5766,7 +5790,7 @@ export const generateManifestService = async (params: {
               .from(invoicePreferences)
               .where(eq(invoicePreferences.userId, order.user_id))
 
-            // 🔹 Fetch user profile for company details
+            // ðŸ”¹ Fetch user profile for company details
             const [user] = await db
               .select({
                 companyName: sql<string>`(${userProfiles.companyInfo} ->> 'brandName')`,
@@ -5801,7 +5825,7 @@ export const generateManifestService = async (params: {
               order.courier_partner ||
               ''
 
-            // ✅ Always use prefs prefix/suffix
+            // âœ… Always use prefs prefix/suffix
             const invoiceNumber = await resolveInvoiceNumber({
               userId: order.user_id,
               existingInvoiceNumber: (order as any)?.invoice_number,
@@ -5829,7 +5853,7 @@ export const generateManifestService = async (params: {
             const supportPhone = pickupDetails?.phone || user?.supportPhone || ''
             const supportEmail = user?.supportEmail || prefs?.supportEmail || ''
 
-            // ✅ COD-safe invoice amount
+            // âœ… COD-safe invoice amount
             const invoiceAmount =
               Number(order.order_amount ?? 0) +
               Number(order.shipping_charges ?? 0) +
@@ -5859,19 +5883,19 @@ export const generateManifestService = async (params: {
                   }))
                 } else {
                   console.warn(
-                    `⚠️ [Manifest] Products is not an array for order ${order.order_number}, using empty array`,
+                    `âš ï¸ [Manifest] Products is not an array for order ${order.order_number}, using empty array`,
                   )
                   products = []
                 }
               } else {
                 console.warn(
-                  `⚠️ [Manifest] Products is null/undefined for order ${order.order_number}, using empty array`,
+                  `âš ï¸ [Manifest] Products is null/undefined for order ${order.order_number}, using empty array`,
                 )
                 products = []
               }
             } catch (productsErr: any) {
               console.error(
-                `❌ [Manifest] Failed to parse products for order ${order.order_number}:`,
+                `âŒ [Manifest] Failed to parse products for order ${order.order_number}:`,
                 productsErr?.message || productsErr,
               )
               products = []
@@ -5880,7 +5904,7 @@ export const generateManifestService = async (params: {
             // Ensure we have at least one product
             if (products.length === 0) {
               console.warn(
-                `⚠️ [Manifest] No products found for order ${order.order_number}, creating placeholder product`,
+                `âš ï¸ [Manifest] No products found for order ${order.order_number}, creating placeholder product`,
               )
               products = [
                 {
@@ -5895,7 +5919,7 @@ export const generateManifestService = async (params: {
               ]
             }
 
-            console.log(`📄 [Manifest] Generating invoice PDF for order ${order.order_number}...`)
+            console.log(`ðŸ“„ [Manifest] Generating invoice PDF for order ${order.order_number}...`)
 
             // Generate invoice PDF
             const invoiceBuffer = await generateInvoicePDF({
@@ -5949,7 +5973,7 @@ export const generateManifestService = async (params: {
             }
 
             console.log(
-              `📤 [Manifest] Uploading invoice PDF for order ${order.order_number} (size: ${invoiceBuffer.length} bytes)...`,
+              `ðŸ“¤ [Manifest] Uploading invoice PDF for order ${order.order_number} (size: ${invoiceBuffer.length} bytes)...`,
             )
 
             // Upload invoice to R2
@@ -5996,7 +6020,7 @@ export const generateManifestService = async (params: {
             }
 
             console.log(
-              `✅ [Manifest] Invoice generated and uploaded successfully for order ${order.order_number}: ${keyToStore} (status: ${uploadResponse.status})`,
+              `âœ… [Manifest] Invoice generated and uploaded successfully for order ${order.order_number}: ${keyToStore} (status: ${uploadResponse.status})`,
             )
 
             return {
@@ -6007,7 +6031,7 @@ export const generateManifestService = async (params: {
             }
           } catch (err: any) {
             console.error(
-              `❌ [Manifest] Failed to generate invoice for order ${order.order_number} (ID: ${order.id}):`,
+              `âŒ [Manifest] Failed to generate invoice for order ${order.order_number} (ID: ${order.id}):`,
               {
                 error: err?.message || err,
                 errorName: err?.name,
@@ -6226,7 +6250,7 @@ export const generateManifestService = async (params: {
               : '11:00:00'
 
           if (isManifestRetry) {
-            console.log('ℹ️ Delhivery manifest retry pickup schedule adjusted', {
+            console.log('â„¹ï¸ Delhivery manifest retry pickup schedule adjusted', {
               order_number: fetchedOrders[0]?.order_number,
               requested_pickup_date: String(pickupDateRaw).slice(0, 10) || null,
               final_pickup_date: pickupDate,
@@ -6423,7 +6447,7 @@ export const generateManifestService = async (params: {
           const invoicePromisesDel = fetchedOrders.map((order) =>
             generateInvoiceForOrder(order).catch((err) => {
               console.error(
-                `❌ [Manifest] Invoice generation failed for order ${order.order_number}:`,
+                `âŒ [Manifest] Invoice generation failed for order ${order.order_number}:`,
                 err?.message || err,
               )
               return null
@@ -6432,12 +6456,12 @@ export const generateManifestService = async (params: {
 
           // Process orders (labels first, then update) - don't wait for invoices
           const orderUpdatePromisesDel = fetchedOrders.map(async (order) => {
-            // 🖨️ Generate label if it doesn't exist and order has AWB
+            // ðŸ–¨ï¸ Generate label if it doesn't exist and order has AWB
             // Fetch fresh order data to avoid race conditions
             const [freshOrder] = await tx.select().from(table).where(eq(table.id, order.id))
             if (!freshOrder) {
               console.warn(
-                `⚠️ Order ${order.order_number} not found in database, skipping label generation`,
+                `âš ï¸ Order ${order.order_number} not found in database, skipping label generation`,
               )
               return
             }
@@ -6445,7 +6469,7 @@ export const generateManifestService = async (params: {
             const currentLabel = freshOrder.label || null
             const currentAwb = freshOrder.awb_number || null
 
-            console.log(`🔍 Checking label generation for order ${order.order_number}:`, {
+            console.log(`ðŸ” Checking label generation for order ${order.order_number}:`, {
               order_id: order.id,
               has_label: !!currentLabel,
               label_value: currentLabel,
@@ -6457,7 +6481,7 @@ export const generateManifestService = async (params: {
             if (!labelKey && currentAwb) {
               try {
                 console.log(
-                  `🖨️ [Delhivery] Generating custom label during manifest for order ${order.order_number} (AWB: ${currentAwb})`,
+                  `ðŸ–¨ï¸ [Delhivery] Generating custom label during manifest for order ${order.order_number} (AWB: ${currentAwb})`,
                 )
 
                 // Fetch Delhivery packing_slip JSON (pdf=false) to enrich our custom label
@@ -6488,7 +6512,7 @@ export const generateManifestService = async (params: {
                   }
                 } catch (metaErr: any) {
                   console.warn(
-                    `⚠️ [Delhivery] Failed to fetch packing_slip JSON for order ${order.order_number}:`,
+                    `âš ï¸ [Delhivery] Failed to fetch packing_slip JSON for order ${order.order_number}:`,
                     metaErr?.message || metaErr,
                   )
                 }
@@ -6498,11 +6522,11 @@ export const generateManifestService = async (params: {
 
                 if (!labelKey) {
                   console.warn(
-                    `⚠️ [Delhivery] Custom label generation returned null for order ${order.order_number} during manifest`,
+                    `âš ï¸ [Delhivery] Custom label generation returned null for order ${order.order_number} during manifest`,
                   )
                 } else {
                   console.log(
-                    `✅ [Delhivery] Custom label generated for order ${order.order_number} during manifest: ${labelKey}`,
+                    `âœ… [Delhivery] Custom label generated for order ${order.order_number} during manifest: ${labelKey}`,
                   )
                 }
 
@@ -6514,17 +6538,17 @@ export const generateManifestService = async (params: {
                     format: 'pdf',
                   })
                   console.log(
-                    `✅ [Delhivery] Provider label PDF fetched for AWB ${currentAwb} (${providerLabelPdf?.length || 0} bytes)`,
+                    `âœ… [Delhivery] Provider label PDF fetched for AWB ${currentAwb} (${providerLabelPdf?.length || 0} bytes)`,
                   )
                 } catch (providerLabelErr: any) {
                   console.warn(
-                    `⚠️ [Delhivery] Failed to fetch provider label PDF for AWB ${currentAwb}:`,
+                    `âš ï¸ [Delhivery] Failed to fetch provider label PDF for AWB ${currentAwb}:`,
                     providerLabelErr?.message || providerLabelErr,
                   )
                 }
               } catch (labelErr: any) {
                 console.error(
-                  `❌ [Delhivery] Failed to generate custom label for order ${order.order_number} during manifest:`,
+                  `âŒ [Delhivery] Failed to generate custom label for order ${order.order_number} during manifest:`,
                   labelErr?.message || labelErr,
                   labelErr?.stack,
                 )
@@ -6532,11 +6556,11 @@ export const generateManifestService = async (params: {
               }
             } else if (!labelKey) {
               console.warn(
-                `⚠️ Cannot generate label for order ${order.order_number}: AWB number is missing (AWB: ${currentAwb})`,
+                `âš ï¸ Cannot generate label for order ${order.order_number}: AWB number is missing (AWB: ${currentAwb})`,
               )
             } else {
               console.log(
-                `ℹ️ Label already exists for order ${order.order_number}: ${currentLabel}`,
+                `â„¹ï¸ Label already exists for order ${order.order_number}: ${currentLabel}`,
               )
             }
 
@@ -6554,10 +6578,10 @@ export const generateManifestService = async (params: {
               const normalizedLabel = normalizeToR2Key(labelKey.trim())
               if (normalizedLabel) {
                 updateDataDel.label = normalizedLabel
-                console.log(`✅ [Delhivery] Normalized label key stored: ${normalizedLabel}`)
+                console.log(`âœ… [Delhivery] Normalized label key stored: ${normalizedLabel}`)
               } else {
                 console.warn(
-                  `⚠️ [Delhivery] Could not normalize label, skipping: ${labelKey.trim()}`,
+                  `âš ï¸ [Delhivery] Could not normalize label, skipping: ${labelKey.trim()}`,
                 )
               }
             } else if (
@@ -6607,30 +6631,30 @@ export const generateManifestService = async (params: {
                     .where(eq(table.id, order.id))
                       .then(() => {
                         console.log(
-                          `✅ [Manifest] Invoice link updated for order ${order.order_number}: ${normalizedInvoiceKey}`,
+                          `âœ… [Manifest] Invoice link updated for order ${order.order_number}: ${normalizedInvoiceKey}`,
                         )
                       })
                       .catch((err) => {
                         console.error(
-                          `❌ [Manifest] Failed to update invoice_link for order ${order.order_number}:`,
+                          `âŒ [Manifest] Failed to update invoice_link for order ${order.order_number}:`,
                           err?.message || err,
                         )
                       })
                   } else {
                     console.warn(
-                      `⚠️ [Manifest] Could not normalize invoice key for order ${
+                      `âš ï¸ [Manifest] Could not normalize invoice key for order ${
                         order.order_number
                       }: ${invoiceKey.trim()}`,
                     )
                   }
                 } else {
                   console.warn(
-                    `⚠️ [Manifest] Invoice generation failed for order ${order.order_number}: Invalid key`,
+                    `âš ï¸ [Manifest] Invoice generation failed for order ${order.order_number}: Invalid key`,
                   )
                 }
               } else {
                 console.warn(
-                  `⚠️ [Manifest] Invoice generation failed for order ${order.order_number}`,
+                  `âš ï¸ [Manifest] Invoice generation failed for order ${order.order_number}`,
                 )
               }
             })
@@ -6658,7 +6682,7 @@ export const generateManifestService = async (params: {
             .from(invoicePreferences)
             .where(eq(invoicePreferences.userId, order.user_id))
 
-          // 🔹 Fetch user profile for company details
+          // ðŸ”¹ Fetch user profile for company details
           const [user] = await tx
             .select({
               companyName: sql<string>`(${userProfiles.companyInfo} ->> 'brandName')`,
@@ -6715,7 +6739,7 @@ export const generateManifestService = async (params: {
           const supportPhone = pickupDetails?.phone || user?.supportPhone || ''
           const supportEmail = user?.supportEmail || prefs?.supportEmail || ''
 
-          // ✅ COD-safe invoice amount
+          // âœ… COD-safe invoice amount
           const invoiceAmount =
             Number(order.order_amount ?? 0) +
             Number(order.shipping_charges ?? 0) +
@@ -6801,7 +6825,7 @@ export const generateManifestService = async (params: {
             throw new Error(`Invalid invoice key format: ${trimmedKey}`)
           }
 
-          console.log(`📄 Invoice generated and uploaded for order ${order.order_number}:`, {
+          console.log(`ðŸ“„ Invoice generated and uploaded for order ${order.order_number}:`, {
             invoice_key: keyToStore,
             upload_url: Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl,
             invoice_size: invoiceBuffer.length,
@@ -6822,14 +6846,14 @@ export const generateManifestService = async (params: {
             .where(eq(table.id, order.id))
 
           console.log(
-            `✅ Invoice link saved to database for order ${order.order_number}: ${finalKey}`,
+            `âœ… Invoice link saved to database for order ${order.order_number}: ${finalKey}`,
           )
 
-          // 🖨️ Generate label if it doesn't exist and order has AWB
+          // ðŸ–¨ï¸ Generate label if it doesn't exist and order has AWB
           if (!order.label && order.awb_number) {
             try {
               console.log(
-                `🖨️ Generating label for order ${order.order_number} during manifest (AWB: ${order.awb_number})`,
+                `ðŸ–¨ï¸ Generating label for order ${order.order_number} during manifest (AWB: ${order.awb_number})`,
               )
               const labelKey = await generateLabelForOrder(order, order.user_id, tx)
 
@@ -6847,30 +6871,30 @@ export const generateManifestService = async (params: {
                     .where(eq(table.id, order.id))
 
                   console.log(
-                    `✅ Label generated and saved for order ${order.order_number} during manifest: ${normalizedLabelKey}`,
+                    `âœ… Label generated and saved for order ${order.order_number} during manifest: ${normalizedLabelKey}`,
                   )
                 } else {
                   console.warn(
-                    `⚠️ Could not normalize label key for order ${
+                    `âš ï¸ Could not normalize label key for order ${
                       order.order_number
                     }: ${labelKey.trim()}`,
                   )
                 }
               } else {
                 console.warn(
-                  `⚠️ Label generation returned invalid value for order ${order.order_number} during manifest`,
+                  `âš ï¸ Label generation returned invalid value for order ${order.order_number} during manifest`,
                 )
               }
             } catch (labelErr: any) {
               console.error(
-                `❌ Failed to generate label for order ${order.order_number} during manifest:`,
+                `âŒ Failed to generate label for order ${order.order_number} during manifest:`,
                 labelErr?.message || labelErr,
               )
               // Don't throw - continue with manifest generation even if label fails
             }
           } else if (!order.label) {
             console.warn(
-              `⚠️ Cannot generate label for order ${order.order_number}: AWB number is missing`,
+              `âš ï¸ Cannot generate label for order ${order.order_number}: AWB number is missing`,
             )
           } else if (order.label) {
             // Ensure existing label is preserved and properly formatted
@@ -6885,7 +6909,7 @@ export const generateManifestService = async (params: {
                 .where(eq(table.id, order.id))
             }
           } else {
-            console.log(`ℹ️ Label already exists for order ${order.order_number}: ${order.label}`)
+            console.log(`â„¹ï¸ Label already exists for order ${order.order_number}: ${order.label}`)
           }
         }
 
@@ -7048,10 +7072,10 @@ export const retryFailedManifestService = async (
 
 //   try {
 //     const result = await db.transaction(async (tx) => {
-//       // 1️⃣ Generate manifest
+//       // 1ï¸âƒ£ Generate manifest
 //       const manifestData = await generateManifestService({ awbs })
 
-//       // 2️⃣ Update all local orders with manifest_id
+//       // 2ï¸âƒ£ Update all local orders with manifest_id
 //       // const updatedOrders = await Promise.all(
 //       //   awbs.map(async (awb) => {
 //       //     const [updated] = await tx
@@ -7119,7 +7143,7 @@ export const getAllOrdersService = async (
   // Combine
   let combinedOrders = [...b2cOrders, ...b2bOrders]
 
-  // ✅ Apply filters safely
+  // âœ… Apply filters safely
   if (filters.status) {
     combinedOrders = combinedOrders.filter((o) => o.order_status === filters.status)
   }
@@ -7148,7 +7172,7 @@ export const getAllOrdersService = async (
     })
   }
 
-  // ✅ Sort safely
+  // âœ… Sort safely
   combinedOrders.sort((a, b) => {
     const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
     const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
@@ -7592,7 +7616,7 @@ export const trackByOrderService = async ({
     throw new Error('Order number and either email or phone are required')
   }
 
-  // 1️⃣ Find user
+  // 1ï¸âƒ£ Find user
   const user = await db
     .select()
     .from(users)
@@ -7603,11 +7627,11 @@ export const trackByOrderService = async ({
 
   if (!user[0]) throw new Error('User not found with provided contact details')
 
-  // 2️⃣ Fetch orders for user
+  // 2ï¸âƒ£ Fetch orders for user
   const orders = await getAllOrdersService(user[0].id, { filters: { search: orderNumber } })
 
   if (orders.totalCount === 0) throw new Error(`No order found with order number: ${orderNumber}`)
 
-  // 3️⃣ Return the first matching order with tracking info
+  // 3ï¸âƒ£ Return the first matching order with tracking info
   return orders.orders[0]
 }
