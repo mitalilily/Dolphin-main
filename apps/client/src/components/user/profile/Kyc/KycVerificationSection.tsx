@@ -110,6 +110,10 @@ const KYCVerificationStep: React.FC<{
               folder: 'kyc',
             })
 
+            if (!presign?.uploadUrl || typeof presign.uploadUrl !== 'string') {
+              throw new Error('Presigned upload URL missing for selfie upload')
+            }
+
             await axios.put(presign.uploadUrl, file, {
               headers: { 'Content-Type': file.type },
               withCredentials: false,

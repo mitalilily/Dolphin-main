@@ -212,6 +212,20 @@ const FileUploader: React.FC<FileUploaderProps> = ({
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
+
+  const canUsePresignedUrl = (value: unknown): value is string =>
+    typeof value === 'string' && /^https?:\/\//i.test(value)
+
+  const toInlineUploadedFile = async (file: File): Promise<UploadedFileInfo> => {
+    const dataUrl = await fileToDataUrl(file)
+    return {
+      url: dataUrl,
+      key: dataUrl,
+      originalName: file.name,
+      size: file.size,
+      mime: file.type || 'application/octet-stream',
+    }
+  }
   /* --------------- upload logic --------------- */
   const uploadFiles = useCallback(
     async (files: File[] | FileList) => {
@@ -266,15 +280,12 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           })
 
           if (data?.inlineOnly) {
-            const dataUrl = await fileToDataUrl(file)
-            uploaded.push({
-              url: dataUrl,
-              key: dataUrl,
-              originalName: file.name,
-              size: file.size,
-              mime: file.type || 'application/octet-stream',
-            })
+            uploaded.push(await toInlineUploadedFile(file))
             continue
+          }
+
+          if (!canUsePresignedUrl(data?.uploadUrl)) {
+            throw new Error('Presigned upload URL is missing or invalid')
           }
 
           // Upload directly to R2 using presigned URL - no credentials needed
@@ -308,25 +319,24 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           // setShowPlaceholder(false);
         }
         onUploaded(uploaded)
-      } catch (err) {
+      } catch (err: any) {
         console.error(err)
-        if (allowInlineFallback) {
+        const httpStatus = err?.response?.status
+        const shouldForceInlineFallback =
+          allowInlineFallback ||
+          httpStatus === 404 ||
+          httpStatus === 405 ||
+          /presigned upload url is missing or invalid/i.test(String(err?.message || ''))
+
+        if (shouldForceInlineFallback) {
           try {
-            const inlineFiles = await Promise.all(
-              arr.map(async (file) => {
-                const dataUrl = await fileToDataUrl(file)
-                return {
-                  url: dataUrl,
-                  key: dataUrl,
-                  originalName: file.name,
-                  size: file.size,
-                  mime: file.type || 'application/octet-stream',
-                }
-              }),
-            )
+            const inlineFiles = await Promise.all(arr.map((file) => toInlineUploadedFile(file)))
             onUploaded(inlineFiles)
             toast.open({
-              message: 'Storage upload failed. Using inline demo upload fallback.',
+              message:
+                httpStatus === 405
+                  ? 'Storage upload method not allowed. Using inline upload fallback.'
+                  : 'Storage upload failed. Using inline demo upload fallback.',
               severity: 'warning',
             })
           } catch (fallbackErr) {

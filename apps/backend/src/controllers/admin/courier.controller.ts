@@ -1319,6 +1319,14 @@ export const updateShippingRateController = async (req: Request, res: Response) 
     }
 
     const updates: ShippingRateUpdatePayload = req.body
+    const normalizedCourierName = String(updates?.courier_name || '').trim()
+    if (!normalizedCourierName) {
+      return res.status(400).json({
+        success: false,
+        message: 'courier_name is required in request body',
+      })
+    }
+    updates.courier_name = normalizedCourierName
 
     console.log(`[updateShippingRateController] courierId: ${courierId}, planId: ${planId}`)
 

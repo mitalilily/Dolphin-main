@@ -171,13 +171,26 @@ export const RateCardEditModal = ({
       data?.serviceProvider ||
       ''
 
+    const normalizedCurrentMode = normalizeMode(form.mode)
+    const normalizedPreviousMode = normalizeMode(data?.mode)
+
+    if (!isEdit && !(form.courier_id || data?.courier_id)) {
+      alert('Please select a courier before adding rates.')
+      return
+    }
+
+    if (isB2C && !normalizedCurrentMode) {
+      alert('Please enter shipping mode as Air or Surface.')
+      return
+    }
+
     const payload = {
       min_weight: isB2C ? undefined : form.min_weight,
       cod_charges: form.cod_charges,
       cod_percent: form.cod_percent,
       other_charges: form.other_charges,
-      mode: form.mode,
-      previous_mode: data?.mode,
+      mode: normalizedCurrentMode || form.mode,
+      previous_mode: normalizedPreviousMode || normalizedCurrentMode || form.mode,
       courier_id: form.courier_id || data?.courier_id, // from form (create) or existing (edit)
       courier_name: form.courier_name || data?.courier_name,
       service_provider: serviceProviderValue, // Always send the service_provider
@@ -249,9 +262,15 @@ export const RateCardEditModal = ({
       return
     }
 
+    const targetCourierId = (data?.courier_id ?? payload?.courier_id) || undefined
+    if (!targetCourierId) {
+      alert('Courier ID is missing. Please select a courier and try again.')
+      return
+    }
+
     updateRate(
       {
-        id: (data?.courier_id ?? payload?.courier_id) || undefined, // pass id only in edit mode
+        id: targetCourierId, // API path uses courier_id
         updates: payload,
         planId: planIdString,
       },
