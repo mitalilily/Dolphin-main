@@ -13,6 +13,31 @@ dotenv.config({ path: path.resolve(__dirname, `../.env.${env}`) })
 
 // Render provides PORT as a string env var, so coerce it to a real TCP port number.
 const PORT = Number(process.env.PORT) || 5002
+let isShuttingDown = false
+
+const shutdownGracefully = (signal: NodeJS.Signals) => {
+  if (isShuttingDown) return
+  isShuttingDown = true
+  console.log(`Received ${signal}. Closing server gracefully...`)
+
+  server.close((err) => {
+    if (err) {
+      console.error('Error while closing server:', err)
+      process.exit(1)
+    }
+
+    console.log('HTTP server closed. Exiting process.')
+    process.exit(0)
+  })
+
+  setTimeout(() => {
+    console.warn('Graceful shutdown timeout reached. Forcing process exit.')
+    process.exit(1)
+  }, 10000).unref()
+}
+
+process.on('SIGTERM', () => shutdownGracefully('SIGTERM'))
+process.on('SIGINT', () => shutdownGracefully('SIGINT'))
 
 // Test database connection before starting server
 async function startServer() {
