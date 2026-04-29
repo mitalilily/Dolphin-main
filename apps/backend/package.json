@@ -42,6 +42,7 @@
     "seed:courier-creds": "node -r ts-node/register src/scripts/seedCourierCredentialsFromEnv.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "drizzle-kit push",
+    "patch:invoice-preferences": "ts-node src/scripts/patchInvoicePreferencesColumns.ts",
     "seed:holidays": "ts-node src/scripts/seedHolidays.ts",
     "seed:holidays:year": "ts-node src/scripts/seedHolidays.ts",
     "seed:delhivery-b2c": "ts-node src/scripts/seedDelhiveryB2CRatecard.ts",

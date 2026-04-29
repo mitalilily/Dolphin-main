@@ -19,6 +19,24 @@ async function run() {
   await client.connect()
 
   try {
+    console.log('Ensuring invoice_preferences table exists...')
+    await client.query(`CREATE EXTENSION IF NOT EXISTS "pgcrypto"`)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS "invoice_preferences" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+        "user_id" uuid NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "prefix" varchar(10) NOT NULL DEFAULT 'INV',
+        "suffix" varchar(10) DEFAULT '',
+        "template" varchar(20) NOT NULL DEFAULT 'classic',
+        "include_logo" boolean NOT NULL DEFAULT true,
+        "include_signature" boolean NOT NULL DEFAULT true,
+        "logo_file" varchar(255),
+        "signature_file" varchar(255),
+        "created_at" timestamptz NOT NULL DEFAULT now(),
+        "updated_at" timestamptz NOT NULL DEFAULT now()
+      )
+    `)
+
     console.log('Patching invoice_preferences columns (safe/idempotent)...')
     await client.query(`
       ALTER TABLE "invoice_preferences"
@@ -33,6 +51,11 @@ async function run() {
       ADD COLUMN IF NOT EXISTS "invoice_notes" text,
       ADD COLUMN IF NOT EXISTS "terms_and_conditions" text
     `)
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS "invoice_preferences_user_id_idx"
+      ON "invoice_preferences" ("user_id")
+    `)
     console.log('Patch applied successfully.')
   } finally {
     await client.end()
@@ -43,4 +66,3 @@ run().catch((err) => {
   console.error('Failed to patch invoice_preferences columns:', err)
   process.exit(1)
 })
-
