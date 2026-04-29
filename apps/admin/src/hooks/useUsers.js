@@ -43,8 +43,9 @@ export function useUsersWithRoleUser({
         sortOrder,
         approved,
       }),
-    staleTime: 5 * 60 * 1000, // cache for 5 minutes
-    refetchOnWindowFocus: false,
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
   })
 }
 
