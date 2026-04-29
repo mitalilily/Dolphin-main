@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { HttpError } from '../../../utils/classes'
+import { withRetry } from '../../../utils/httpRetry'
 import {
   ShipmozoConfig,
   getEffectiveCourierConfig,
@@ -400,12 +401,16 @@ export class ShipmozoService {
         payload: this.sanitizeForLogs(data),
         params,
       })
-      const response = await http.request<ShipmozoResponse<T>>({
-        method,
-        url: `/${path.replace(/^\/+/, '')}`,
-        data,
-        params,
-      })
+      const response = await withRetry(
+        () =>
+          http.request<ShipmozoResponse<T>>({
+            method,
+            url: `/${path.replace(/^\/+/, '')}`,
+            data,
+            params,
+          }),
+        { attempts: 3, baseDelayMs: 250, maxDelayMs: 1500 },
+      )
       this.log('API response', {
         method,
         url: `${this.baseApi}/${path.replace(/^\/+/, '')}`,
