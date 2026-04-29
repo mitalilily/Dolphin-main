@@ -3,7 +3,7 @@ import { platforms } from '../schema/platform'
 import { users } from '../schema/users'
 // utils/verifyGoogleToken.ts
 import * as bcrypt from 'bcryptjs'
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm'
 import { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { OAuth2Client } from 'google-auth-library'
 
@@ -708,8 +708,8 @@ type GetUsersParams = {
   sortBy?: 'createdAt' | 'email' | 'role' | 'companyName' | 'contactPerson'
   sortOrder?: 'asc' | 'desc'
   businessTypes?: string[]
-  approved?: boolean
-  onboardingComplete?: boolean
+  approved?: boolean | string
+  onboardingComplete?: boolean | string
 }
 
 export async function getAllUsersWithRoleUser({
@@ -723,8 +723,12 @@ export async function getAllUsersWithRoleUser({
   approved,
 }: GetUsersParams) {
   const offset = (page - 1) * perPage
-  // Support both legacy and current merchant role labels.
-  const filters: any[] = [inArray(users.role, ['customer', 'user'])]
+  // Include all merchant/user-facing roles and exclude only internal/admin roles.
+  // This keeps visibility intact even if legacy data has mixed role values.
+  const filters: any[] = [
+    sql`coalesce(nullif(lower(trim(${users.role})), ''), 'customer') not in ('admin', 'employee', 'manager')`,
+    sql`coalesce(${users.email}, '') <> ''`,
+  ]
 
   // Search filter across multiple fields (null-safe with coalesce)
   if (search.trim()) {
@@ -756,16 +760,22 @@ export async function getAllUsersWithRoleUser({
   }
 
   // Onboarding complete filter (example: step 4 is complete)
-  if (onboardingComplete && typeof onboardingComplete === 'string') {
-    if (onboardingComplete === 'true') {
+  if (onboardingComplete !== undefined && onboardingComplete !== '') {
+    const onboarding =
+      typeof onboardingComplete === 'boolean'
+        ? onboardingComplete
+        : String(onboardingComplete).toLowerCase() === 'true'
+    if (onboarding) {
       filters.push(eq(schema.userProfiles.onboardingComplete, true))
     } else {
       filters.push(eq(schema.userProfiles.onboardingComplete, false))
     }
   }
 
-  if (approved && typeof approved === 'string') {
-    if (approved === 'true') {
+  if (approved !== undefined && approved !== '') {
+    const isApproved =
+      typeof approved === 'boolean' ? approved : String(approved).toLowerCase() === 'true'
+    if (isApproved) {
       filters.push(eq(schema.userProfiles.approved, true))
     } else {
       filters.push(eq(schema.userProfiles.approved, false))
