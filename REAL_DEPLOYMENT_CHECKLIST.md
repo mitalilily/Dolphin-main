@@ -72,6 +72,7 @@ From `apps/backend`:
 ```bash
 npm run migrate
 npm run patch:invoice-preferences
+npm run patch:kyc-columns
 ```
 
 No new DB migration is required specifically for the latest iCarry feature additions.
