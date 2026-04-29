@@ -47,8 +47,9 @@ export const getAdminApiBaseUrlCandidates = () => {
     currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '0.0.0.0'
 
   const configured = normalizeBaseUrl(process.env.REACT_APP_API_BASE_URL, { ensureApi: true })
+  const socketDerived = normalizeBaseUrl(process.env.REACT_APP_SOCKET_URL, { ensureApi: true })
   const stored = readStoredApiBaseUrl()
-  const candidates = [configured, stored, ...FALLBACK_API_BASE_URLS]
+  const candidates = [configured, socketDerived, stored, ...FALLBACK_API_BASE_URLS]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 

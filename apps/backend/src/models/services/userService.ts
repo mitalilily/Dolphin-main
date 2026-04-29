@@ -577,10 +577,15 @@ export const saveRefreshToken = async (
 
 export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) {
   return txn?.transaction(async (tx: any) => {
+    const normalizedRole = data.role && data.role.trim() ? data.role : 'customer'
+
     // 1) insert user
     const [user] = await tx
       .insert(users)
-      .values(data as IUser)
+      .values({
+        ...(data as IUser),
+        role: normalizedRole,
+      })
       .returning()
 
     // 2) insert wallet
