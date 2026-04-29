@@ -53,7 +53,19 @@ export const getAdminApiBaseUrlCandidates = () => {
   )
   const socketDerived = normalizeBaseUrl(process.env.REACT_APP_SOCKET_URL, { ensureApi: true })
   const stored = readStoredApiBaseUrl()
-  const candidates = [configured, socketDerived, stored, ...FALLBACK_API_BASE_URLS]
+  const trustedCandidates = [configured, socketDerived, ...FALLBACK_API_BASE_URLS]
+    .filter(Boolean)
+    .filter((value, index, list) => list.indexOf(value) === index)
+
+  // On hosted frontends, ignore stale manual overrides that don't match current env/fallbacks.
+  // This prevents browser-local storage from pinning Admin to a wrong backend after redeploys.
+  const safeStored =
+    stored && (!isHostedFrontend || trustedCandidates.includes(stored)) ? stored : null
+  if (stored && !safeStored && canUseStorage()) {
+    window.localStorage.removeItem(ACTIVE_ADMIN_API_BASE_URL_KEY)
+  }
+
+  const candidates = [configured, socketDerived, safeStored, ...FALLBACK_API_BASE_URLS]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 
