@@ -36,6 +36,7 @@ describe('ShiprocketCourierService', () => {
     nock(base).post('/v1/external/auth/login').reply(200, { token: 'token-1' })
     nock(base)
       .get('/v1/external/courier/serviceability')
+      .times(3)
       .query(true)
       .reply(503, { message: 'Service unavailable' })
 
@@ -49,6 +50,7 @@ describe('ShiprocketCourierService', () => {
     nock(base).post('/v1/external/auth/login').reply(200, { token: 'token-1' })
     nock(base)
       .get('/v1/external/courier/serviceability')
+      .times(3)
       .query(true)
       .delay(31000)
       .reply(200, { status: 200, data: {} })

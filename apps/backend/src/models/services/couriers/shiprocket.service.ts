@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
 import { HttpError } from '../../../utils/classes'
+import { withRetry } from '../../../utils/httpRetry'
 import {
   getEffectiveCourierConfig,
   ShiprocketConfig,
@@ -211,7 +212,10 @@ export class ShiprocketCourierService {
           forceRefreshToken,
         })
 
-        const response = await http.request<ShiprocketApiResponse<T>>(requestConfig)
+        const response = await withRetry(
+          () => http.request<ShiprocketApiResponse<T>>(requestConfig),
+          { attempts: 3, baseDelayMs: 250, maxDelayMs: 1500 },
+        )
         this.log('API response', {
           method,
           url: `${this.baseApi}/${path.replace(/^\/+/, '')}`,
