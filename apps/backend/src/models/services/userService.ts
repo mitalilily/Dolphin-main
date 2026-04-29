@@ -3,7 +3,7 @@ import { platforms } from '../schema/platform'
 import { users } from '../schema/users'
 // utils/verifyGoogleToken.ts
 import * as bcrypt from 'bcryptjs'
-import { and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { OAuth2Client } from 'google-auth-library'
 
@@ -723,7 +723,8 @@ export async function getAllUsersWithRoleUser({
   approved,
 }: GetUsersParams) {
   const offset = (page - 1) * perPage
-  const filters: any[] = [eq(users.role, 'customer')]
+  // Support both legacy and current merchant role labels.
+  const filters: any[] = [inArray(users.role, ['customer', 'user'])]
 
   // Search filter across multiple fields (null-safe with coalesce)
   if (search.trim()) {
@@ -735,6 +736,7 @@ export async function getAllUsersWithRoleUser({
         ilike(sql`coalesce(${schema.userProfiles.companyInfo} ->> 'contactEmail', '')`, pattern),
         ilike(sql`coalesce(${schema.userProfiles.companyInfo} ->> 'contactNumber', '')`, pattern),
         ilike(sql`coalesce(${schema.userProfiles.companyInfo} ->> 'businessName', '')`, pattern),
+        ilike(sql`coalesce(${users.email}, '')`, pattern),
       ),
     )
   }
@@ -793,6 +795,7 @@ export async function getAllUsersWithRoleUser({
       onboardingStep: schema.userProfiles.onboardingStep,
       contactPerson: sql<string>`${schema.userProfiles.companyInfo} ->> 'contactPerson'`,
       contactNumber: sql<string>`${schema.userProfiles.companyInfo} ->> 'contactNumber'`,
+      profilePicture: sql<string>`${schema.userProfiles.companyInfo} ->> 'profilePicture'`,
     })
     .from(users)
     .leftJoin(schema.userProfiles, eq(schema.userProfiles.userId, users.id))
