@@ -11,15 +11,20 @@ export async function fetchUsersWithRoleUser({
   sortOrder = 'desc',
   approved,
 }) {
+  const parseOptionalBoolean = (value) => {
+    if (value === true || value === 'true') return true
+    if (value === false || value === 'false') return false
+    return undefined
+  }
+
   const response = await api.get('/admin/users/users-management', {
     params: {
       page,
       perPage,
       search,
       businessTypes: businessTypes.length ? businessTypes : undefined,
-      onboardingComplete:
-        typeof onboardingComplete === 'string' ? onboardingComplete === 'true' : undefined,
-      approved: typeof approved === 'string' ? approved === 'true' : undefined,
+      onboardingComplete: parseOptionalBoolean(onboardingComplete),
+      approved: parseOptionalBoolean(approved),
       sortBy,
       sortOrder,
     },
