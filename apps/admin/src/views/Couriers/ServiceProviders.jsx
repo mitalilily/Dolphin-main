@@ -129,9 +129,13 @@ const ServiceProviders = () => {
       {},
       {
         onSuccess: (data) => {
+          const providerErrors = Array.isArray(data?.providerErrors) ? data.providerErrors : []
+          const errorSummary = providerErrors.length
+            ? ` | Errors: ${providerErrors.map((e) => `${e.provider}: ${e.message}`).join(' ; ')}`
+            : ''
           toast({
             title: 'Provider couriers synced',
-            description: `Shiprocket: ${Number(data?.syncedShiprocketCouriers || 0)}, Shipmozo: ${Number(data?.syncedShipmozoCouriers || 0)}, iCarry: ${Number(data?.syncedIcarryCouriers || 0)}`,
+            description: `Shiprocket: ${Number(data?.syncedShiprocketCouriers || 0)}, Shipmozo: ${Number(data?.syncedShipmozoCouriers || 0)}, iCarry: ${Number(data?.syncedIcarryCouriers || 0)}${errorSummary}`,
             status: 'success',
           })
         },
