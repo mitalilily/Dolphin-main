@@ -1,6 +1,7 @@
 const DEFAULT_API_BASE_URL = '/api'
 const DEFAULT_SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : ''
-const FALLBACK_API_BASE_URLS = []
+const PRODUCTION_BACKEND_ORIGIN = 'https://dolphin-backend-production-99e8.up.railway.app'
+const FALLBACK_API_BASE_URLS = [`${PRODUCTION_BACKEND_ORIGIN}/api`]
 const ACTIVE_ADMIN_API_BASE_URL_KEY = 'activeAdminApiBaseUrl'
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
@@ -46,7 +47,10 @@ export const getAdminApiBaseUrlCandidates = () => {
   const isLocalhost =
     currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '0.0.0.0'
 
-  const configured = normalizeBaseUrl(process.env.REACT_APP_API_BASE_URL, { ensureApi: true })
+  const configured = normalizeBaseUrl(
+    process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_BACKEND_URL,
+    { ensureApi: true },
+  )
   const socketDerived = normalizeBaseUrl(process.env.REACT_APP_SOCKET_URL, { ensureApi: true })
   const stored = readStoredApiBaseUrl()
   const candidates = [configured, socketDerived, stored, ...FALLBACK_API_BASE_URLS]

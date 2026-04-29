@@ -4,19 +4,32 @@ import { clearAuthTokens, getAuthTokens, setAuthTokens } from './tokenVault'
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL
 const DEFAULT_API_BASE_URL = '/api'
+const PRODUCTION_API_BASE_URL = 'https://dolphin-backend-production-99e8.up.railway.app/api'
 
 const getApiBaseUrl = () => {
   const fallback = DEFAULT_API_BASE_URL.replace(/\/+$/, '')
+  const host = typeof window !== 'undefined' ? window.location.hostname : ''
+  const isHostedFrontend =
+    host.endsWith('netlify.app') || host.endsWith('vercel.app') || host === 'dolphin-enterprises.netlify.app'
+  const hostedFallback = isHostedFrontend ? PRODUCTION_API_BASE_URL : fallback
 
   try {
-    if (!RAW_API_BASE_URL) return fallback
+    if (!RAW_API_BASE_URL) return hostedFallback
+    const raw = String(RAW_API_BASE_URL).trim()
 
-    const candidate = new URL(RAW_API_BASE_URL, window.location.origin)
+    // Handle relative path-style env values robustly (e.g. "/api", "//api/").
+    if (raw.startsWith('/')) {
+      const collapsed = `/${raw.replace(/^\/+/, '').replace(/\/+$/, '')}`
+      if (collapsed === '/api' || collapsed.startsWith('/api/')) return collapsed
+      return `${collapsed}/api`
+    }
+
+    const candidate = new URL(raw, window.location.origin)
     const normalized = candidate.href.replace(/\/+$/, '')
     if (normalized.endsWith('/api') || normalized.includes('/api/')) return normalized
     return `${normalized}/api`
   } catch {
-    return fallback
+    return hostedFallback
   }
 }
 
