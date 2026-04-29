@@ -55,4 +55,31 @@ describe('IcarryService', () => {
     const service = new IcarryService()
     await expect(service.login(true)).rejects.toThrow('Invalid credentials')
   })
+
+  it('handles timeout responses', async () => {
+    nock(base).post('/api_login').reply(200, { success: 1, api_token: 'token-1' })
+    nock(base)
+      .post('/api_get_estimate')
+      .times(3)
+      .query({ api_token: 'token-1' })
+      .delay(31000)
+      .reply(200, { success: 1, estimate: [] })
+
+    const service = new IcarryService()
+    await expect(
+      service.getEstimateSingleShipment({
+        length: 10,
+        breadth: 8,
+        height: 5,
+        weight: 1,
+        destination_pincode: '400001',
+        origin_pincode: '560001',
+        destination_country_code: 'IN',
+        origin_country_code: 'IN',
+        shipment_mode: 'E',
+        shipment_type: 'C',
+        shipment_value: 1000,
+      }),
+    ).rejects.toThrow()
+  })
 })
