@@ -37,6 +37,7 @@ import {
   useCouriers,
   useCreateCourier,
   useDeleteCourier,
+  useSyncServiceProviderCouriers,
   useUpdateCourierStatus,
 } from 'hooks/useCouriers'
 import { useDebounce } from 'hooks/useDebounce'
@@ -57,6 +58,7 @@ const Couriers = () => {
   })
   const createCourier = useCreateCourier()
   const deleteCourier = useDeleteCourier()
+  const syncProviders = useSyncServiceProviderCouriers()
   const updateCourierStatus = useUpdateCourierStatus()
   const [isModalOpen, setModalOpen] = useState(false)
   // In your component:
@@ -250,6 +252,28 @@ const Couriers = () => {
   const hasDelhiveryExpress = delhiveryCouriers.some((c) => c.id === 100)
   const hasDelhiverySurface = delhiveryCouriers.some((c) => c.id === 99)
 
+  const handleSyncProviders = () => {
+    syncProviders.mutate(
+      {},
+      {
+        onSuccess: (data) => {
+          toast({
+            title: 'Provider couriers synced',
+            description: `Shiprocket: ${Number(data?.syncedShiprocketCouriers || 0)}, Shipmozo: ${Number(data?.syncedShipmozoCouriers || 0)}, iCarry: ${Number(data?.syncedIcarryCouriers || 0)}`,
+            status: 'success',
+          })
+        },
+        onError: (syncError) => {
+          toast({
+            title: 'Failed to sync provider couriers',
+            description: syncError?.message || 'Please check courier credentials and retry.',
+            status: 'error',
+          })
+        },
+      },
+    )
+  }
+
   return (
     <Flex direction="column" pt={{ base: '120px', md: '75px' }} gap={4}>
       {/* Delhivery Service Info */}
@@ -321,6 +345,13 @@ const Couriers = () => {
             </Button>
           )}
         </HStack>
+        <Button
+          colorScheme="blue"
+          onClick={handleSyncProviders}
+          isLoading={syncProviders.isPending}
+        >
+          Sync Provider Couriers
+        </Button>
         <Button
           colorScheme="brand"
           leftIcon={<AddIcon />}

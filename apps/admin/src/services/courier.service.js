@@ -81,6 +81,12 @@ export const updateServiceProviderStatus = async ({ serviceProvider, isEnabled }
   return data
 }
 
+export const syncServiceProviderCouriers = async (payload = {}) => {
+  const { data } = await api.post('/couriers/providers/sync', payload)
+  if (!data?.success) throw new Error(data?.message || 'Failed to sync provider couriers')
+  return data.data
+}
+
 export const updateShippingRate = async (id, updates, planId) => {
   const { data } = await api.put(`/admin/couriers/shipping-rate/${id}/${planId}`, updates)
   return data
