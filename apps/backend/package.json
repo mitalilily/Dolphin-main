@@ -49,6 +49,7 @@
     "seed:holidays": "ts-node src/scripts/seedHolidays.ts",
     "seed:holidays:year": "ts-node src/scripts/seedHolidays.ts",
     "seed:delhivery-b2c": "ts-node src/scripts/seedDelhiveryB2CRatecard.ts",
+    "seed:shipmozo-b2c-slabs": "ts-node src/scripts/seedShipmozoB2CSlabs.ts",
     "sync:xpressbees-couriers": "ts-node src/scripts/syncXpressbeesCouriers.ts"
   },
   "keywords": [],
