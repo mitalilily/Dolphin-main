@@ -4007,13 +4007,47 @@ export const createB2CShipmentService = async (
         const shipmozoOrderId =
           String(pushResp?.data?.order_id ?? '').trim() || params.order_number
 
-        const assignResp = await shipmozo.assignCourier({
-          order_id: shipmozoOrderId,
-          courier_id: Number(params.courier_id || 0),
-        })
+        const requestedCourierId = Number(params.courier_id || 0)
+        const isShipmozoWalletError = (message: unknown) =>
+          typeof message === 'string' &&
+          /insufficient\s+wallet\s+balance|recharge\s+your\s+wallet/i.test(message)
+
+        let assignResp: any = null
+        let autoAssignResp: any = null
+
+        try {
+          assignResp = await shipmozo.assignCourier({
+            order_id: shipmozoOrderId,
+            courier_id: requestedCourierId,
+          })
+        } catch (assignError: any) {
+          const assignErrorMessage = String(assignError?.message || '')
+          if (isShipmozoWalletError(assignErrorMessage)) {
+            console.warn('⚠️ Shipmozo assign-courier failed with wallet error, trying auto-assign', {
+              orderId: shipmozoOrderId,
+              requestedCourierId,
+              message: assignErrorMessage,
+            })
+            try {
+              autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+            } catch (autoAssignError: any) {
+              throw new HttpError(
+                400,
+                `Shipmozo courier assignment failed. Requested courier ${requestedCourierId} could not be assigned and auto-assign also failed: ${autoAssignError?.message || 'unknown error'}`,
+              )
+            }
+          } else {
+            throw assignError
+          }
+        }
 
         const pickedCourierName =
-          assignResp?.data?.courier || params.courier_partner || params.integration_type || 'Shipmozo'
+          assignResp?.data?.courier ||
+          autoAssignResp?.data?.courier_company_service ||
+          autoAssignResp?.data?.courier_company ||
+          params.courier_partner ||
+          params.integration_type ||
+          'Shipmozo'
 
         const scheduleResp = await shipmozo.schedulePickup({
           order_id: shipmozoOrderId,
@@ -4021,6 +4055,7 @@ export const createB2CShipmentService = async (
         const detailResp = await shipmozo.getOrderDetail(shipmozoOrderId)
 
         const awbNumber =
+          autoAssignResp?.data?.awb_number ||
           scheduleResp?.data?.awb_number ||
           detailResp?.data?.awb_number ||
           detailResp?.data?.awb ||
@@ -4046,7 +4081,8 @@ export const createB2CShipmentService = async (
 
         shipmentData = {
           push: true,
-          assign: assignResp?.data,
+          assign: assignResp?.data || null,
+          auto_assign: autoAssignResp?.data || null,
           schedule: scheduleResp?.data,
           detail: detailResp?.data,
         }
