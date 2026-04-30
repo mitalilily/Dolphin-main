@@ -4031,7 +4031,14 @@ export const createB2CShipmentService = async (
         if (awbNumber) {
           try {
             const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
-            labelDataUrl = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : undefined
+            const rawLabel = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : undefined
+            const normalizedLabel =
+              typeof rawLabel === 'string' && rawLabel.trim().length > 0
+                ? rawLabel.trim()
+                : undefined
+            // Do not persist very large inline data URLs in order rows.
+            labelDataUrl =
+              normalizedLabel && /^data:/i.test(normalizedLabel) ? undefined : normalizedLabel
           } catch (labelError: any) {
             console.warn('âš ï¸ Shipmozo label fetch failed:', labelError?.message || labelError)
           }
