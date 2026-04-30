@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, numeric, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
+import { boolean, integer, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export interface PickupDetails {
@@ -83,11 +83,11 @@ export const b2c_orders = pgTable(
   selected_max_slab_weight: numeric('selected_max_slab_weight').$type<number>(),
   shipment_id: varchar('shipment_id', { length: 100 }),
   is_insurance: boolean('is_insurance').default(false),
-  label: varchar('label', { length: 100 }),
+  label: text('label'),
   // Sort / routing code from courier label (e.g. JBN/JBN/PA)
-  sort_code: varchar('sort_code', { length: 100 }),
+  sort_code: text('sort_code'),
   invoice_link: varchar('invoice_link', { length: 300 }),
-  manifest: varchar('manifest', { length: 100 }),
+  manifest: text('manifest'),
   manifest_error: varchar('manifest_error', { length: 255 }),
   manifest_retry_count: integer('manifest_retry_count').default(0).notNull(),
   manifest_last_retry_at: timestamp('manifest_last_retry_at'),

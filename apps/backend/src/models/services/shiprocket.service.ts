@@ -2722,6 +2722,24 @@ export async function createB2COrder({
   selectedMaxSlabWeight,
   manifestError,
 }: InsertB2COrderParams) {
+  const toNullableTrimmedString = (value: unknown) => {
+    if (typeof value !== 'string') return null
+    const trimmed = value.trim()
+    return trimmed.length ? trimmed : null
+  }
+  const toVarcharBounded = (value: unknown, maxLen: number) => {
+    const trimmed = toNullableTrimmedString(value)
+    if (!trimmed) return null
+    return trimmed.length > maxLen ? trimmed.slice(0, maxLen) : trimmed
+  }
+  const normalizeStoredLabel = (value: unknown) => {
+    const trimmed = toNullableTrimmedString(value)
+    if (!trimmed) return null
+    // Avoid storing large inline base64 payloads in order rows.
+    if (/^data:/i.test(trimmed)) return null
+    return trimmed
+  }
+
   const orderAmount = Number(params.order_amount ?? 0)
   const normalizedOrderNumber = await ensureUniqueMerchantOrderNumber(tx, userId, params.order_number)
   const normalizeJsonValue = (value: unknown) => {
@@ -2813,22 +2831,24 @@ export async function createB2COrder({
         courier_id: params.courier_id ? Number(params.courier_id) : null,
         shipping_mode: shippingMode ?? null,
         selected_max_slab_weight: selectedMaxSlabWeight ?? null,
-        shipment_id: shipmentData?.shipment_id?.toString() ?? null,
-        awb_number: shipmentData?.awb_number ?? null,
+        shipment_id: toVarcharBounded(shipmentData?.shipment_id?.toString(), 100),
+        awb_number: toVarcharBounded(shipmentData?.awb_number, 100),
         // Store courier-provided label key/identifier if available
-        label: typeof shipmentData?.label === 'string' ? shipmentData.label : null,
-        manifest:
-          typeof shipmentData?.manifest === 'string' && shipmentData?.manifest.length <= 100
-            ? shipmentData.manifest
-            : null,
+        label: normalizeStoredLabel(shipmentData?.label),
+        manifest: toNullableTrimmedString(shipmentData?.manifest),
 
         manifest_error: manifestError ?? null,
 
         // Routing / sort code from courier label
-        sort_code: (shipmentData as any)?.sort_code || (shipmentData as any)?.sortCode || null,
+        sort_code:
+          toVarcharBounded((shipmentData as any)?.sort_code, 100) ||
+          toVarcharBounded((shipmentData as any)?.sortCode, 100),
 
         // Pickup & RTO info
-        pickup_location_id: params.pickup_location_id ?? params.pickup?.warehouse_name ?? null,
+        pickup_location_id: toVarcharBounded(
+          params.pickup_location_id ?? params.pickup?.warehouse_name,
+          50,
+        ),
         pickup_details: pickupDetails,
         rto_details: rtoDetails,
 
@@ -2836,8 +2856,8 @@ export async function createB2COrder({
         is_external_api: is_external_api ?? false,
 
         // Tags / meta
-        tags: params.tags ?? null,
-        invoice_link: shipmentData?.invoice_link ?? null,
+        tags: toVarcharBounded(params.tags, 200),
+        invoice_link: toVarcharBounded(shipmentData?.invoice_link, 300),
         created_at: new Date(),
         updated_at: new Date(),
       })

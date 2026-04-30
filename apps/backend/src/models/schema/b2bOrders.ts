@@ -1,4 +1,4 @@
-import { boolean, jsonb, numeric, pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
+import { boolean, jsonb, numeric, pgTable, text, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core'
 import { users } from './users'
 
 export const b2b_orders = pgTable(
@@ -44,9 +44,9 @@ export const b2b_orders = pgTable(
   state: varchar('state', { length: 100 }).notNull(),
   country: varchar('country', { length: 100 }).default('India'),
   pincode: varchar('pincode', { length: 20 }).notNull(),
-  label: varchar('label', { length: 100 }),
+  label: text('label'),
   invoice_link: varchar('invoice_link', { length: 300 }),
-  manifest: varchar('manifest', { length: 100 }),
+  manifest: text('manifest'),
 
   // 🔹 Products and packages
   products: jsonb('products').notNull(),
