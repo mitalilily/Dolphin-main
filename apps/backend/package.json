@@ -39,6 +39,7 @@
     "test:icarry-edit-pickup-address": "node -r ts-node/register src/scripts/testIcarryEditPickupAddress.ts",
     "test:icarry-edit-pickup-address-validate": "node -r ts-node/register src/scripts/testIcarryEditPickupAddressValidation.ts",
     "test:shipmozo-live": "node -r ts-node/register src/scripts/testShipmozoLive.ts",
+    "seed:shipmozo-couriers": "node -r ts-node/register src/scripts/seedShipmozoCouriersFromApi.ts",
     "seed:courier-creds": "node -r ts-node/register src/scripts/seedCourierCredentialsFromEnv.ts",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate": "drizzle-kit push",
@@ -48,6 +49,7 @@
     "seed:holidays": "ts-node src/scripts/seedHolidays.ts",
     "seed:holidays:year": "ts-node src/scripts/seedHolidays.ts",
     "seed:delhivery-b2c": "ts-node src/scripts/seedDelhiveryB2CRatecard.ts",
+    "seed:shipmozo-b2c-slabs": "ts-node src/scripts/seedShipmozoB2CSlabs.ts",
     "sync:xpressbees-couriers": "ts-node src/scripts/syncXpressbeesCouriers.ts"
   },
   "keywords": [],

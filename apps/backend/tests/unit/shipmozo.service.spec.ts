@@ -44,4 +44,46 @@ describe('ShipmozoService', () => {
 
     expect(result.result).toBe(1)
   })
+
+  it('handles upstream failure', async () => {
+    nock(base).post('/app/api/v1/rate-calculator').times(3).reply(503, { message: 'Service unavailable' })
+
+    const service = new ShipmozoService()
+    await expect(
+      service.rateCalculator({
+        pickup_pincode: '560001',
+        delivery_pincode: '400001',
+        payment_type: 'PREPAID',
+        shipment_type: 'Forward',
+        order_amount: 500,
+        type_of_package: 'Box',
+        rov_type: 'none',
+        weight: 0.8,
+        dimensions: [{ no_of_box: 1, length: 10, width: 8, height: 5 }],
+      }),
+    ).rejects.toThrow('Service unavailable')
+  })
+
+  it('handles timeout responses', async () => {
+    nock(base)
+      .post('/app/api/v1/rate-calculator')
+      .times(3)
+      .delay(31000)
+      .reply(200, { result: 1, data: [] })
+
+    const service = new ShipmozoService()
+    await expect(
+      service.rateCalculator({
+        pickup_pincode: '560001',
+        delivery_pincode: '400001',
+        payment_type: 'PREPAID',
+        shipment_type: 'Forward',
+        order_amount: 500,
+        type_of_package: 'Box',
+        rov_type: 'none',
+        weight: 0.8,
+        dimensions: [{ no_of_box: 1, length: 10, width: 8, height: 5 }],
+      }),
+    ).rejects.toThrow()
+  })
 })

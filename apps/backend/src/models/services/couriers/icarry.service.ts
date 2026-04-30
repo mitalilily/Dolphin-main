@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios'
 import { HttpError } from '../../../utils/classes'
+import { withRetry } from '../../../utils/httpRetry'
 import { IcarryConfig, getEffectiveCourierConfig } from '../courierCredentials.service'
 
 export type IcarryLoginResponse = {
@@ -274,7 +275,10 @@ export class IcarryService {
         hasApiToken: Boolean(apiToken),
       })
 
-      const response = await this.getHttp().post<T>(urlWithToken, payload)
+      const response = await withRetry(
+        () => this.getHttp().post<T>(urlWithToken, payload),
+        { attempts: 3, baseDelayMs: 250, maxDelayMs: 1500 },
+      )
       this.log('API response', {
         url: `${this.baseApi}${endpoint}`,
         response: this.sanitizeForLogs(response?.data),

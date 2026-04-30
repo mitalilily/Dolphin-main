@@ -535,6 +535,7 @@ interface NimbusServiceabilityParams {
   pickupId?: string
   // Hint that this call is coming from a rate calculator UI (we can skip heavy live checks)
   isCalculator?: boolean
+  service_providers?: string[]
 }
 
 // Delhivery-only serviceability.
@@ -662,12 +663,12 @@ const determineB2CZoneKey = (
  * Adjust the right-hand values if your zones.code uses different wording.
  */
 const ZONE_KEY_TO_DB_CODE: Record<string, string> = {
-  METRO_TO_METRO: 'Metro to Metro',
+  METRO_TO_METRO: 'METRO_TO_METRO',
   ROI: 'ROI',
-  SPECIAL_ZONE: 'Special Zone',
-  WITHIN_CITY: 'Within City',
-  WITHIN_REGION: 'Within Region',
-  WITHIN_STATE: 'Within State',
+  SPECIAL_ZONE: 'SPECIAL_ZONE',
+  WITHIN_CITY: 'WITHIN_CITY',
+  WITHIN_REGION: 'WITHIN_REGION',
+  WITHIN_STATE: 'WITHIN_STATE',
 }
 
 /**
@@ -755,6 +756,20 @@ const fetchZoneIdByKey = async (
   if (fallback?.[0]?.id) {
     console.log('Falling back to ROI zone:', fallback[0].code)
     return { id: fallback[0].id, code: fallback[0].code, name: fallback[0].name }
+  }
+
+  // 5) Last fallback: any B2C zone row (prevents complete serviceability failure if custom zone codes differ)
+  const [anyB2CZone] = await db
+    .select({ id: zones.id, code: zones.code, name: zones.name })
+    .from(zones)
+    .where(sql`lower(trim(${zones.business_type})) = 'b2c'`)
+    .limit(1)
+
+  if (anyB2CZone?.id) {
+    console.warn(
+      `Zone lookup failed for key "${key}" (${dbCode}). Falling back to first B2C zone "${anyB2CZone.code}".`,
+    )
+    return { id: anyB2CZone.id, code: anyB2CZone.code, name: anyB2CZone.name }
   }
 
   throw new Error(
@@ -1234,6 +1249,18 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Registry of enabled providers (by serviceProvider string)
     const enabledProviders = new Set(Object.keys(systemCourierMap))
+    const requestedProviders = Array.isArray(params.service_providers)
+      ? params.service_providers
+          .map((provider) => normalizeProviderKey(provider))
+          .filter((provider): provider is string => Boolean(provider))
+      : []
+    if (requestedProviders.length) {
+      for (const provider of Array.from(enabledProviders)) {
+        if (!requestedProviders.includes(provider)) {
+          enabledProviders.delete(provider)
+        }
+      }
+    }
 
     // ðŸ”¹ Start with an empty list of candidate couriers
     let combinedCouriers: any[] = []
@@ -1263,56 +1290,68 @@ export const fetchAvailableCouriersWithRates = async (
       })
 
       if (originPincode && destinationPincode) {
-        const [originResp, destinationResp] = await Promise.all([
-          delhivery.checkServiceability(originPincode),
-          delhivery.checkServiceability(destinationPincode),
-        ])
-        delhiveryResp = destinationResp
+        try {
+          const [originResp, destinationResp] = await Promise.all([
+            delhivery.checkServiceability(originPincode),
+            delhivery.checkServiceability(destinationPincode),
+          ])
+          delhiveryResp = destinationResp
 
-        const originService = originResp?.delivery_codes?.[0]?.postal_code
-        const destinationService = destinationResp?.delivery_codes?.[0]?.postal_code
+          const originService = originResp?.delivery_codes?.[0]?.postal_code
+          const destinationService = destinationResp?.delivery_codes?.[0]?.postal_code
 
-        delhiveryOriginServiceable =
-          Boolean(originResp?.delivery_codes?.length) && originService?.pickup === 'Y'
-        delhiveryDestinationServiceable =
-          Boolean(destinationResp?.delivery_codes?.length) &&
-          (delhiveryRequiresCOD
-            ? destinationService?.cod === 'Y'
-            : destinationService?.pre_paid === 'Y')
+          delhiveryOriginServiceable =
+            Boolean(originResp?.delivery_codes?.length) && originService?.pickup === 'Y'
+          delhiveryDestinationServiceable =
+            Boolean(destinationResp?.delivery_codes?.length) &&
+            (delhiveryRequiresCOD
+              ? destinationService?.cod === 'Y'
+              : destinationService?.pre_paid === 'Y')
 
-        console.log('[Serviceability] Delhivery pincode check result', {
-          mode: isCalculator ? 'calculator' : 'standard',
-          origin: originPincode,
-          destination: destinationPincode,
-          paymentType: normalizedPaymentType,
-          requiresCOD: delhiveryRequiresCOD,
-          originAvailableRecords: originResp?.delivery_codes?.length ?? 0,
-          destinationAvailableRecords: destinationResp?.delivery_codes?.length ?? 0,
-          originPickup: originService?.pickup,
-          destinationPrePaid: destinationService?.pre_paid,
-          destinationCod: destinationService?.cod,
-          destinationRemark: destinationService?.remark ?? '',
-        })
-
-        delhiveryAvailable = delhiveryOriginServiceable && delhiveryDestinationServiceable
-
-        // Keep calculator path lighter: serviceability is required, TAT is optional.
-        if (delhiveryAvailable && !isCalculator) {
-          const tatResp = await delhivery.getExpectedTAT(
-            originPincode,
-            destinationPincode,
-            'S',
-            'B2C',
-          )
-          if (tatResp && Number.isFinite(Number(tatResp)) && Number(tatResp) > 0) {
-            delhiveryEDD = `${Number(tatResp)} Days`
-          }
-          console.log('[Serviceability] Delhivery TAT evaluated', {
-            mode: 'standard',
+          console.log('[Serviceability] Delhivery pincode check result', {
+            mode: isCalculator ? 'calculator' : 'standard',
             origin: originPincode,
             destination: destinationPincode,
-            tat: tatResp,
-            edd: delhiveryEDD,
+            paymentType: normalizedPaymentType,
+            requiresCOD: delhiveryRequiresCOD,
+            originAvailableRecords: originResp?.delivery_codes?.length ?? 0,
+            destinationAvailableRecords: destinationResp?.delivery_codes?.length ?? 0,
+            originPickup: originService?.pickup,
+            destinationPrePaid: destinationService?.pre_paid,
+            destinationCod: destinationService?.cod,
+            destinationRemark: destinationService?.remark ?? '',
+          })
+
+          delhiveryAvailable = delhiveryOriginServiceable && delhiveryDestinationServiceable
+
+          // Keep calculator path lighter: serviceability is required, TAT is optional.
+          if (delhiveryAvailable && !isCalculator) {
+            const tatResp = await delhivery.getExpectedTAT(
+              originPincode,
+              destinationPincode,
+              'S',
+              'B2C',
+            )
+            if (tatResp && Number.isFinite(Number(tatResp)) && Number(tatResp) > 0) {
+              delhiveryEDD = `${Number(tatResp)} Days`
+            }
+            console.log('[Serviceability] Delhivery TAT evaluated', {
+              mode: 'standard',
+              origin: originPincode,
+              destination: destinationPincode,
+              tat: tatResp,
+              edd: delhiveryEDD,
+            })
+          }
+        } catch (err: any) {
+          delhiveryAvailable = false
+          delhiveryOriginServiceable = false
+          delhiveryDestinationServiceable = false
+          console.error('❌ Delhivery serviceability error:', {
+            pincode: destinationPincode,
+            status: err?.response?.status ?? err?.statusCode ?? null,
+            data: err?.response?.data ?? null,
+            message: err?.message || 'Failed to fetch Delhivery serviceability',
           })
         }
       } else {
@@ -1553,6 +1592,7 @@ export const fetchAvailableCouriersWithRates = async (
     let shipmozoAvailable = false
     let shipmozoResp: any = null
     let shipmozoRateRecords: any[] = []
+    let shipmozoPincodeResponse: any = null
     if (enabledProviders.has('shipmozo')) {
       const shipmozo = new ShipmozoService()
       const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
@@ -1567,8 +1607,19 @@ export const fetchAvailableCouriersWithRates = async (
             pickup_pincode: originPincode,
             delivery_pincode: destinationPincode,
           })
+          shipmozoPincodeResponse = serviceabilityResp
 
-          shipmozoAvailable = serviceabilityResp?.data?.serviceable === true
+          const shipmozoServiceabilityPayload = serviceabilityResp as any
+          const rawShipmozoServiceable =
+            shipmozoServiceabilityPayload?.data?.serviceable ??
+            shipmozoServiceabilityPayload?.serviceable ??
+            shipmozoServiceabilityPayload?.data?.is_serviceable ??
+            shipmozoServiceabilityPayload?.is_serviceable
+          shipmozoAvailable =
+            rawShipmozoServiceable === true ||
+            rawShipmozoServiceable === 1 ||
+            String(rawShipmozoServiceable).toLowerCase() === 'true' ||
+            String(rawShipmozoServiceable).toLowerCase() === 'yes'
           console.log('[Serviceability] Shipmozo pincode response', {
             serviceable: shipmozoAvailable,
             originPincode,
@@ -1576,7 +1627,6 @@ export const fetchAvailableCouriersWithRates = async (
           })
 
           if (
-            shipmozoAvailable &&
             Number(params.weight ?? 0) > 0 &&
             Number(params.length ?? 0) > 0 &&
             Number(params.breadth ?? 0) > 0 &&
@@ -1613,6 +1663,7 @@ export const fetchAvailableCouriersWithRates = async (
                   : []
 
             if (shipmozoRateRecords.length) {
+              shipmozoAvailable = true
               await syncShipmozoCourierRows(shipmozoRateRecords)
               registerServiceableProvider('shipmozo', {
                 providerId: 'shipmozo',
@@ -1623,6 +1674,22 @@ export const fetchAvailableCouriersWithRates = async (
                 raw: shipmozoResp,
               })
             }
+          }
+
+          if (shipmozoAvailable && !serviceableProviders.has('shipmozo')) {
+            registerServiceableProvider('shipmozo', {
+              providerId: 'shipmozo',
+              providerName: 'Shipmozo',
+              codAvailable: true,
+              prepaidAvailable: true,
+              edd: '3-7 Days',
+              raw: shipmozoResp ?? shipmozoPincodeResponse,
+            })
+            console.log('[Serviceability] Shipmozo fallback enabled from pincode serviceability', {
+              originPincode,
+              destinationPincode,
+              hasRateRecords: shipmozoRateRecords.length > 0,
+            })
           }
         } catch (err: any) {
           console.error('âŒ Shipmozo serviceability error:', err?.message || err)
@@ -2190,8 +2257,9 @@ export const fetchAvailableCouriersWithRates = async (
     // Cache the final combined list before returning
     return combined
   } catch (error: any) {
-    console.error('Error fetching combined courier rates:', error.message)
-    throw new Error('Failed to fetch combined courier rates')
+    const message = error?.message || 'Failed to fetch combined courier rates'
+    console.error('Error fetching combined courier rates:', message)
+    throw new Error(message)
   }
 }
 export const fetchAvailableCouriersForGuest = async (params: NimbusServiceabilityParams) => {
@@ -3819,14 +3887,20 @@ export const createB2CShipmentService = async (
           )
         }
 
+        const primaryConsigneePhone = String(params.consignee?.phone ?? '').trim()
+        const alternateConsigneePhone = String((params.consignee as any)?.alternate_phone ?? '').trim()
+
         const pushPayload = {
           order_id: params.order_number,
           order_date:
             params.invoice_date || new Date(params.order_date || new Date()).toISOString().slice(0, 10),
           order_type: 'ESSENTIALS',
           consignee_name: params.consignee?.name,
-          consignee_phone: Number(params.consignee?.phone || 0),
-          consignee_alternate_phone: Number(params.consignee?.phone || 0),
+          consignee_phone: Number(primaryConsigneePhone || 0),
+          consignee_alternate_phone:
+            alternateConsigneePhone && alternateConsigneePhone !== primaryConsigneePhone
+              ? Number(alternateConsigneePhone)
+              : '',
           consignee_email: params.consignee?.email || '',
           consignee_address_line_one: params.consignee?.address,
           consignee_address_line_two: params.consignee?.address_2 || '',
@@ -3853,10 +3927,12 @@ export const createB2CShipmentService = async (
           gstin_number: params.company?.gst || '',
         }
 
-        await shipmozo.pushOrder(pushPayload)
+        const pushResp = await shipmozo.pushOrder(pushPayload)
+        const shipmozoOrderId =
+          String(pushResp?.data?.order_id ?? '').trim() || params.order_number
 
         const assignResp = await shipmozo.assignCourier({
-          order_id: params.order_number,
+          order_id: shipmozoOrderId,
           courier_id: Number(params.courier_id || 0),
         })
 
@@ -3864,9 +3940,9 @@ export const createB2CShipmentService = async (
           assignResp?.data?.courier || params.courier_partner || params.integration_type || 'Shipmozo'
 
         const scheduleResp = await shipmozo.schedulePickup({
-          order_id: params.order_number,
+          order_id: shipmozoOrderId,
         })
-        const detailResp = await shipmozo.getOrderDetail(params.order_number)
+        const detailResp = await shipmozo.getOrderDetail(shipmozoOrderId)
 
         const awbNumber =
           scheduleResp?.data?.awb_number ||
@@ -3896,6 +3972,7 @@ export const createB2CShipmentService = async (
         shipmentMeta = {
           shipment_id:
             shipmentSuccessPackage?.reference_id ??
+            shipmozoOrderId ??
             shipmentSuccessPackage?.order_id ??
             params.order_number,
           awb_number: awbNumber,

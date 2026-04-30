@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { Request, Response } from 'express'
 import Papa from 'papaparse'
 import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProviders'
+import { SHIPMOZO_COURIER_SEEDS } from '../../constants/shipmozoCouriers'
 import { db } from '../../models/client'
 import {
   deleteCourierService,
@@ -134,6 +135,28 @@ export const getAllCouriersController = async (req: Request, res: Response) => {
 
 export const getAllCouriersListController = async (req: Request, res: Response) => {
   try {
+    await db
+      .insert(couriers)
+      .values(
+        SHIPMOZO_COURIER_SEEDS.map((row) => ({
+          id: row.id,
+          name: row.name,
+          serviceProvider: 'shipmozo',
+          isEnabled: true,
+          businessType: row.businessType,
+          updatedAt: new Date(),
+        })) as any,
+      )
+      .onConflictDoUpdate({
+        target: [couriers.id, couriers.serviceProvider],
+        set: {
+          name: sql`excluded.name`,
+          isEnabled: true,
+          businessType: sql`excluded.business_type`,
+          updatedAt: new Date(),
+        },
+      })
+
     const { search, serviceProvider, businessType } = req.query
 
     const whereClauses = []
@@ -779,101 +802,146 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     const breadth = Number(req.body?.breadth ?? 10)
     const height = Number(req.body?.height ?? 10)
 
-    const syncCandidates = await fetchAvailableCouriersWithRatesAdmin({
-      origin,
-      destination,
-      payment_type: 'prepaid',
-      order_amount: orderAmount,
-      shipment_type: 'b2c',
-      weight,
-      length,
-      breadth,
-      height,
-      isCalculator: true,
-    })
-    const syncedShiprocketCouriers = (syncCandidates || []).filter(
-      (row: any) => String(row?.serviceProvider || row?.service_provider || '').toLowerCase() === 'shiprocket',
-    ).length
-    const syncedShipmozoCouriers = (syncCandidates || []).filter(
-      (row: any) => String(row?.serviceProvider || row?.service_provider || '').toLowerCase() === 'shipmozo',
-    ).length
+    let syncedShiprocketCouriers = 0
+    let syncedShipmozoCouriers = 0
+    let syncedIcarryCouriers = 0
 
-    const icarry = new IcarryService()
-    const icarryResp = await icarry.getEstimateSingleShipment({
-      origin_pincode: origin,
-      destination_pincode: destination,
-      origin_country_code: 'IN',
-      destination_country_code: 'IN',
-      shipment_mode: 'S',
-      shipment_type: 'P',
-      shipment_value: Math.max(orderAmount, 1),
-      weight: Math.max(weight, 0.1),
-      length: Math.max(length, 1),
-      breadth: Math.max(breadth, 1),
-      height: Math.max(height, 1),
-    })
+    const providerErrors: Array<{ provider: string; message: string }> = []
 
-    const estimateRows = Array.isArray((icarryResp as any)?.estimate)
-      ? (icarryResp as any).estimate
-      : Array.isArray((icarryResp as any)?.data?.estimate)
-        ? (icarryResp as any).data.estimate
-        : Array.isArray((icarryResp as any)?.data)
-          ? (icarryResp as any).data
-          : []
-
-    const normalizedIcarryRows = estimateRows
-      .map((record: any) => {
-        const courierId = Number(
-          record?.courier_id ??
-            record?.courierId ??
-            record?.id ??
-            record?.service_id ??
-            record?.provider_id ??
-            NaN,
-        )
-        const courierName = String(
-          record?.courier_name ??
-            record?.courier ??
-            record?.provider_name ??
-            record?.name ??
-            '',
-        ).trim()
-
-        if (!Number.isFinite(courierId) || !courierName) return null
-
-        return {
-          id: courierId,
-          name: courierName,
-          serviceProvider: 'icarry',
-          isEnabled: true,
-          businessType: ['b2c'],
-          updatedAt: new Date(),
-        }
+    try {
+      const syncCandidates = await fetchAvailableCouriersWithRatesAdmin({
+        origin,
+        destination,
+        payment_type: 'prepaid',
+        order_amount: orderAmount,
+        shipment_type: 'b2c',
+        weight,
+        length,
+        breadth,
+        height,
+        isCalculator: true,
       })
-      .filter((row: any) => Boolean(row))
 
-    if (normalizedIcarryRows.length) {
-      await db
-        .insert(couriers)
-        .values(normalizedIcarryRows as any)
-        .onConflictDoUpdate({
-          target: [couriers.id, couriers.serviceProvider],
-          set: {
-            name: sql`excluded.name`,
+      syncedShiprocketCouriers = (syncCandidates || []).filter(
+        (row: any) =>
+          String(row?.serviceProvider || row?.service_provider || '').toLowerCase() === 'shiprocket',
+      ).length
+      syncedShipmozoCouriers = (syncCandidates || []).filter(
+        (row: any) =>
+          String(row?.serviceProvider || row?.service_provider || '').toLowerCase() === 'shipmozo',
+      ).length
+    } catch (error: any) {
+      providerErrors.push({
+        provider: 'shiprocket+shipmozo',
+        message: String(error?.message || 'Sync failed'),
+      })
+    }
+
+    try {
+      const icarry = new IcarryService()
+      const icarryResp = await icarry.getEstimateSingleShipment({
+        origin_pincode: origin,
+        destination_pincode: destination,
+        origin_country_code: 'IN',
+        destination_country_code: 'IN',
+        shipment_mode: 'S',
+        shipment_type: 'P',
+        shipment_value: Math.max(orderAmount, 1),
+        weight: Math.max(weight, 0.1),
+        length: Math.max(length, 1),
+        breadth: Math.max(breadth, 1),
+        height: Math.max(height, 1),
+      })
+
+      const estimateRows = Array.isArray((icarryResp as any)?.estimate)
+        ? (icarryResp as any).estimate
+        : Array.isArray((icarryResp as any)?.data?.estimate)
+          ? (icarryResp as any).data.estimate
+          : Array.isArray((icarryResp as any)?.data)
+            ? (icarryResp as any).data
+            : []
+
+      const normalizedIcarryRows = estimateRows
+        .map((record: any) => {
+          const courierId = Number(
+            record?.courier_id ??
+              record?.courierId ??
+              record?.id ??
+              record?.service_id ??
+              record?.provider_id ??
+              NaN,
+          )
+          const courierName = String(
+            record?.courier_name ??
+              record?.courier ??
+              record?.provider_name ??
+              record?.name ??
+              '',
+          ).trim()
+
+          if (!Number.isFinite(courierId) || !courierName) return null
+
+          return {
+            id: courierId,
+            name: courierName,
+            serviceProvider: 'icarry',
             isEnabled: true,
-            businessType: sql`excluded.business_type`,
+            businessType: ['b2c'],
             updatedAt: new Date(),
-          },
+          }
         })
+        .filter((row: any) => Boolean(row))
+
+      if (normalizedIcarryRows.length) {
+        await db
+          .insert(couriers)
+          .values(normalizedIcarryRows as any)
+          .onConflictDoUpdate({
+            target: [couriers.id, couriers.serviceProvider],
+            set: {
+              name: sql`excluded.name`,
+              isEnabled: true,
+              businessType: sql`excluded.business_type`,
+              updatedAt: new Date(),
+            },
+          })
+      }
+
+      syncedIcarryCouriers = normalizedIcarryRows.length
+    } catch (error: any) {
+      providerErrors.push({
+        provider: 'icarry',
+        message: String(error?.message || 'Sync failed'),
+      })
+    }
+
+    const hasAtLeastOneSuccess =
+      syncedShiprocketCouriers > 0 || syncedShipmozoCouriers > 0 || syncedIcarryCouriers > 0
+
+    if (!hasAtLeastOneSuccess && providerErrors.length > 0) {
+      return res.status(502).json({
+        success: false,
+        message: 'Courier sync failed for all providers',
+        data: {
+          syncedShiprocketCouriers,
+          syncedShipmozoCouriers,
+          syncedIcarryCouriers,
+          providerErrors,
+        },
+      })
     }
 
     return res.json({
       success: true,
-      message: 'Courier sync completed',
+      message:
+        providerErrors.length > 0
+          ? 'Courier sync partially completed. Some providers failed.'
+          : 'Courier sync completed',
       data: {
         syncedShiprocketCouriers,
         syncedShipmozoCouriers,
-        syncedIcarryCouriers: normalizedIcarryRows.length,
+        syncedIcarryCouriers,
+        providerErrors,
       },
     })
   } catch (err: any) {

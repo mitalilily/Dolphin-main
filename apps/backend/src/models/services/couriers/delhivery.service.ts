@@ -63,12 +63,20 @@ export class DelhiveryService {
 
       return res.data
     } catch (err: any) {
+      const status = Number(err?.response?.status || 0)
       console.error('❌ Delhivery serviceability error:', {
         pincode,
         status: err.response?.status,
         data: JSON.stringify(err.response?.data, null, 2),
         message: err.message,
       })
+
+      // Fail open for auth/permission style issues so other providers can still be fetched.
+      // Upstream code treats empty delivery_codes as non-serviceable for Delhivery only.
+      if (status === 401 || status === 403) {
+        return { delivery_codes: [] } as any
+      }
+
       throw new Error('Failed to fetch Delhivery serviceability')
     }
   }

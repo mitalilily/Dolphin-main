@@ -39,6 +39,15 @@ const extractPreferredCarrierIds = (raw: unknown): number[] | undefined => {
   return ids.length ? ids : undefined
 }
 
+const extractServiceProviders = (raw: unknown): string[] | undefined => {
+  if (!raw) return undefined
+  const items = Array.isArray(raw) ? raw : String(raw).split(',')
+  const providers = items
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean)
+  return providers.length ? providers : undefined
+}
+
 const buildServiceabilityOptions = (body: any): Record<string, any> => {
   const options: Record<string, any> = {}
 
@@ -67,6 +76,14 @@ const buildServiceabilityOptions = (body: any): Record<string, any> => {
   const costInfo = parseOptionalBoolean(body?.cost_info ?? body?.costInfo) ?? undefined
   if (costInfo !== undefined) {
     options.cost_info = costInfo
+  }
+
+  const serviceProviders =
+    extractServiceProviders(body?.service_providers ?? body?.serviceProviders) ??
+    extractServiceProviders(body?.service_provider ?? body?.serviceProvider) ??
+    extractServiceProviders(body?.integration_type ?? body?.integrationType)
+  if (serviceProviders?.length) {
+    options.service_providers = serviceProviders
   }
 
   const explicitSource = parseOptionalNumber(body?.source_pincode ?? body?.sourcePincode)
