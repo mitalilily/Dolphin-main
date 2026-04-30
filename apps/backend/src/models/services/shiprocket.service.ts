@@ -1596,7 +1596,17 @@ export const fetchAvailableCouriersWithRates = async (
           })
           shipmozoPincodeResponse = serviceabilityResp
 
-          shipmozoAvailable = serviceabilityResp?.data?.serviceable === true
+          const shipmozoServiceabilityPayload = serviceabilityResp as any
+          const rawShipmozoServiceable =
+            shipmozoServiceabilityPayload?.data?.serviceable ??
+            shipmozoServiceabilityPayload?.serviceable ??
+            shipmozoServiceabilityPayload?.data?.is_serviceable ??
+            shipmozoServiceabilityPayload?.is_serviceable
+          shipmozoAvailable =
+            rawShipmozoServiceable === true ||
+            rawShipmozoServiceable === 1 ||
+            String(rawShipmozoServiceable).toLowerCase() === 'true' ||
+            String(rawShipmozoServiceable).toLowerCase() === 'yes'
           console.log('[Serviceability] Shipmozo pincode response', {
             serviceable: shipmozoAvailable,
             originPincode,
@@ -1604,7 +1614,6 @@ export const fetchAvailableCouriersWithRates = async (
           })
 
           if (
-            shipmozoAvailable &&
             Number(params.weight ?? 0) > 0 &&
             Number(params.length ?? 0) > 0 &&
             Number(params.breadth ?? 0) > 0 &&
@@ -1641,6 +1650,7 @@ export const fetchAvailableCouriersWithRates = async (
                   : []
 
             if (shipmozoRateRecords.length) {
+              shipmozoAvailable = true
               await syncShipmozoCourierRows(shipmozoRateRecords)
               registerServiceableProvider('shipmozo', {
                 providerId: 'shipmozo',
