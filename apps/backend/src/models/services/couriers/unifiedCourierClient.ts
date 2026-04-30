@@ -49,9 +49,11 @@ class ShipmozoUnifiedClient implements UnifiedCourierClient {
   }
 
   cancelShipment(shipmentId: string | number) {
-    throw new HttpError(
-      501,
-      'NEEDS MANUAL REVIEW: Shipmozo cancel-order requires both order_id and awb_number; unified shipmentId mapping is ambiguous.',
+    return Promise.reject(
+      new HttpError(
+        501,
+        'NEEDS MANUAL REVIEW: Shipmozo cancel-order requires both order_id and awb_number; unified shipmentId mapping is ambiguous.',
+      ),
     )
   }
 
@@ -90,9 +92,11 @@ class IcarryUnifiedClient implements UnifiedCourierClient {
   }
 
   schedulePickup(_input: Record<string, any>) {
-    throw new HttpError(
-      501,
-      'NEEDS MANUAL REVIEW: iCarry pickup scheduling endpoint is not documented in current codebase.',
+    return Promise.reject(
+      new HttpError(
+        501,
+        'NEEDS MANUAL REVIEW: iCarry pickup scheduling endpoint is not documented in current codebase.',
+      ),
     )
   }
 }

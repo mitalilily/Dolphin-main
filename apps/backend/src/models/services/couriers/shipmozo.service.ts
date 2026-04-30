@@ -355,6 +355,18 @@ export class ShipmozoService {
     return fallback
   }
 
+  private extractBusinessErrorMessage(response: ShipmozoResponse<any>, fallback: string) {
+    const dataError =
+      typeof response?.data === 'object' && response?.data
+        ? (response.data as any)?.error
+        : undefined
+    const candidates = [dataError, response?.message, fallback]
+    for (const candidate of candidates) {
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+    }
+    return fallback
+  }
+
   private assertRequiredFields(payload: Record<string, any>, fields: string[]) {
     const missing = fields.filter((field) => {
       const value = payload[field]
@@ -416,6 +428,14 @@ export class ShipmozoService {
         url: `${this.baseApi}/${path.replace(/^\/+/, '')}`,
         response: this.sanitizeForLogs(response.data),
       })
+
+      if (String(response?.data?.result ?? '') !== '1') {
+        throw new HttpError(
+          400,
+          this.extractBusinessErrorMessage(response.data, `Shipmozo API error for ${path}`),
+        )
+      }
+
       return response.data
     } catch (err: any) {
       this.log('API request failed', {
