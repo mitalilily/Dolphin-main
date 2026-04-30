@@ -1,6 +1,5 @@
 import {
   Badge,
-  Button,
   Flex,
   HStack,
   Spinner,
@@ -21,7 +20,6 @@ import { useMemo } from 'react'
 import {
   useCouriers,
   useServiceProviders,
-  useSyncServiceProviderCouriers,
   useUpdateServiceProviderStatus,
 } from 'hooks/useCouriers'
 
@@ -46,7 +44,6 @@ const ServiceProviders = () => {
   const { data: providers = [], isLoading, error } = useServiceProviders()
   const { data: couriers = [], isLoading: isCouriersLoading } = useCouriers()
   const updateStatus = useUpdateServiceProviderStatus()
-  const syncProviders = useSyncServiceProviderCouriers()
   const toast = useToast()
 
   const normalizedProviders = useMemo(() => {
@@ -124,32 +121,6 @@ const ServiceProviders = () => {
     )
   }
 
-  const handleSync = () => {
-    syncProviders.mutate(
-      {},
-      {
-        onSuccess: (data) => {
-          const providerErrors = Array.isArray(data?.providerErrors) ? data.providerErrors : []
-          const errorSummary = providerErrors.length
-            ? ` | Errors: ${providerErrors.map((e) => `${e.provider}: ${e.message}`).join(' ; ')}`
-            : ''
-          toast({
-            title: 'Provider couriers synced',
-            description: `Shiprocket: ${Number(data?.syncedShiprocketCouriers || 0)}, Shipmozo: ${Number(data?.syncedShipmozoCouriers || 0)}, iCarry: ${Number(data?.syncedIcarryCouriers || 0)}${errorSummary}`,
-            status: 'success',
-          })
-        },
-        onError: (syncError) => {
-          toast({
-            title: 'Failed to sync provider couriers',
-            description: syncError?.message || 'Please check courier credentials and retry.',
-            status: 'error',
-          })
-        },
-      },
-    )
-  }
-
   return (
     <Flex direction="column" pt={{ base: '120px', md: '75px' }} gap={4}>
       <Text fontSize="xl" fontWeight="bold">
@@ -159,14 +130,6 @@ const ServiceProviders = () => {
         <Text fontSize="sm" color="gray.500">
           Manage provider status and review newly added couriers grouped under each provider.
         </Text>
-        <Button
-          colorScheme="blue"
-          size="sm"
-          onClick={handleSync}
-          isLoading={syncProviders.isPending}
-        >
-          Sync Couriers
-        </Button>
       </HStack>
 
       <TableContainer borderWidth="1px" borderRadius="lg">
