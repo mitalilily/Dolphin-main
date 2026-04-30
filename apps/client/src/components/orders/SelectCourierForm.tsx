@@ -110,6 +110,7 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
     payment_type: orderType,
     orderAmount: courierPayloadOrderAmount,
     shipmentType: shipment_type,
+    serviceProviders: shipment_type === 'b2c' ? ['shipmozo'] : undefined,
   }
 
   if (shipment_type === 'b2c') {

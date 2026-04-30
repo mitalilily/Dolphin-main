@@ -40,6 +40,7 @@ export interface UseAvailableCouriersParams {
   payment_type: 'cod' | 'prepaid'
   context?: string
   isCalculator?: boolean
+  serviceProviders?: string[]
 }
 
 export const useAvailableCouriers = (params: UseAvailableCouriersParams) => {
@@ -91,6 +92,7 @@ export const useAvailableCouriers = (params: UseAvailableCouriersParams) => {
         length,
         ...(shipmentType && { shipment_type: shipmentType }),
         isCalculator: params.isCalculator === true || params.context === 'rate_calculator',
+        service_providers: params.serviceProviders,
         breadth,
         height,
       }),

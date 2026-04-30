@@ -535,6 +535,7 @@ interface NimbusServiceabilityParams {
   pickupId?: string
   // Hint that this call is coming from a rate calculator UI (we can skip heavy live checks)
   isCalculator?: boolean
+  service_providers?: string[]
 }
 
 // Delhivery-only serviceability.
@@ -1248,6 +1249,18 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Registry of enabled providers (by serviceProvider string)
     const enabledProviders = new Set(Object.keys(systemCourierMap))
+    const requestedProviders = Array.isArray(params.service_providers)
+      ? params.service_providers
+          .map((provider) => normalizeProviderKey(provider))
+          .filter((provider): provider is string => Boolean(provider))
+      : []
+    if (requestedProviders.length) {
+      for (const provider of Array.from(enabledProviders)) {
+        if (!requestedProviders.includes(provider)) {
+          enabledProviders.delete(provider)
+        }
+      }
+    }
 
     // ðŸ”¹ Start with an empty list of candidate couriers
     let combinedCouriers: any[] = []
