@@ -1277,56 +1277,68 @@ export const fetchAvailableCouriersWithRates = async (
       })
 
       if (originPincode && destinationPincode) {
-        const [originResp, destinationResp] = await Promise.all([
-          delhivery.checkServiceability(originPincode),
-          delhivery.checkServiceability(destinationPincode),
-        ])
-        delhiveryResp = destinationResp
+        try {
+          const [originResp, destinationResp] = await Promise.all([
+            delhivery.checkServiceability(originPincode),
+            delhivery.checkServiceability(destinationPincode),
+          ])
+          delhiveryResp = destinationResp
 
-        const originService = originResp?.delivery_codes?.[0]?.postal_code
-        const destinationService = destinationResp?.delivery_codes?.[0]?.postal_code
+          const originService = originResp?.delivery_codes?.[0]?.postal_code
+          const destinationService = destinationResp?.delivery_codes?.[0]?.postal_code
 
-        delhiveryOriginServiceable =
-          Boolean(originResp?.delivery_codes?.length) && originService?.pickup === 'Y'
-        delhiveryDestinationServiceable =
-          Boolean(destinationResp?.delivery_codes?.length) &&
-          (delhiveryRequiresCOD
-            ? destinationService?.cod === 'Y'
-            : destinationService?.pre_paid === 'Y')
+          delhiveryOriginServiceable =
+            Boolean(originResp?.delivery_codes?.length) && originService?.pickup === 'Y'
+          delhiveryDestinationServiceable =
+            Boolean(destinationResp?.delivery_codes?.length) &&
+            (delhiveryRequiresCOD
+              ? destinationService?.cod === 'Y'
+              : destinationService?.pre_paid === 'Y')
 
-        console.log('[Serviceability] Delhivery pincode check result', {
-          mode: isCalculator ? 'calculator' : 'standard',
-          origin: originPincode,
-          destination: destinationPincode,
-          paymentType: normalizedPaymentType,
-          requiresCOD: delhiveryRequiresCOD,
-          originAvailableRecords: originResp?.delivery_codes?.length ?? 0,
-          destinationAvailableRecords: destinationResp?.delivery_codes?.length ?? 0,
-          originPickup: originService?.pickup,
-          destinationPrePaid: destinationService?.pre_paid,
-          destinationCod: destinationService?.cod,
-          destinationRemark: destinationService?.remark ?? '',
-        })
-
-        delhiveryAvailable = delhiveryOriginServiceable && delhiveryDestinationServiceable
-
-        // Keep calculator path lighter: serviceability is required, TAT is optional.
-        if (delhiveryAvailable && !isCalculator) {
-          const tatResp = await delhivery.getExpectedTAT(
-            originPincode,
-            destinationPincode,
-            'S',
-            'B2C',
-          )
-          if (tatResp && Number.isFinite(Number(tatResp)) && Number(tatResp) > 0) {
-            delhiveryEDD = `${Number(tatResp)} Days`
-          }
-          console.log('[Serviceability] Delhivery TAT evaluated', {
-            mode: 'standard',
+          console.log('[Serviceability] Delhivery pincode check result', {
+            mode: isCalculator ? 'calculator' : 'standard',
             origin: originPincode,
             destination: destinationPincode,
-            tat: tatResp,
-            edd: delhiveryEDD,
+            paymentType: normalizedPaymentType,
+            requiresCOD: delhiveryRequiresCOD,
+            originAvailableRecords: originResp?.delivery_codes?.length ?? 0,
+            destinationAvailableRecords: destinationResp?.delivery_codes?.length ?? 0,
+            originPickup: originService?.pickup,
+            destinationPrePaid: destinationService?.pre_paid,
+            destinationCod: destinationService?.cod,
+            destinationRemark: destinationService?.remark ?? '',
+          })
+
+          delhiveryAvailable = delhiveryOriginServiceable && delhiveryDestinationServiceable
+
+          // Keep calculator path lighter: serviceability is required, TAT is optional.
+          if (delhiveryAvailable && !isCalculator) {
+            const tatResp = await delhivery.getExpectedTAT(
+              originPincode,
+              destinationPincode,
+              'S',
+              'B2C',
+            )
+            if (tatResp && Number.isFinite(Number(tatResp)) && Number(tatResp) > 0) {
+              delhiveryEDD = `${Number(tatResp)} Days`
+            }
+            console.log('[Serviceability] Delhivery TAT evaluated', {
+              mode: 'standard',
+              origin: originPincode,
+              destination: destinationPincode,
+              tat: tatResp,
+              edd: delhiveryEDD,
+            })
+          }
+        } catch (err: any) {
+          delhiveryAvailable = false
+          delhiveryOriginServiceable = false
+          delhiveryDestinationServiceable = false
+          console.error('❌ Delhivery serviceability error:', {
+            pincode: destinationPincode,
+            status: err?.response?.status ?? err?.statusCode ?? null,
+            data: err?.response?.data ?? null,
+            message: err?.message || 'Failed to fetch Delhivery serviceability',
           })
         }
       } else {
