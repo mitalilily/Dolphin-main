@@ -1579,6 +1579,7 @@ export const fetchAvailableCouriersWithRates = async (
     let shipmozoAvailable = false
     let shipmozoResp: any = null
     let shipmozoRateRecords: any[] = []
+    let shipmozoPincodeResponse: any = null
     if (enabledProviders.has('shipmozo')) {
       const shipmozo = new ShipmozoService()
       const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
@@ -1593,6 +1594,7 @@ export const fetchAvailableCouriersWithRates = async (
             pickup_pincode: originPincode,
             delivery_pincode: destinationPincode,
           })
+          shipmozoPincodeResponse = serviceabilityResp
 
           shipmozoAvailable = serviceabilityResp?.data?.serviceable === true
           console.log('[Serviceability] Shipmozo pincode response', {
@@ -1649,6 +1651,22 @@ export const fetchAvailableCouriersWithRates = async (
                 raw: shipmozoResp,
               })
             }
+          }
+
+          if (shipmozoAvailable && !serviceableProviders.has('shipmozo')) {
+            registerServiceableProvider('shipmozo', {
+              providerId: 'shipmozo',
+              providerName: 'Shipmozo',
+              codAvailable: true,
+              prepaidAvailable: true,
+              edd: '3-7 Days',
+              raw: shipmozoResp ?? shipmozoPincodeResponse,
+            })
+            console.log('[Serviceability] Shipmozo fallback enabled from pincode serviceability', {
+              originPincode,
+              destinationPincode,
+              hasRateRecords: shipmozoRateRecords.length > 0,
+            })
           }
         } catch (err: any) {
           console.error('âŒ Shipmozo serviceability error:', err?.message || err)
