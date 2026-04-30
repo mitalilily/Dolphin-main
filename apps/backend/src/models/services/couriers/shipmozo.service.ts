@@ -339,6 +339,10 @@ export class ShipmozoService {
         Accept: 'application/json',
         'public-key': this.publicKey,
         'private-key': this.privateKey,
+        public_key: this.publicKey,
+        private_key: this.privateKey,
+        'x-public-key': this.publicKey,
+        'x-private-key': this.privateKey,
       },
     })
   }

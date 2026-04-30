@@ -3876,9 +3876,10 @@ export const createB2CShipmentService = async (
         }
       } else {
         const shipmozo = new ShipmozoService()
-        const warehouseId = params.pickup_location_id
-          ? null
-          : shipmozo.getDefaultWarehouseId()
+        const requestedWarehouseId = String(
+          params.pickup_location_id ?? params.pickup?.warehouse_name ?? '',
+        ).trim()
+        const warehouseId = requestedWarehouseId || shipmozo.getDefaultWarehouseId()
 
         if (!warehouseId) {
           throw new HttpError(
