@@ -3879,7 +3879,62 @@ export const createB2CShipmentService = async (
         const requestedWarehouseId = String(
           params.pickup_location_id ?? params.pickup?.warehouse_name ?? '',
         ).trim()
-        const warehouseId = requestedWarehouseId || shipmozo.getDefaultWarehouseId()
+        const configuredDefaultWarehouseId = shipmozo.getDefaultWarehouseId()
+        let warehouseId = requestedWarehouseId || configuredDefaultWarehouseId
+
+        try {
+          const warehousesResp = await shipmozo.getWarehouses()
+          const warehouses = Array.isArray(warehousesResp?.data) ? warehousesResp.data : []
+          const normalizedRequested = requestedWarehouseId.toLowerCase()
+          const toNormalized = (value: unknown) => String(value ?? '').trim().toLowerCase()
+          const isDefaultWarehouse = (warehouse: any) => {
+            const marker = toNormalized(warehouse?.default)
+            return marker === '1' || marker === 'true' || marker === 'yes' || marker === 'y'
+          }
+
+          const matchedRequestedWarehouse = requestedWarehouseId
+            ? warehouses.find((warehouse: any) => {
+                const id = String(warehouse?.id ?? '').trim()
+                const title = toNormalized(warehouse?.address_title)
+                const name = toNormalized(warehouse?.name)
+                return id === requestedWarehouseId || title === normalizedRequested || name === normalizedRequested
+              })
+            : null
+
+          const matchedConfiguredDefaultWarehouse = configuredDefaultWarehouseId
+            ? warehouses.find(
+                (warehouse: any) =>
+                  String(warehouse?.id ?? '').trim() === String(configuredDefaultWarehouseId).trim(),
+              )
+            : null
+
+          const apiDefaultWarehouse = warehouses.find((warehouse: any) => isDefaultWarehouse(warehouse))
+          const firstActiveWarehouse = warehouses.find((warehouse: any) => {
+            const status = toNormalized(warehouse?.status)
+            return !status || status === '1' || status === 'true' || status === 'active' || status === 'enabled'
+          })
+
+          if (matchedRequestedWarehouse) {
+            warehouseId = String(matchedRequestedWarehouse.id).trim()
+          } else if (matchedConfiguredDefaultWarehouse) {
+            warehouseId = String(matchedConfiguredDefaultWarehouse.id).trim()
+          } else if (apiDefaultWarehouse) {
+            warehouseId = String(apiDefaultWarehouse.id ?? '').trim() || warehouseId
+          } else if (firstActiveWarehouse) {
+            warehouseId = String(firstActiveWarehouse.id ?? '').trim() || warehouseId
+          }
+
+          console.log('Shipmozo warehouse resolved for booking', {
+            requestedWarehouseId: requestedWarehouseId || null,
+            configuredDefaultWarehouseId: configuredDefaultWarehouseId || null,
+            resolvedWarehouseId: warehouseId || null,
+            totalWarehouses: warehouses.length,
+          })
+        } catch (warehouseLookupError: any) {
+          console.warn('Shipmozo warehouse lookup failed, using configured warehouse fallback', {
+            message: warehouseLookupError?.message || warehouseLookupError,
+          })
+        }
 
         if (!warehouseId) {
           throw new HttpError(
