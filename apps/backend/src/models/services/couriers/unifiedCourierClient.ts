@@ -2,8 +2,9 @@ import { HttpError } from '../../../utils/classes'
 import { IcarryService } from './icarry.service'
 import { ShipmozoService } from './shipmozo.service'
 import { ShiprocketCourierService } from './shiprocket.service'
+import { TruxcargoService } from './truxcargo.service'
 
-export type UnifiedCourierProvider = 'shiprocket' | 'shipmozo' | 'icarry'
+export type UnifiedCourierProvider = 'shiprocket' | 'shipmozo' | 'icarry' | 'truxcargo'
 
 export interface UnifiedCourierClient {
   createShipment(orderData: Record<string, any>): Promise<any>
@@ -101,8 +102,38 @@ class IcarryUnifiedClient implements UnifiedCourierClient {
   }
 }
 
+class TruxcargoUnifiedClient implements UnifiedCourierClient {
+  private readonly service = new TruxcargoService()
+
+  createShipment(orderData: Record<string, any>) {
+    return this.service.createOrder(orderData || {})
+  }
+
+  trackShipment(trackingId: string | number) {
+    return this.service.trackShipment({ waybill: String(trackingId || '') })
+  }
+
+  cancelShipment(shipmentId: string | number) {
+    return this.service.cancelOrder({ waybill: String(shipmentId || '') })
+  }
+
+  getRates(input: Record<string, any>) {
+    return this.service.getShippingCharge(input || {})
+  }
+
+  schedulePickup(_input: Record<string, any>) {
+    return Promise.reject(
+      new HttpError(
+        501,
+        'NEEDS MANUAL REVIEW: Truxcargo pickup scheduling endpoint is not documented in current codebase.',
+      ),
+    )
+  }
+}
+
 export const getUnifiedCourierClient = (provider: UnifiedCourierProvider): UnifiedCourierClient => {
   if (provider === 'shiprocket') return new ShiprocketUnifiedClient()
   if (provider === 'shipmozo') return new ShipmozoUnifiedClient()
+  if (provider === 'truxcargo') return new TruxcargoUnifiedClient()
   return new IcarryUnifiedClient()
 }

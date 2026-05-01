@@ -4,6 +4,7 @@ import Papa from 'papaparse'
 import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProviders'
 import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { SHIPMOZO_COURIER_SEEDS } from '../../constants/shipmozoCouriers'
+import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
 import { db } from '../../models/client'
 import {
   deleteCourierService,
@@ -21,6 +22,7 @@ import { EkartService } from '../../models/services/couriers/ekart.service'
 import { IcarryService } from '../../models/services/couriers/icarry.service'
 import { ShiprocketCourierService } from '../../models/services/couriers/shiprocket.service'
 import { ShipmozoService } from '../../models/services/couriers/shipmozo.service'
+import { TruxcargoService } from '../../models/services/couriers/truxcargo.service'
 import { XpressbeesService } from '../../models/services/couriers/xpressbees.service'
 import { fetchAvailableCouriersWithRatesAdmin } from '../../models/services/shiprocket.service'
 import { courier_credentials } from '../../models/schema/courierCredentials'
@@ -192,6 +194,8 @@ export const getAllCouriersController = async (req: Request, res: Response) => {
 
 export const getAllCouriersListController = async (req: Request, res: Response) => {
   try {
+    let icarrySyncError: string | null = null
+
     await db
       .insert(couriers)
       .values(
@@ -199,6 +203,28 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
           id: row.id,
           name: row.name,
           serviceProvider: 'shiprocket',
+          isEnabled: true,
+          businessType: row.businessType,
+          updatedAt: new Date(),
+        })) as any,
+      )
+      .onConflictDoUpdate({
+        target: [couriers.id, couriers.serviceProvider],
+        set: {
+          name: sql`excluded.name`,
+          isEnabled: sql`${couriers.isEnabled}`,
+          businessType: sql`excluded.business_type`,
+          updatedAt: new Date(),
+        },
+      })
+
+    await db
+      .insert(couriers)
+      .values(
+        TRUXCARGO_COURIER_SEEDS.map((row) => ({
+          id: row.id,
+          name: row.name,
+          serviceProvider: 'truxcargo',
           isEnabled: true,
           businessType: row.businessType,
           updatedAt: new Date(),
@@ -260,6 +286,7 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
         const normalizedIcarryRows = normalizeIcarryCourierRows(extractIcarryEstimateRows(icarryResp))
         await upsertIcarryCouriers(normalizedIcarryRows)
       } catch (icarrySyncErr: any) {
+        icarrySyncError = String(icarrySyncErr?.message || icarrySyncErr || 'iCarry sync failed')
         console.warn(
           '[Courier List] iCarry sync skipped due to API error:',
           String(icarrySyncErr?.message || icarrySyncErr),
@@ -310,7 +337,17 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
       .where(whereCondition)
       .orderBy(desc(couriers.createdAt))
 
-    res.json({ success: true, data: courierList })
+    res.json({
+      success: true,
+      data: courierList,
+      syncDiagnostics: {
+        icarry: {
+          attempted: shouldSyncIcarry,
+          success: shouldSyncIcarry ? !icarrySyncError : null,
+          message: icarrySyncError,
+        },
+      },
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: 'Failed to fetch couriers' })
@@ -537,6 +574,13 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
         apiKeyMasked: '',
         clientId: '',
       },
+      truxcargo: {
+        provider: 'truxcargo',
+        apiBase: 'https://b2b.truxcargo.com',
+        userId: '',
+        hasApiKey: false,
+        apiKeyMasked: '',
+      },
       icarry: {
         provider: 'icarry',
         apiBase: '',
@@ -626,6 +670,17 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
             ? `${apiKey.slice(0, 4)}${'*'.repeat(Math.max(apiKey.length - 8, 0))}${apiKey.slice(-4)}`
             : '',
           clientId: row.clientId || '',
+        }
+      } else if (provider === 'truxcargo') {
+        const apiKey = row.apiKey || ''
+        acc.truxcargo = {
+          provider: 'truxcargo',
+          apiBase: row.apiBase || 'https://b2b.truxcargo.com',
+          userId: row.clientId || '',
+          hasApiKey: Boolean(apiKey.trim()),
+          apiKeyMasked: apiKey
+            ? `${apiKey.slice(0, 4)}${'*'.repeat(Math.max(apiKey.length - 8, 0))}${apiKey.slice(-4)}`
+            : '',
         }
       } else if (provider === 'icarry') {
         const apiKey = row.apiKey || ''
@@ -915,6 +970,7 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     let syncedShiprocketCouriers = 0
     let syncedShipmozoCouriers = 0
     let syncedIcarryCouriers = 0
+    let syncedTruxcargoCouriers = 0
 
     const providerErrors: Array<{ provider: string; message: string }> = []
 
@@ -948,6 +1004,35 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     }
 
     try {
+      const truxRows = TRUXCARGO_COURIER_SEEDS.map((row) => ({
+        id: row.id,
+        name: row.name,
+        serviceProvider: 'truxcargo',
+        isEnabled: true,
+        businessType: row.businessType,
+        updatedAt: new Date(),
+      }))
+      await db
+        .insert(couriers)
+        .values(truxRows as any)
+        .onConflictDoUpdate({
+          target: [couriers.id, couriers.serviceProvider],
+          set: {
+            name: sql`excluded.name`,
+            isEnabled: sql`${couriers.isEnabled}`,
+            businessType: sql`excluded.business_type`,
+            updatedAt: new Date(),
+          },
+        })
+      syncedTruxcargoCouriers = truxRows.length
+    } catch (error: any) {
+      providerErrors.push({
+        provider: 'truxcargo',
+        message: String(error?.message || 'Sync failed'),
+      })
+    }
+
+    try {
       const icarry = new IcarryService()
       const icarryResp = await icarry.getEstimateSingleShipment({
         origin_pincode: origin,
@@ -975,7 +1060,10 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     }
 
     const hasAtLeastOneSuccess =
-      syncedShiprocketCouriers > 0 || syncedShipmozoCouriers > 0 || syncedIcarryCouriers > 0
+      syncedShiprocketCouriers > 0 ||
+      syncedShipmozoCouriers > 0 ||
+      syncedIcarryCouriers > 0 ||
+      syncedTruxcargoCouriers > 0
 
     if (!hasAtLeastOneSuccess && providerErrors.length > 0) {
       return res.status(502).json({
@@ -985,6 +1073,7 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
           syncedShiprocketCouriers,
           syncedShipmozoCouriers,
           syncedIcarryCouriers,
+          syncedTruxcargoCouriers,
           providerErrors,
         },
       })
@@ -1000,6 +1089,7 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
         syncedShiprocketCouriers,
         syncedShipmozoCouriers,
         syncedIcarryCouriers,
+        syncedTruxcargoCouriers,
         providerErrors,
       },
     })
@@ -1278,6 +1368,80 @@ export const updateIcarryCredentialsController = async (req: Request, res: Respo
   } catch (err) {
     console.error(err)
     res.status(500).json({ success: false, message: 'Failed to update iCarry credentials' })
+  }
+}
+
+export const updateTruxcargoCredentialsController = async (req: Request, res: Response) => {
+  const { apiBase, userId, apiKey } = req.body || {}
+
+  try {
+    const nextApiBase = typeof apiBase === 'string' ? apiBase.trim() : undefined
+    const nextUserId = typeof userId === 'string' ? userId.trim() : undefined
+    const nextApiKey = typeof apiKey === 'string' ? apiKey.trim() : undefined
+    const hasApiKey = typeof nextApiKey === 'string' && nextApiKey.length > 0
+
+    const [existing] = await db
+      .select({ id: courier_credentials.id })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'truxcargo'))
+      .limit(1)
+
+    if (existing) {
+      const updatePayload: Record<string, any> = {
+        updatedAt: new Date(),
+      }
+      if (nextApiBase !== undefined) {
+        updatePayload.apiBase = nextApiBase || 'https://b2b.truxcargo.com'
+      }
+      if (nextUserId !== undefined) {
+        updatePayload.clientId = nextUserId
+      }
+      if (hasApiKey) {
+        updatePayload.apiKey = nextApiKey
+      }
+
+      await db
+        .update(courier_credentials)
+        .set(updatePayload)
+        .where(eq(courier_credentials.provider, 'truxcargo'))
+    } else {
+      await db.insert(courier_credentials).values({
+        provider: 'truxcargo',
+        apiBase: nextApiBase || 'https://b2b.truxcargo.com',
+        clientName: '',
+        clientId: nextUserId || '',
+        apiKey: hasApiKey ? nextApiKey : '',
+        username: '',
+        password: '',
+        webhookSecret: '',
+      })
+    }
+
+    TruxcargoService.clearCachedConfig()
+
+    const [saved] = await db
+      .select({
+        apiBase: courier_credentials.apiBase,
+        userId: courier_credentials.clientId,
+        apiKey: courier_credentials.apiKey,
+      })
+      .from(courier_credentials)
+      .where(eq(courier_credentials.provider, 'truxcargo'))
+      .limit(1)
+
+    res.json({
+      success: true,
+      message: 'Truxcargo credentials updated successfully',
+      data: {
+        provider: 'truxcargo',
+        apiBase: saved?.apiBase || 'https://b2b.truxcargo.com',
+        userId: saved?.userId || '',
+        hasApiKey: Boolean((saved?.apiKey || '').trim()),
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ success: false, message: 'Failed to update Truxcargo credentials' })
   }
 }
 

@@ -65,6 +65,12 @@ export type IcarryConfig = {
   clientId?: string
 }
 
+export type TruxcargoConfig = {
+  apiBase?: string
+  userId?: string
+  apiKey?: string
+}
+
 export type SmartshipConfig = {
   username?: string
   password?: string
@@ -93,6 +99,7 @@ export type CourierConfig =
   | ShiprocketConfig
   | JuxcargoConfig
   | IcarryConfig
+  | TruxcargoConfig
 
 export interface CourierCredentialsUpsertPayload {
   serviceProvider: ServiceProviderId
@@ -180,6 +187,13 @@ const hasEnvForProviderAndType = (provider: ServiceProviderId, _type: BusinessTy
       process.env.ICARRY_API_KEY ||
       process.env.ICARRY_PASSWORD ||
       process.env.ICARRY_CLIENT_ID
+    )
+  }
+  if (provider === 'truxcargo') {
+    return !!(
+      process.env.TRUXCARGO_API_BASE ||
+      process.env.TRUXCARGO_USER_ID ||
+      process.env.TRUXCARGO_API_KEY
     )
   }
   return false
@@ -271,6 +285,14 @@ const buildConfigFromRow = (provider: ServiceProviderId, row: typeof courierCred
     }
     return cfg
   }
+  if (provider === 'truxcargo') {
+    const cfg: TruxcargoConfig = {
+      apiBase: normalize(row.apiBase),
+      userId: normalize(row.clientId),
+      apiKey: normalize(row.apiKey),
+    }
+    return cfg
+  }
 
   const cfg: XpressbeesConfig = {
     apiBase: normalize(row.apiBase),
@@ -297,6 +319,9 @@ const rowHasUsableCredentials = (
 
   if (provider === 'shipmozo') {
     return Boolean((clientId && apiKey) || (username && password))
+  }
+  if (provider === 'truxcargo') {
+    return Boolean(apiKey)
   }
 
   return Boolean(apiBase || apiKey || clientId || username || password)
@@ -344,7 +369,10 @@ export const upsertCourierCredentials = async (
         '',
     ),
     clientId: normalize(
-      (mergedConfig?.clientId as string) || (mergedConfig?.publicKey as string) || '',
+      (mergedConfig?.clientId as string) ||
+        (mergedConfig?.publicKey as string) ||
+        (mergedConfig?.userId as string) ||
+        '',
     ),
     username: normalize((mergedConfig?.username as string) || (mergedConfig?.email as string) || ''),
     password: normalize((mergedConfig?.password as string) || ''),

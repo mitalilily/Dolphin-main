@@ -3,8 +3,9 @@ import { randomUUID } from 'crypto'
 import { db, pool } from '../models/client'
 import { couriers, plans, shippingRateSlabs, shippingRates, zones } from '../schema/schema'
 
-const TARGET_PROVIDERS = ['shiprocket', 'icarry'] as const
+const TARGET_PROVIDERS = ['icarry', 'truxcargo'] as const
 const BASE_RATE = '20.00'
+const SLAB_BASE_RATE = '10.00'
 const COD_CHARGES = '20.00'
 const COD_PERCENT = '2.00'
 const EXTRA_RATE = '10.00'
@@ -29,7 +30,7 @@ async function main() {
     .where(inArray(couriers.serviceProvider, [...TARGET_PROVIDERS]))
 
   if (!providerCouriers.length) {
-    throw new Error('No Shiprocket/iCarry couriers found. Sync couriers first.')
+    throw new Error('No iCarry/Truxcargo couriers found. Sync couriers first.')
   }
 
   const b2cZones = await db
@@ -116,7 +117,7 @@ async function main() {
     shipping_rate_id: rate.id,
     weight_from: '0.000',
     weight_to: '0.500',
-    rate: BASE_RATE,
+    rate: SLAB_BASE_RATE,
     extra_rate: EXTRA_RATE,
     extra_weight_unit: EXTRA_WEIGHT_UNIT,
   }))

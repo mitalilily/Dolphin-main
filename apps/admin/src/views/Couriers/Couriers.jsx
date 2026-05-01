@@ -40,7 +40,7 @@ import {
   useUpdateCourierStatus,
 } from 'hooks/useCouriers'
 import { useDebounce } from 'hooks/useDebounce'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { GenericTable } from 'views/Dashboard/Tables/components/GenericTable'
 
@@ -69,6 +69,21 @@ const Couriers = () => {
     }
     return String(a?.name || '').localeCompare(String(b?.name || ''))
   })
+  const enabledCouriers = sortedCouriers.filter((row) => Boolean(row?.isEnabled))
+  const disabledCouriers = sortedCouriers.filter((row) => !row?.isEnabled)
+
+  useEffect(() => {
+    const diagnostics = couriers?._syncDiagnostics
+    const message = diagnostics?.icarry?.message
+    if (diagnostics?.icarry?.attempted && message) {
+      toast({
+        title: 'iCarry sync warning',
+        description: message,
+        status: 'warning',
+        isClosable: true,
+      })
+    }
+  }, [couriers, toast])
 
   const columnKeys = ['id', 'name', 'serviceProvider', 'businessType', 'isEnabled', 'createdAt']
   const captions = [
@@ -314,6 +329,7 @@ const Couriers = () => {
             <option value="xpressbees">Xpressbees</option>
             <option value="shipmozo">Shipmozo</option>
             <option value="shiprocket">Shiprocket</option>
+            <option value="truxcargo">Truxcargo</option>
             <option value="icarry">iCarry</option>
             <option value="juxcargo">Juxcargo</option>
           </Select>
@@ -341,8 +357,8 @@ const Couriers = () => {
 
       {/* Couriers Table */}
       <GenericTable
-        title="Couriers List"
-        data={sortedCouriers}
+        title="Enabled Couriers"
+        data={enabledCouriers}
         columnKeys={columnKeys}
         captions={captions}
         renderers={renderers}
@@ -432,6 +448,100 @@ const Couriers = () => {
           </HStack>
         )}
       />
+      {disabledCouriers.length > 0 && (
+        <GenericTable
+          title="Disabled Couriers"
+          data={disabledCouriers}
+          columnKeys={columnKeys}
+          captions={captions}
+          renderers={renderers}
+          loading={isLoading}
+          paginated={false}
+          renderActions={(row) => (
+            <HStack spacing={3} align="center">
+              <Switch
+                colorScheme="green"
+                isChecked={row.isEnabled}
+                onChange={() =>
+                  updateCourierStatus.mutate(
+                    {
+                      id: row.id,
+                      serviceProvider: row.serviceProvider,
+                      isEnabled: !row.isEnabled,
+                    },
+                    {
+                      onSuccess: () => {
+                        toast({
+                          title: `Courier ${row.isEnabled ? 'disabled' : 'enabled'} successfully`,
+                          status: 'success',
+                        })
+                      },
+                      onError: () => {
+                        toast({
+                          title: 'Failed to update courier status',
+                          status: 'error',
+                        })
+                      },
+                    },
+                  )
+                }
+              />
+              <Popover
+                isLazy
+                placement="auto"
+                closeOnBlur={true}
+                isOpen={openPopoverId === row?.id}
+                onClose={() => setOpenPopoverId(null)}
+              >
+                <PopoverTrigger>
+                  <IconButton
+                    icon={<DeleteIcon color="red" />}
+                    aria-label="Delete courier"
+                    size="sm"
+                    onClick={() => setOpenPopoverId(row.id)}
+                  />
+                </PopoverTrigger>
+                <Portal>
+                  <PopoverContent w="200px">
+                    <PopoverArrow />
+                    <PopoverCloseButton onClick={() => setOpenPopoverId(null)} />
+                    <PopoverHeader fontSize="sm">Confirm Delete</PopoverHeader>
+                    <PopoverBody fontSize="sm">
+                      Are you sure you want to delete <b>{row.name}</b>?
+                    </PopoverBody>
+                    <PopoverFooter display="flex" justifyContent="flex-end" gap={2}>
+                      <Button size="xs" onClick={() => setOpenPopoverId(null)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        size="xs"
+                        colorScheme="red"
+                        isLoading={deleteCourier?.isPending}
+                        onClick={() => {
+                          deleteCourier.mutate(
+                            { id: row.id, serviceProvider: row.serviceProvider },
+                            {
+                              onSuccess: () => {
+                                toast({ title: 'Courier deleted', status: 'success' })
+                                setOpenPopoverId(null)
+                              },
+                              onError: () => {
+                                toast({ title: 'Failed to delete', status: 'error' })
+                              },
+                            },
+                          )
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </PopoverFooter>
+                  </PopoverContent>
+                </Portal>
+              </Popover>
+            </HStack>
+          )}
+        />
+      )}
 
       {/* Custom Modal */}
       <CustomModal
@@ -478,6 +588,7 @@ const Couriers = () => {
             <option value="xpressbees">Xpressbees</option>
             <option value="shipmozo">Shipmozo</option>
             <option value="shiprocket">Shiprocket</option>
+            <option value="truxcargo">Truxcargo</option>
             <option value="icarry">iCarry</option>
             <option value="juxcargo">Juxcargo</option>
           </Select>

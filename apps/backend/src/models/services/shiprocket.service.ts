@@ -66,6 +66,7 @@ import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
 import { ShiprocketCourierService } from './couriers/shiprocket.service'
 import { ShipmozoService } from './couriers/shipmozo.service'
+import { TruxcargoService } from './couriers/truxcargo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { calculateOrderWeights } from './courierWeightCalculation.service'
 import { generateLabelForOrder } from './generateCustomLabelService'
@@ -1094,7 +1095,14 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Build registry of enabled couriers by service provider
     // Filter by business type: check if business_type JSONB array contains 'b2c'
-    const SUPPORTED_PROVIDERS = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket']
+    const SUPPORTED_PROVIDERS = [
+      'delhivery',
+      'ekart',
+      'xpressbees',
+      'shipmozo',
+      'shiprocket',
+      'truxcargo',
+    ]
     const systemCourierRows = await db
       .select({
         id: couriers.id,
@@ -3598,10 +3606,17 @@ export const createB2CShipmentService = async (
   try {
     // 1ï¸âƒ£ CREATE SHIPMENT
     const requestedIntegrationType = String(params.integration_type || '').toLowerCase()
-    const allowedIntegrationTypes = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket']
+    const allowedIntegrationTypes = [
+      'delhivery',
+      'ekart',
+      'xpressbees',
+      'shipmozo',
+      'shiprocket',
+      'truxcargo',
+    ]
     if (!requestedIntegrationType || !allowedIntegrationTypes.includes(requestedIntegrationType)) {
       throw new Error(
-        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees, shipmozo, shiprocket.`,
+        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees, shipmozo, shiprocket, truxcargo.`,
       )
     }
 
@@ -7583,6 +7598,42 @@ const mapShiprocketTracking = (raw: any, order: OrderSummary): ProviderNormalize
   }
 }
 
+const mapTruxcargoTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const shipment = raw?.data?.ShipmentData?.[0]?.Shipment || raw?.data?.shipment || raw?.data || {}
+  const statusObj = shipment?.Status || {}
+  const statusText = sanitizeString(statusObj?.Status || shipment?.status || order.order_status)
+  const location = sanitizeString(statusObj?.StatusLocation || shipment?.current_location || shipment?.location)
+  const eventAt = statusObj?.StatusDateTime || shipment?.last_update || shipment?.updated_at || null
+  const scans = Array.isArray(shipment?.Scans) ? shipment.Scans : []
+  if (Array.isArray(scans) && scans.length) {
+    scans.forEach((scan: any) => {
+      const detail = scan?.ScanDetail || scan || {}
+      pushHistoryEvent(history, {
+        statusCode: detail?.StatusCode || detail?.ScanType || detail?.Scan,
+        message: detail?.Instructions || detail?.Status || detail?.Scan,
+        location: detail?.ScannedLocation || location,
+        time: detail?.StatusDateTime || detail?.ScanDateTime || eventAt,
+      })
+    })
+  } else {
+    pushHistoryEvent(history, {
+      statusCode: statusText || shipment?.status,
+      message: statusText || shipment?.status,
+      location,
+      time: eventAt,
+    })
+  }
+  sortHistoryDescending(history)
+  return {
+    history,
+    status: statusText || sanitizeString(order.order_status),
+    courier_name: sanitizeString(order.courier_partner || 'Truxcargo'),
+    edd: sanitizeString(shipment?.ExpectedDeliveryDate || order.edd || ''),
+    shipment_info: sanitizeString(shipment?.Instructions || ''),
+  }
+}
+
 const buildTrackingResponse = (
   order: OrderSummary,
   providerData: ProviderNormalizedTracking,
@@ -7725,11 +7776,12 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
 
   let providerKey = sanitizeString(order.integration_type ?? 'delhivery').toLowerCase()
 
-  if (!['delhivery', 'shipmozo', 'shiprocket'].includes(providerKey) && order.courier_partner) {
+  if (!['delhivery', 'shipmozo', 'shiprocket', 'truxcargo'].includes(providerKey) && order.courier_partner) {
     const partner = order.courier_partner.toLowerCase()
     if (partner.includes('delhivery')) providerKey = 'delhivery'
     if (partner.includes('shipmozo')) providerKey = 'shipmozo'
     if (partner.includes('shiprocket')) providerKey = 'shiprocket'
+    if (partner.includes('truxcargo')) providerKey = 'truxcargo'
   }
 
   let providerData: ProviderNormalizedTracking
@@ -7747,6 +7799,10 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
       const shiprocketService = new ShiprocketCourierService()
       const raw = await shiprocketService.trackByAwb(awb)
       providerData = mapShiprocketTracking(raw, order)
+    } else if (providerKey === 'truxcargo') {
+      const truxcargoService = new TruxcargoService()
+      const raw = await truxcargoService.trackShipment({ waybill: awb })
+      providerData = mapTruxcargoTracking(raw, order)
     } else {
       throw new HttpError(400, 'Unsupported integration_type for tracking')
     }

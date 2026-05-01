@@ -40,6 +40,7 @@ import {
   updateDelhiveryCredentialsController,
   updateEkartCredentialsController,
   updateIcarryCredentialsController,
+  updateTruxcargoCredentialsController,
   updateShiprocketCredentialsController,
   updateShipmozoWarehouseForOrderController,
   updateShipmozoCredentialsController,
@@ -153,6 +154,12 @@ router.put(
   requireAuth,
   isAdminMiddleware,
   updateIcarryCredentialsController,
+)
+router.put(
+  '/credentials/truxcargo',
+  requireAuth,
+  isAdminMiddleware,
+  updateTruxcargoCredentialsController,
 )
 router.post('/shiprocket/login', requireAuth, isAdminMiddleware, shiprocketLoginController)
 router.post('/shiprocket/logout', requireAuth, isAdminMiddleware, shiprocketLogoutController)

@@ -29,6 +29,7 @@ const DEFAULT_ADMIN_PROVIDERS = [
   'xpressbees',
   'shipmozo',
   'shiprocket',
+  'truxcargo',
   'icarry',
   'juxcargo',
 ]

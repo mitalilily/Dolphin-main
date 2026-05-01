@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { SHIPROCKET_COURIER_SEEDS } from '../constants/shiprocketCouriers'
+import { TRUXCARGO_COURIER_SEEDS } from '../constants/truxcargoCouriers'
 import { db } from '../models/client'
 import { couriers } from '../models/schema/couriers'
 import { IcarryService } from '../models/services/couriers/icarry.service'
@@ -64,6 +65,30 @@ async function main() {
     })
 
   console.log(`[sync] Shiprocket couriers upserted: ${SHIPROCKET_COURIER_SEEDS.length}`)
+
+  await db
+    .insert(couriers)
+    .values(
+      TRUXCARGO_COURIER_SEEDS.map((row) => ({
+        id: row.id,
+        name: row.name,
+        serviceProvider: 'truxcargo',
+        isEnabled: true,
+        businessType: row.businessType,
+        updatedAt: new Date(),
+      })) as any,
+    )
+    .onConflictDoUpdate({
+      target: [couriers.id, couriers.serviceProvider],
+      set: {
+        name: sql`excluded.name`,
+        isEnabled: sql`${couriers.isEnabled}`,
+        businessType: sql`excluded.business_type`,
+        updatedAt: new Date(),
+      },
+    })
+
+  console.log(`[sync] Truxcargo couriers upserted: ${TRUXCARGO_COURIER_SEEDS.length}`)
 
   try {
     const icarry = new IcarryService()

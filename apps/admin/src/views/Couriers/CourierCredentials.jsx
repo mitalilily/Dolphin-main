@@ -19,12 +19,21 @@ import {
   useUpdateDelhiveryCredentials,
   useUpdateEkartCredentials,
   useUpdateIcarryCredentials,
+  useUpdateTruxcargoCredentials,
   useUpdateShipmozoCredentials,
   useUpdateShiprocketCredentials,
   useUpdateXpressbeesCredentials,
 } from 'hooks/useCouriers'
 
-const SUPPORTED_PROVIDERS = ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'icarry']
+const SUPPORTED_PROVIDERS = [
+  'delhivery',
+  'ekart',
+  'xpressbees',
+  'shipmozo',
+  'shiprocket',
+  'truxcargo',
+  'icarry',
+]
 
 const toTitleCase = (value = '') =>
   value
@@ -55,6 +64,7 @@ const CourierCredentials = () => {
   const updateXpressbees = useUpdateXpressbeesCredentials()
   const updateShipmozo = useUpdateShipmozoCredentials()
   const updateShiprocket = useUpdateShiprocketCredentials()
+  const updateTruxcargo = useUpdateTruxcargoCredentials()
   const updateIcarry = useUpdateIcarryCredentials()
 
   const [delhiveryForm, setDelhiveryForm] = useState({
@@ -97,6 +107,11 @@ const CourierCredentials = () => {
     apiKey: '',
     password: '',
     clientId: '',
+  })
+  const [truxcargoForm, setTruxcargoForm] = useState({
+    apiBase: '',
+    userId: '',
+    apiKey: '',
   })
 
   useEffect(() => {
@@ -151,6 +166,13 @@ const CourierCredentials = () => {
         apiKey: '',
         password: '',
         clientId: data.icarry.clientId || '',
+      })
+    }
+    if (data?.truxcargo) {
+      setTruxcargoForm({
+        apiBase: data.truxcargo.apiBase || '',
+        userId: data.truxcargo.userId || '',
+        apiKey: '',
       })
     }
   }, [data])
@@ -317,6 +339,29 @@ const CourierCredentials = () => {
         onError: (err) => {
           toast({
             title: 'Failed to update iCarry credentials',
+            description: err?.message,
+            status: 'error',
+          })
+        },
+      },
+    )
+  }
+
+  const handleSaveTruxcargo = () => {
+    updateTruxcargo.mutate(
+      {
+        apiBase: truxcargoForm.apiBase,
+        userId: truxcargoForm.userId,
+        ...(truxcargoForm.apiKey ? { apiKey: truxcargoForm.apiKey } : {}),
+      },
+      {
+        onSuccess: () => {
+          toast({ title: 'Truxcargo credentials updated', status: 'success' })
+          setTruxcargoForm((prev) => ({ ...prev, apiKey: '' }))
+        },
+        onError: (err) => {
+          toast({
+            title: 'Failed to update Truxcargo credentials',
             description: err?.message,
             status: 'error',
           })
@@ -697,6 +742,60 @@ const CourierCredentials = () => {
             alignSelf="flex-start"
           >
             Save Shiprocket Credentials
+          </Button>
+        </ProviderCard>
+
+        <ProviderCard
+          title="Truxcargo"
+          badgeColorScheme={data?.truxcargo?.hasApiKey ? 'green' : 'orange'}
+          badgeLabel={data?.truxcargo?.hasApiKey ? 'API key set' : 'Missing API key'}
+        >
+          <FormControl>
+            <FormLabel>API Base URL</FormLabel>
+            <Input
+              value={truxcargoForm.apiBase}
+              onChange={(e) =>
+                setTruxcargoForm((prev) => ({ ...prev, apiBase: e.target.value }))
+              }
+              placeholder="https://b2b.truxcargo.com"
+            />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>User ID (Optional)</FormLabel>
+            <Input
+              value={truxcargoForm.userId}
+              onChange={(e) =>
+                setTruxcargoForm((prev) => ({ ...prev, userId: e.target.value }))
+              }
+              placeholder="Truxcargo user id"
+            />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>API Key</FormLabel>
+            <Input
+              type="password"
+              value={truxcargoForm.apiKey}
+              onChange={(e) =>
+                setTruxcargoForm((prev) => ({ ...prev, apiKey: e.target.value }))
+              }
+              placeholder={data?.truxcargo?.apiKeyMasked || 'Enter Truxcargo API key'}
+            />
+            {!!data?.truxcargo?.apiKeyMasked && (
+              <Text fontSize="xs" color="gray.500" mt={1}>
+                Current key: {data.truxcargo.apiKeyMasked}
+              </Text>
+            )}
+          </FormControl>
+
+          <Button
+            colorScheme="blue"
+            onClick={handleSaveTruxcargo}
+            isLoading={updateTruxcargo.isPending}
+            alignSelf="flex-start"
+          >
+            Save Truxcargo Credentials
           </Button>
         </ProviderCard>
 

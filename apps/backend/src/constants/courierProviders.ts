@@ -5,6 +5,7 @@ export const KNOWN_COURIER_PROVIDERS = [
   'ekart',
   'shipmozo',
   'shiprocket',
+  'truxcargo',
   'juxcargo',
   'icarry',
 ] as const
@@ -15,6 +16,7 @@ export const ADMIN_SUPPORTED_COURIER_PROVIDERS = [
   'xpressbees',
   'shipmozo',
   'shiprocket',
+  'truxcargo',
   'juxcargo',
   'icarry',
 ] as const

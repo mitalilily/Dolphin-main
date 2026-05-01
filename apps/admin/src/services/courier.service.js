@@ -46,7 +46,9 @@ export const fetchAllCouriersList = async (filters = {}) => {
 
   const res = await api.get(`/couriers/full-list`, { params })
   if (!res.data?.success) throw new Error('Failed to fetch couriers')
-  return res.data.data // returns an array of courier objects
+  const rows = Array.isArray(res.data.data) ? res.data.data : []
+  rows._syncDiagnostics = res.data.syncDiagnostics || null
+  return rows // returns an array of courier objects + _syncDiagnostics metadata
 }
 
 export const createCourier = async (payload) => {
@@ -173,5 +175,11 @@ export const updateShiprocketCredentials = async (payload) => {
 export const updateIcarryCredentials = async (payload) => {
   const { data } = await api.put('/admin/couriers/credentials/icarry', payload)
   if (!data?.success) throw new Error('Failed to update iCarry credentials')
+  return data.data
+}
+
+export const updateTruxcargoCredentials = async (payload) => {
+  const { data } = await api.put('/admin/couriers/credentials/truxcargo', payload)
+  if (!data?.success) throw new Error('Failed to update Truxcargo credentials')
   return data.data
 }

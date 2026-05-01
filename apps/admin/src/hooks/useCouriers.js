@@ -14,6 +14,7 @@ import {
   updateDelhiveryCredentials,
   updateEkartCredentials,
   updateIcarryCredentials,
+  updateTruxcargoCredentials,
   updateShiprocketCredentials,
   updateShipmozoCredentials,
   updateXpressbeesCredentials,
@@ -191,6 +192,17 @@ export const useUpdateIcarryCredentials = () => {
 
   return useMutation({
     mutationFn: updateIcarryCredentials,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['courierCredentials'])
+    },
+  })
+}
+
+export const useUpdateTruxcargoCredentials = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateTruxcargoCredentials,
     onSuccess: () => {
       queryClient.invalidateQueries(['courierCredentials'])
     },
