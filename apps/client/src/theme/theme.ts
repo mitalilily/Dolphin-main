@@ -65,7 +65,7 @@ const theme = createTheme({
     divider: alpha(brand.ink, 0.08),
   },
   shape: {
-    borderRadius: 22,
+    borderRadius: 10,
   },
   typography: {
     fontFamily: brandFonts.body,
@@ -168,7 +168,7 @@ const theme = createTheme({
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: 30,
+          borderRadius: 10,
           boxShadow: brand.shadow,
           border: `1px solid ${alpha('#FFFFFF', 0.82)}`,
           background: brandGradients.surface,
@@ -186,7 +186,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           background: brandGradients.surface,
-          borderRadius: 30,
+          borderRadius: 10,
         },
         elevation1: {
           boxShadow: '0 18px 38px rgba(15, 44, 67, 0.06)',
@@ -199,20 +199,19 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: 8,
           padding: '11px 22px',
           fontSize: '0.88rem',
           fontWeight: 700,
           boxShadow: 'none',
         },
         containedPrimary: {
-          background: brandGradients.button,
-          color: brand.ink,
-          boxShadow: '0 16px 32px rgba(130,194,255,0.24)',
+          background: brand.ink,
+          color: '#FFFFFF',
+          boxShadow: '0 8px 20px rgba(15, 44, 67, 0.22)',
           '&:hover': {
-            background: brandGradients.button,
-            transform: 'translateY(-1px)',
-            boxShadow: '0 20px 40px rgba(130,194,255,0.3)',
+            background: '#163E59',
+            boxShadow: '0 10px 24px rgba(15, 44, 67, 0.28)',
           },
         },
         containedSecondary: {
@@ -287,7 +286,7 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 30,
+          borderRadius: 10,
           border: `1px solid ${alpha(brand.ink, 0.1)}`,
           boxShadow: '0 32px 68px rgba(15, 44, 67, 0.16)',
           background: brandGradients.surface,

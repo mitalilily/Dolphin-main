@@ -39,6 +39,7 @@
     "test:icarry-edit-pickup-address": "node -r ts-node/register src/scripts/testIcarryEditPickupAddress.ts",
     "test:icarry-edit-pickup-address-validate": "node -r ts-node/register src/scripts/testIcarryEditPickupAddressValidation.ts",
     "test:shipmozo-live": "node -r ts-node/register src/scripts/testShipmozoLive.ts",
+    "test:courier-label-invoice": "node -r ts-node/register src/scripts/testCourierLabelInvoiceApis.ts",
     "cleanup:shipmozo-test-orders": "node -r ts-node/register src/scripts/cleanupShipmozoTestOrders.ts",
     "seed:shipmozo-couriers": "node -r ts-node/register src/scripts/seedShipmozoCouriersFromApi.ts",
     "seed:courier-creds": "node -r ts-node/register src/scripts/seedCourierCredentialsFromEnv.ts",

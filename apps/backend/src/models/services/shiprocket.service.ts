@@ -196,6 +196,18 @@ const getWalletDebitReasonFromOrder = (orderType: string | null | undefined) =>
     ? 'B2C COD Service Charges'
     : 'B2C Prepaid Order Payment'
 
+const shouldSkipWalletDebitForTestRun = () => {
+  const argv = Array.isArray(process.argv) ? process.argv.join(' ') : ''
+  const runningFromScript = argv.includes('src/scripts/')
+  if (runningFromScript && String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'production') {
+    return true
+  }
+  const raw = String(process.env.SKIP_WALLET_DEBIT_FOR_TEST_RUNS || '').trim().toLowerCase()
+  const enabled = raw === '1' || raw === 'true' || raw === 'yes'
+  if (!enabled) return false
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'production'
+}
+
 const getManifestFailureRefundOutstanding = async (
   executor: any,
   walletId: string,
@@ -335,6 +347,15 @@ const debitManifestSuccessChargeIfNeeded = async ({
   const amountToDebit = Math.max(0, expectedDebit - netCharged)
 
   if (amountToDebit <= 0) {
+    return
+  }
+
+  if (shouldSkipWalletDebitForTestRun()) {
+    console.log('ℹ️ Skipping manifest-success wallet debit for test run', {
+      order_id: order.id,
+      order_number: order.order_number,
+      amount_to_debit: amountToDebit,
+    })
     return
   }
 
@@ -4469,6 +4490,12 @@ export const createB2CShipmentService = async (
         })
       } else if (finalWalletDebit <= 0) {
         console.warn('âš ï¸ Wallet debit is 0 or negative, skipping wallet transaction')
+      } else if (shouldSkipWalletDebitForTestRun()) {
+        console.log('ℹ️ Skipping wallet debit for test run', {
+          order_number: params.order_number,
+          integration_type: params.integration_type,
+          skipped_wallet_debit: finalWalletDebit,
+        })
       } else {
         await createWalletTransaction({
           walletId: userWallet?.id,
