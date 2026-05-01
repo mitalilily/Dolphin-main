@@ -571,6 +571,9 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                           <Typography sx={{ mt: 0.35, fontSize: 13, color: TEXT_SECONDARY }}>
                             {courier?.edd ? `Estimated delivery: ${courier.edd}` : 'EDD unavailable'}
                           </Typography>
+                          <Typography sx={{ mt: 0.35, fontSize: 12, fontWeight: 700, color: '#0B2348' }}>
+                            {aggregatorName}
+                          </Typography>
                         </Box>
                       </Stack>
 
@@ -626,19 +629,6 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                         </Typography>
                       </Stack>
                     )}
-
-                    <Typography
-                      sx={{
-                        pt: 1.05,
-                        borderTop: '1px solid rgba(13,59,142,0.12)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#0B2348',
-                        textAlign: 'left',
-                      }}
-                    >
-                      {aggregatorName}
-                    </Typography>
                   </Stack>
                 </Paper>
               )

@@ -2548,6 +2548,50 @@ export const fetchAvailableCouriersWithRates = async (
     // âœ… Final filter: Ensure all couriers have correct business_type
     combined = await filterCouriersByBusinessType(combined, 'b2c')
 
+    // Guarantee at least one visible card per key aggregator in B2C selection.
+    const ensureProviderCardPresent = (providerKey: string) => {
+      const hasProviderCard = combined.some(
+        (row: any) =>
+          String(
+            row?.integration_type || row?.service_provider || row?.serviceProvider || '',
+          ).toLowerCase() === providerKey,
+      )
+      if (hasProviderCard) return
+
+      const bucket = providerCourierBuckets.get(providerKey)
+      const seedRow = bucket?.rows?.[0]
+      if (!seedRow) return
+
+      combined.push({
+        id: seedRow.id,
+        name: seedRow.name,
+        displayName: seedRow.name,
+        serviceProvider: providerKey,
+        service_provider: providerKey,
+        integration_type: providerKey,
+        cod: true,
+        prepaid: true,
+        edd: '3-6 Days',
+        approxZone,
+        createdAt: seedRow.createdAt,
+        courier_cost_estimate: null,
+        rateEstimate: null,
+        freight_charges: null,
+        cod_charges: null,
+        total_charges: null,
+        chargeable_weight: chargeableWeight,
+        volumetric_weight: null,
+        slabs: null,
+        rate: null,
+        max_slab_weight: null,
+        localRates: {},
+        provider_serviceability: null,
+        shipping_mode: null,
+      })
+    }
+
+    ;['shipmozo', 'shiprocket', 'truxcargo', 'icarry'].forEach(ensureProviderCardPresent)
+
     // ðŸ”¹ Sorting and tagging
     if (userId && combined?.length) {
       const [profile] = await db
