@@ -2,6 +2,7 @@ import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { Request, Response } from 'express'
 import Papa from 'papaparse'
 import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProviders'
+import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { SHIPMOZO_COURIER_SEEDS } from '../../constants/shipmozoCouriers'
 import { db } from '../../models/client'
 import {
@@ -191,6 +192,28 @@ export const getAllCouriersController = async (req: Request, res: Response) => {
 
 export const getAllCouriersListController = async (req: Request, res: Response) => {
   try {
+    await db
+      .insert(couriers)
+      .values(
+        SHIPROCKET_COURIER_SEEDS.map((row) => ({
+          id: row.id,
+          name: row.name,
+          serviceProvider: 'shiprocket',
+          isEnabled: true,
+          businessType: row.businessType,
+          updatedAt: new Date(),
+        })) as any,
+      )
+      .onConflictDoUpdate({
+        target: [couriers.id, couriers.serviceProvider],
+        set: {
+          name: sql`excluded.name`,
+          isEnabled: sql`${couriers.isEnabled}`,
+          businessType: sql`excluded.business_type`,
+          updatedAt: new Date(),
+        },
+      })
+
     await db
       .insert(couriers)
       .values(
