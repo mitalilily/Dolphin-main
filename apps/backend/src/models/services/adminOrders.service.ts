@@ -370,23 +370,34 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
       layout: ((prefs?.template as 'classic' | 'thermal') ?? 'classic'),
     })
 
-    const { uploadUrl, key } = await presignUpload({
-      filename: `invoice-${order.id}.pdf`,
-      contentType: 'application/pdf',
-      userId,
-      folderKey: 'invoices',
-    })
-    const finalUploadUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
-    await axios.put(finalUploadUrl, invoiceBuffer, {
-      headers: { 'Content-Type': 'application/pdf' },
-      validateStatus: (status) => status >= 200 && status < 300,
-      timeout: 60000,
-    })
-    const finalKey = Array.isArray(key) ? key[0] : key
-    if (!finalKey || typeof finalKey !== 'string') {
-      throw new Error('Invoice upload key missing')
+    try {
+      const { uploadUrl, key } = await presignUpload({
+        filename: `invoice-${order.id}.pdf`,
+        contentType: 'application/pdf',
+        userId,
+        folderKey: 'invoices',
+      })
+      const finalUploadUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
+      await axios.put(finalUploadUrl, invoiceBuffer, {
+        headers: { 'Content-Type': 'application/pdf' },
+        validateStatus: (status) => status >= 200 && status < 300,
+        timeout: 60000,
+      })
+      const finalKey = Array.isArray(key) ? key[0] : key
+      if (!finalKey || typeof finalKey !== 'string') {
+        throw new Error('Invoice upload key missing')
+      }
+      newInvoiceKey = finalKey.trim()
+    } catch (uploadErr: any) {
+      const message = String(uploadErr?.message || '')
+      if (!/Storage is not configured/i.test(message)) {
+        throw uploadErr
+      }
+      console.warn(
+        `⚠️ Storage unavailable while regenerating invoice for order ${order.order_number || order.id}. Using inline PDF data URL fallback.`,
+      )
+      newInvoiceKey = `data:application/pdf;base64,${invoiceBuffer.toString('base64')}`
     }
-    newInvoiceKey = finalKey.trim()
   }
 
   const updates: Record<string, unknown> = { updated_at: new Date() }

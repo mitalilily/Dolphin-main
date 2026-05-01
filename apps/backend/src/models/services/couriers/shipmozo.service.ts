@@ -458,7 +458,8 @@ export class ShipmozoService {
     }
   }
 
-  getDefaultWarehouseId() {
+  async getDefaultWarehouseId() {
+    await this.ensureConfigLoaded()
     return String(this.defaultWarehouseId || '').trim() || null
   }
 

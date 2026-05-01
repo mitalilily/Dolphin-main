@@ -795,13 +795,30 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
       `📄 PDF generated successfully (${pdfBuffer.length} bytes) for order ${order?.order_number}`,
     )
 
+    const toInlinePdfDataUrl = () => `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
+
     // Upload
-    const { uploadUrl, key } = await presignUpload({
-      filename: `label-${order?.order_number ?? order?.id}.pdf`,
-      contentType: 'application/pdf',
-      userId,
-      folderKey: 'labels',
-    })
+    let uploadUrl: string | string[] | undefined
+    let key: string | string[] | undefined
+    try {
+      const upload = await presignUpload({
+        filename: `label-${order?.order_number ?? order?.id}.pdf`,
+        contentType: 'application/pdf',
+        userId,
+        folderKey: 'labels',
+      })
+      uploadUrl = upload.uploadUrl
+      key = upload.key
+    } catch (uploadInitErr: any) {
+      const message = String(uploadInitErr?.message || '')
+      if (/Storage is not configured/i.test(message)) {
+        console.warn(
+          `⚠️ Storage unavailable for order ${order?.order_number}. Returning inline PDF label.`,
+        )
+        return toInlinePdfDataUrl()
+      }
+      throw uploadInitErr
+    }
 
     if (!uploadUrl || !key) {
       throw new Error('Failed to get presigned URL for label upload')

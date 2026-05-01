@@ -5533,7 +5533,9 @@ export const generateManifestService = async (params: {
             const isShipmozoWalletError = (message: unknown) =>
               typeof message === 'string' &&
               /insufficient\\s+wallet\\s+balance|recharge\\s+your\\s+wallet/i.test(message)
-            const configuredDefaultWarehouseId = String(shipmozo.getDefaultWarehouseId() || '').trim()
+            const configuredDefaultWarehouseId = String(
+              (await shipmozo.getDefaultWarehouseId()) || '',
+            ).trim()
             let shipmozoWarehouseCache: any[] | null = null
             const normalizeWarehouseText = (value: unknown) => String(value ?? '').trim().toLowerCase()
             const isShipmozoInvalidWarehouseError = (message: unknown) =>
@@ -5603,9 +5605,8 @@ export const generateManifestService = async (params: {
               const activeWarehouseId = String(activeWarehouse?.id ?? '').trim()
               if (activeWarehouseId) return activeWarehouseId
 
-              if (warehouses.length === 0) {
-                if (configuredDefaultWarehouseId) return configuredDefaultWarehouseId
-                if (explicitWarehouseId) return explicitWarehouseId
+              if (warehouses.length === 0 && configuredDefaultWarehouseId) {
+                return configuredDefaultWarehouseId
               }
               return ''
             }
