@@ -15,6 +15,7 @@ import {
   trackByAwbService,
   trackByOrderService,
 } from '../../models/services/shiprocket.service'
+import { regenerateOrderDocumentsServiceAdmin } from '../../models/services/adminOrders.service'
 import { presignDownload } from '../../models/services/upload.service'
 import { applyCancellationRefundOnce } from '../../models/services/webhookProcessor'
 import { b2c_orders } from '../../schema/schema'
@@ -468,7 +469,24 @@ export const getOrderLabelController = async (req: any, res: Response) => {
       })
     }
 
-    if (!order.label) {
+    let labelValue =
+      (typeof order.label_key === 'string' && order.label_key.trim() ? order.label_key.trim() : null) ||
+      (typeof order.label === 'string' && order.label.trim() ? order.label.trim() : null)
+
+    if (!labelValue) {
+      const regenerated = await regenerateOrderDocumentsServiceAdmin({
+        orderId: order.id,
+        regenerateLabel: true,
+        regenerateInvoice: false,
+        expectedUserId: userId,
+      })
+      labelValue =
+        (typeof regenerated?.label === 'string' && regenerated.label.trim()
+          ? regenerated.label.trim()
+          : null)
+    }
+
+    if (!labelValue) {
       return res.status(404).json({
         success: false,
         error: 'Label not found',
@@ -479,11 +497,11 @@ export const getOrderLabelController = async (req: any, res: Response) => {
     // Generate presigned URL for label
     let labelUrl: string
     try {
-      const signed = await presignDownload(order.label)
-      labelUrl = Array.isArray(signed) ? signed[0] || order.label : signed
+      const signed = await presignDownload(labelValue)
+      labelUrl = Array.isArray(signed) ? signed[0] || labelValue : signed
     } catch (err) {
       // Fallback to stored URL if presigning fails
-      labelUrl = order.label
+      labelUrl = labelValue
     }
 
     res.status(200).json({
@@ -501,6 +519,88 @@ export const getOrderLabelController = async (req: any, res: Response) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch label',
+      message: error.message || 'Internal server error',
+    })
+  }
+}
+
+/**
+ * Get invoice PDF for an order
+ * GET /api/v1/orders/:orderId/invoice
+ */
+export const getOrderInvoiceController = async (req: any, res: Response) => {
+  try {
+    const userId = req.userId
+    const { orderId } = req.params
+
+    const { orders } = await getB2COrdersByUserService(userId, 1, 1, {
+      search: orderId,
+    })
+
+    const order = orders.find(
+      (o: any) => o.order_number === orderId || o.order_id === orderId || o.id === orderId,
+    )
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found',
+        message: `Order with ID ${orderId} not found`,
+      })
+    }
+
+    let invoiceValue =
+      (typeof order.invoice_key === 'string' && order.invoice_key.trim()
+        ? order.invoice_key.trim()
+        : null) ||
+      (typeof order.invoice_link === 'string' && order.invoice_link.trim()
+        ? order.invoice_link.trim()
+        : null)
+
+    if (!invoiceValue) {
+      const regenerated = await regenerateOrderDocumentsServiceAdmin({
+        orderId: order.id,
+        regenerateLabel: false,
+        regenerateInvoice: true,
+        expectedUserId: userId,
+      })
+      invoiceValue =
+        (typeof regenerated?.invoice_link === 'string' && regenerated.invoice_link.trim()
+          ? regenerated.invoice_link.trim()
+          : null)
+    }
+
+    if (!invoiceValue) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invoice not found',
+        message: 'Invoice has not been generated for this order',
+      })
+    }
+
+    let invoiceUrl: string
+    try {
+      const signed = await presignDownload(invoiceValue)
+      invoiceUrl = Array.isArray(signed) ? signed[0] || invoiceValue : signed
+    } catch {
+      invoiceUrl = invoiceValue
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        order_id: order.id,
+        order_number: order.order_number,
+        awb_number: order.awb_number,
+        invoice_url: invoiceUrl,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      },
+    })
+  } catch (error: any) {
+    console.error('Error fetching invoice via API:', error)
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch invoice',
       message: error.message || 'Internal server error',
     })
   }

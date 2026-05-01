@@ -19,6 +19,7 @@ import {
   cancelOrderController,
   createOrderController,
   getOrderController,
+  getOrderInvoiceController,
   getOrderLabelController,
   getOrdersController,
   retryFailedManifestController,
@@ -109,6 +110,7 @@ router.post('/orders/:orderId/retry-manifest', requireApiKey, retryFailedManifes
 
 // Get shipping label
 router.get('/orders/:orderId/label', requireApiKey, getOrderLabelController)
+router.get('/orders/:orderId/invoice', requireApiKey, getOrderInvoiceController)
 
 // ============================================================================
 // MANIFEST MANAGEMENT (Requires API Key)
