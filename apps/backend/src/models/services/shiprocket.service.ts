@@ -6066,13 +6066,73 @@ export const generateManifestService = async (params: {
                 detailResp?.data?.tracking_id ||
                 null
 
+              const uploadShipmozoDocumentFromUrl = async (
+                rawUrl: unknown,
+                opts: { folderKey: 'labels' | 'invoices'; filenamePrefix: 'label' | 'invoice' },
+              ): Promise<string | null> => {
+                if (typeof rawUrl !== 'string') return null
+                const sourceUrl = rawUrl.trim()
+                if (!sourceUrl || /^data:/i.test(sourceUrl)) return null
+                if (!/^https?:\/\//i.test(sourceUrl)) return sourceUrl
+                try {
+                  const docResponse = await axios.get(sourceUrl, {
+                    responseType: 'arraybuffer',
+                    timeout: 60000,
+                  })
+                  const docBuffer = Buffer.from(docResponse.data)
+                  if (!docBuffer.length) return sourceUrl
+
+                  const { uploadUrl, key } = await presignUpload({
+                    filename: `${opts.filenamePrefix}-${order.order_number || order.id}.pdf`,
+                    contentType: 'application/pdf',
+                    userId: order.user_id,
+                    folderKey: opts.folderKey,
+                  })
+                  const putUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
+                  await axios.put(putUrl, docBuffer, {
+                    headers: { 'Content-Type': 'application/pdf' },
+                    timeout: 60000,
+                  })
+                  const finalKey = Array.isArray(key) ? key[0] : key
+                  if (typeof finalKey === 'string' && finalKey.trim()) return finalKey.trim()
+                } catch (docErr: any) {
+                  console.warn(
+                    `⚠️ [Shipmozo] Failed to persist ${opts.filenamePrefix} document for order ${order.order_number}:`,
+                    docErr?.message || docErr,
+                  )
+                }
+                return sourceUrl
+              }
+
               let labelToStore: string | null = null
+              let invoiceToStore: string | null = null
               if (awbNumber) {
                 try {
                   const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
-                  const rawLabel = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : null
-                  if (typeof rawLabel === 'string' && rawLabel.trim() && !/^data:/i.test(rawLabel.trim())) {
-                    labelToStore = rawLabel.trim()
+                  const labelRow = Array.isArray(labelResp?.data) ? labelResp.data[0] : null
+                  const rawLabel =
+                    labelRow?.label ?? labelRow?.label_url ?? labelRow?.label_link ?? null
+                  const rawInvoice =
+                    labelRow?.invoice ??
+                    labelRow?.invoice_url ??
+                    labelRow?.invoice_link ??
+                    labelRow?.invoiceLabel ??
+                    null
+
+                  labelToStore = await uploadShipmozoDocumentFromUrl(rawLabel, {
+                    folderKey: 'labels',
+                    filenamePrefix: 'label',
+                  })
+                  invoiceToStore = await uploadShipmozoDocumentFromUrl(rawInvoice, {
+                    folderKey: 'invoices',
+                    filenamePrefix: 'invoice',
+                  })
+
+                  if (typeof labelToStore === 'string' && !labelToStore.trim()) {
+                    labelToStore = null
+                  }
+                  if (typeof invoiceToStore === 'string' && !invoiceToStore.trim()) {
+                    invoiceToStore = null
                   }
                 } catch (labelErr: any) {
                   console.warn(
@@ -6096,6 +6156,7 @@ export const generateManifestService = async (params: {
                   awb_number: awbNumber ? String(awbNumber) : null,
                   courier_partner: pickedCourierName,
                   label: labelToStore,
+                  invoice_link: invoiceToStore,
                   order_status: 'booked',
                   manifest_error: null,
                   updated_at: new Date(),
@@ -6106,6 +6167,7 @@ export const generateManifestService = async (params: {
               order.awb_number = awbNumber ? String(awbNumber) : null
               order.courier_partner = pickedCourierName
               if (labelToStore) order.label = labelToStore
+              if (invoiceToStore) order.invoice_link = invoiceToStore
             }
           }
 
