@@ -11,6 +11,10 @@ import {
   delhiveryWebhookHandler,
 } from './controllers/webhooks/delhivery.webhook'
 import { ekartWebhookHandler } from './controllers/webhooks/ekart.webhook'
+import { icarryWebhookHandler } from './controllers/webhooks/icarry.webhook'
+import { shipmozoWebhookHandler } from './controllers/webhooks/shipmozo.webhook'
+import { shiprocketWebhookHandler } from './controllers/webhooks/shiprocket.webhook'
+import { truxcargoWebhookHandler } from './controllers/webhooks/truxcargo.webhook'
 import { xpressbeesWebhookHandler } from './controllers/webhooks/xpressbees.webhook'
 import adminCourierRoutes from './routes/adminRoutes/adminCourier.routes'
 import adminSupportRoutes from './routes/adminRoutes/adminSupport.routes'
@@ -225,6 +229,14 @@ app.use('/api/v1', externalApiRoutes)
 // Ekart webhook
 app.post('/api/webhook/ekart', express.json(), ekartWebhookHandler)
 app.post('/api/webhook/ekart/track', express.json(), ekartWebhookHandler)
+app.post('/api/webhook/icarry', express.json(), icarryWebhookHandler)
+app.post('/api/webhook/icarry/callback', express.json(), icarryWebhookHandler)
+app.post('/api/webhook/shipmozo', express.json(), shipmozoWebhookHandler)
+app.post('/api/webhook/shipmozo/callback', express.json(), shipmozoWebhookHandler)
+app.post('/api/webhook/shiprocket', express.json(), shiprocketWebhookHandler)
+app.post('/api/webhook/shiprocket/callback', express.json(), shiprocketWebhookHandler)
+app.post('/api/webhook/truxcargo', express.json(), truxcargoWebhookHandler)
+app.post('/api/webhook/truxcargo/callback', express.json(), truxcargoWebhookHandler)
 app.post(
   '/api/webhook/xpressbees',
   express.json({

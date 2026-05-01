@@ -1856,3 +1856,234 @@ export async function processXpressbeesWebhook(payload: any, tx = db) {
 
   return { success: true }
 }
+
+const mapGenericWebhookStatus = (status: string): string => {
+  const s = (status || '').toLowerCase().trim()
+  if (!s) return 'in_transit'
+  if (s.includes('cancel')) return 'cancelled'
+  if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
+  if (s.includes('rto') && s.includes('deliver')) return 'rto_delivered'
+  if (s.includes('rto')) return 'rto_in_transit'
+  if (s.includes('deliver')) return 'delivered'
+  if (s.includes('out for delivery') || s.includes('ofd')) return 'out_for_delivery'
+  if (s.includes('pickup scheduled') || s.includes('pickup requested')) return 'pickup_initiated'
+  if (s.includes('pickup') || s.includes('manifest') || s.includes('booked') || s.includes('created')) {
+    return 'booked'
+  }
+  if (s.includes('transit') || s.includes('dispatched')) return 'in_transit'
+  return 'in_transit'
+}
+
+const normalizeProviderLabel = (provider: string) => {
+  const p = String(provider || '').trim().toLowerCase()
+  if (!p) return 'Courier'
+  if (p === 'shiprocket') return 'Shiprocket'
+  if (p === 'shipmozo') return 'Shipmozo'
+  if (p === 'icarry') return 'iCarry'
+  if (p === 'truxcargo') return 'Truxcargo'
+  return p.charAt(0).toUpperCase() + p.slice(1)
+}
+
+export async function processGenericCourierWebhook(provider: string, payload: any, tx = db) {
+  const event = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : payload
+  const awb =
+    event?.awb_number ||
+    event?.awb ||
+    event?.waybill ||
+    event?.tracking_id ||
+    event?.trackingId ||
+    event?.wbn ||
+    event?.barcode ||
+    event?.shipment_id ||
+    null
+  const orderRef =
+    event?.order_number ||
+    event?.order_id ||
+    event?.reference_number ||
+    event?.tracking_ref ||
+    event?.ref_no ||
+    null
+  const statusRaw =
+    event?.current_status ||
+    event?.shipment_status ||
+    event?.status ||
+    event?.event ||
+    event?.event_name ||
+    event?.scan_status ||
+    event?.remarks_status ||
+    ''
+  const remarks =
+    event?.courier_remarks ||
+    event?.remarks ||
+    event?.remark ||
+    event?.message ||
+    event?.description ||
+    ''
+  const location =
+    event?.current_location ||
+    event?.location ||
+    event?.scan_location ||
+    event?.hub_name ||
+    event?.city ||
+    null
+
+  if (!awb && !orderRef) return { success: false, reason: 'missing_awb' as const }
+
+  let order
+  if (awb) {
+    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.awb_number, String(awb)))
+  }
+  if (!order && orderRef) {
+    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.order_number, String(orderRef)))
+  }
+  if (!order && orderRef) {
+    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.order_id, String(orderRef)))
+  }
+
+  if (!order) return { success: false, reason: 'order_not_found' as const, awb, status: statusRaw || 'unknown' }
+
+  const internalStatus = mapGenericWebhookStatus(statusRaw)
+  const statusLower = internalStatus.toLowerCase()
+  const statusText = statusRaw || internalStatus
+  const providerLabel = normalizeProviderLabel(provider)
+
+  const updateData: any = {
+    order_status: internalStatus,
+    delivery_location: location,
+    delivery_message: remarks || null,
+    updated_at: new Date(),
+  }
+
+  if (event?.courier_cost !== undefined) updateData.courier_cost = Number(event.courier_cost)
+  if (event?.shipping_charge !== undefined && updateData.courier_cost === undefined) {
+    updateData.courier_cost = Number(event.shipping_charge)
+  }
+  if (event?.charged_weight !== undefined) updateData.charged_weight = Number(event.charged_weight)
+  if (event?.chargeable_weight !== undefined && updateData.charged_weight === undefined) {
+    updateData.charged_weight = Number(event.chargeable_weight)
+  }
+  if (event?.volumetric_weight !== undefined) updateData.volumetric_weight = Number(event.volumetric_weight)
+  if (event?.actual_weight !== undefined) updateData.actual_weight = Number(event.actual_weight)
+
+  await tx.transaction(async (innerTx) => {
+    await innerTx.update(b2c_orders).set(updateData).where(eq(b2c_orders.id, order.id))
+    await syncShopifyStatusForLocalOrder({ ...order, ...updateData }, innerTx).catch((err) => {
+      console.warn(`⚠️ Failed Shopify status sync for ${providerLabel} webhook:`, err)
+    })
+
+    try {
+      await logTrackingEvent({
+        orderId: order.id,
+        userId: order.user_id,
+        awbNumber: order.awb_number,
+        courier: providerLabel,
+        statusCode: internalStatus,
+        statusText,
+        location,
+        raw: payload,
+      })
+    } catch (err: any) {
+      console.error(`❌ Failed to log ${providerLabel} tracking event:`, err)
+    }
+
+    if (
+      ['booked', 'pickup_initiated', 'shipment_created', 'in_transit', 'out_for_delivery', 'delivered'].includes(
+        internalStatus,
+      )
+    ) {
+      const [freshOrder] = await innerTx.select().from(b2c_orders).where(eq(b2c_orders.id, order.id))
+      if (freshOrder) await ensureOrderDocumentsAfterWebhook(freshOrder, innerTx, providerLabel)
+    }
+  })
+
+  if (hasNdrSignal(statusLower, statusText, remarks)) {
+    await captureNdrEventFromWebhook({
+      order,
+      awbNumber: order.awb_number || String(awb || ''),
+      status: statusLower,
+      reason: remarks || null,
+      remarks: statusText || null,
+      payload,
+      courierLabel: providerLabel,
+      signalParts: [statusText, remarks],
+    }).catch((err) => console.error(`❌ Failed NDR capture for ${providerLabel}:`, err))
+  }
+
+  if (statusLower.includes('rto')) {
+    try {
+      const rtoCharge = await applyRtoChargeOnce(tx, order, providerLabel)
+      await recordRtoEvent({
+        orderId: order.id,
+        userId: order.user_id,
+        awbNumber: order.awb_number || undefined,
+        status: statusLower,
+        reason: remarks || null,
+        remarks: statusText || null,
+        rtoCharges: rtoCharge,
+        payload,
+        tx,
+      })
+    } catch (err) {
+      console.error(`❌ Failed RTO capture for ${providerLabel}:`, err)
+    }
+  }
+
+  if (internalStatus === 'delivered' && order.order_type === 'cod') {
+    try {
+      await createCodRemittance({
+        orderId: order.id,
+        orderType: 'b2c',
+        userId: order.user_id,
+        orderNumber: order.order_number,
+        awbNumber: order.awb_number || undefined,
+        courierPartner: providerLabel,
+        codAmount: Number(order.order_amount ?? 0),
+        codCharges: Number(order.cod_charges ?? 0),
+        freightCharges: Number(order.freight_charges ?? order.shipping_charges ?? 0),
+        collectedAt: new Date(),
+      })
+    } catch (err) {
+      console.error(`❌ Failed COD remittance for ${providerLabel}:`, err)
+    }
+  }
+
+  if (internalStatus === 'cancelled') {
+    await applyCancellationRefundOnce(tx, order, `${String(provider || '').toLowerCase()}_webhook`)
+  }
+
+  try {
+    const actualWeight = Number(event?.actual_weight ?? order?.actual_weight ?? 0)
+    const chargedWeight = Number(event?.charged_weight ?? event?.chargeable_weight ?? order?.charged_weight ?? 0)
+    if (actualWeight > 0 && chargedWeight > 0 && chargedWeight > actualWeight) {
+      const proofUrl = await extractWeightProofFromWebhook(payload, String(provider || ''))
+      const discrepancyAmount =
+        Number(event?.weight_discrepancy_charge ?? event?.extra_weight_charges ?? event?.extra_charge ?? 0) || 0
+      await createWeightDiscrepancy({
+        orderId: order.id,
+        userId: order.user_id,
+        awbNumber: order.awb_number || String(awb || ''),
+        courierPartner: providerLabel,
+        deadWeightKg: actualWeight,
+        volumetricWeightKg: Number(event?.volumetric_weight ?? order?.volumetric_weight ?? 0) || undefined,
+        chargedWeightKg: chargedWeight,
+        discrepancyAmount,
+        proofUrl: proofUrl || undefined,
+        source: 'webhook',
+        rawPayload: payload,
+      } as any)
+    }
+  } catch (err) {
+    console.error(`❌ Failed weight discrepancy handling for ${providerLabel}:`, err)
+  }
+
+  return { success: true as const, awb: String(awb || order.awb_number || ''), status: statusText }
+}
+
+export const processShipmozoWebhook = (payload: any, tx = db) =>
+  processGenericCourierWebhook('shipmozo', payload, tx)
+export const processShiprocketWebhook = (payload: any, tx = db) =>
+  processGenericCourierWebhook('shiprocket', payload, tx)
+export const processTruxcargoWebhook = (payload: any, tx = db) =>
+  processGenericCourierWebhook('truxcargo', payload, tx)
+export const processIcarryWebhook = (payload: any, tx = db) =>
+  processGenericCourierWebhook('icarry', payload, tx)

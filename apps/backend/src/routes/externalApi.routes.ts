@@ -8,6 +8,9 @@ import {
 import { generateManifestController } from '../controllers/externalApi/manifest.controller'
 import { ekartWebhookHandler } from '../controllers/webhooks/ekart.webhook'
 import { icarryWebhookHandler } from '../controllers/webhooks/icarry.webhook'
+import { shipmozoWebhookHandler } from '../controllers/webhooks/shipmozo.webhook'
+import { shiprocketWebhookHandler } from '../controllers/webhooks/shiprocket.webhook'
+import { truxcargoWebhookHandler } from '../controllers/webhooks/truxcargo.webhook'
 import {
   getNdrEventsController,
   getNdrTimelineController,
@@ -68,6 +71,9 @@ router.post('/webhooks/:id/regenerate-secret', requireAuth, regenerateWebhookSec
 // Provider webhook (Ekart) for partners who want to post directly
 router.post('/webhook/ekart/track', ekartWebhookHandler)
 router.post('/webhook/icarry/callback', icarryWebhookHandler)
+router.post('/webhook/shipmozo/callback', shipmozoWebhookHandler)
+router.post('/webhook/shiprocket/callback', shiprocketWebhookHandler)
+router.post('/webhook/truxcargo/callback', truxcargoWebhookHandler)
 
 // ============================================================================
 // SHIPPING & SERVICEABILITY (Requires API Key)
