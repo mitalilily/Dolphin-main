@@ -5536,6 +5536,11 @@ export const generateManifestService = async (params: {
             const configuredDefaultWarehouseId = String(shipmozo.getDefaultWarehouseId() || '').trim()
             let shipmozoWarehouseCache: any[] | null = null
             const normalizeWarehouseText = (value: unknown) => String(value ?? '').trim().toLowerCase()
+            const isShipmozoInvalidWarehouseError = (message: unknown) =>
+              typeof message === 'string' &&
+              /selected\s+warehouse\s+id\s+is\s+invalid|warehouse\s+id\s+is\s+invalid/i.test(
+                message,
+              )
             const getShipmozoWarehouses = async () => {
               if (shipmozoWarehouseCache) return shipmozoWarehouseCache
               try {
@@ -5580,8 +5585,28 @@ export const generateManifestService = async (params: {
                 return configuredDefaultWarehouseId
               }
 
-              if (explicitWarehouseId) return explicitWarehouseId
-              if (configuredDefaultWarehouseId) return configuredDefaultWarehouseId
+              const defaultWarehouse = warehouses.find((warehouse: any) => {
+                const normalizedDefault = String(warehouse?.default ?? '')
+                  .trim()
+                  .toLowerCase()
+                return normalizedDefault === '1' || normalizedDefault === 'true'
+              })
+              const defaultWarehouseId = String(defaultWarehouse?.id ?? '').trim()
+              if (defaultWarehouseId) return defaultWarehouseId
+
+              const activeWarehouse = warehouses.find((warehouse: any) => {
+                const status = String(warehouse?.status ?? '')
+                  .trim()
+                  .toLowerCase()
+                return !status || status === 'active' || status === '1' || status === 'true'
+              })
+              const activeWarehouseId = String(activeWarehouse?.id ?? '').trim()
+              if (activeWarehouseId) return activeWarehouseId
+
+              if (warehouses.length === 0) {
+                if (configuredDefaultWarehouseId) return configuredDefaultWarehouseId
+                if (explicitWarehouseId) return explicitWarehouseId
+              }
               return ''
             }
 
@@ -5639,7 +5664,32 @@ export const generateManifestService = async (params: {
                 gstin_number: '',
               }
 
-              const pushResp = await shipmozo.pushOrder(pushPayload as any)
+              let pushResp: any
+              try {
+                pushResp = await shipmozo.pushOrder(pushPayload as any)
+              } catch (pushError: any) {
+                const pushErrorMessage = String(pushError?.message || '')
+                if (!isShipmozoInvalidWarehouseError(pushErrorMessage)) {
+                  throw pushError
+                }
+
+                // Warehouse list can change; refresh and retry once with latest default/active warehouse.
+                shipmozoWarehouseCache = null
+                const retryWarehouseId = await resolveShipmozoWarehouseId(
+                  { ...order, pickup_location_id: '' },
+                  pickup,
+                )
+                if (!retryWarehouseId || retryWarehouseId === String(pushPayload.warehouse_id || '').trim()) {
+                  throw new HttpError(
+                    400,
+                    `Shipmozo manifest failed for order ${order.order_number}: invalid warehouse_id and no alternate active warehouse found.`,
+                  )
+                }
+                pushResp = await shipmozo.pushOrder({
+                  ...(pushPayload as any),
+                  warehouse_id: retryWarehouseId,
+                })
+              }
               const shipmozoOrderId =
                 String(pushResp?.data?.order_id ?? '').trim() || String(order.order_number).trim()
 
