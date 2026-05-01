@@ -785,4 +785,24 @@ export class XpressbeesService {
       data: { awb },
     })
   }
+
+  async trackShipment(awb: string) {
+    const normalizedAwb = String(awb || '').trim()
+    if (!normalizedAwb) {
+      throw new HttpError(400, 'AWB is required for Xpressbees tracking')
+    }
+
+    return this.requestWithFallback<any>({
+      method: 'post',
+      pathCandidates: [
+        '/api/track',
+        '/track',
+        '/api/shipments/track',
+        '/shipments/track',
+        '/api/shipments2/track',
+        '/shipments2/track',
+      ],
+      data: { awb: normalizedAwb },
+    })
+  }
 }

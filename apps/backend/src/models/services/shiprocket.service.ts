@@ -64,6 +64,7 @@ import { b2bPincodes, b2bZoneToZoneRates, zones } from '../schema/zones'
 import { calculateB2BRate } from './b2bAdmin.service'
 import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
+import { IcarryService } from './couriers/icarry.service'
 import { ShiprocketCourierService } from './couriers/shiprocket.service'
 import { ShipmozoService } from './couriers/shipmozo.service'
 import { TruxcargoService } from './couriers/truxcargo.service'
@@ -7681,6 +7682,69 @@ const mapTruxcargoTracking = (raw: any, order: OrderSummary): ProviderNormalized
   }
 }
 
+const mapEkartTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const track = raw?.track || raw?.data || raw || {}
+  pushHistoryEvent(history, {
+    statusCode: track?.status || order.order_status || 'Status Update',
+    message: track?.status || track?.message || order.order_status || 'Status Update',
+    location: track?.location || '',
+    time: track?.updated_at || track?.timestamp || order.updated_at || order.created_at,
+  })
+
+  return {
+    history,
+    status: sanitizeString(track?.status || order.order_status, 'In Transit'),
+    courier_name: sanitizeString(order.courier_partner || 'Ekart'),
+    edd: sanitizeString(track?.estimated_delivery_date || order.edd || ''),
+    shipment_info: sanitizeString(track?.remarks || ''),
+  }
+}
+
+const mapXpressbeesTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const event =
+    raw?.data?.tracking_data?.[0] ||
+    raw?.data?.shipment_track?.[0] ||
+    raw?.data?.[0] ||
+    raw?.data ||
+    raw ||
+    {}
+
+  pushHistoryEvent(history, {
+    statusCode: event?.status || event?.current_status || order.order_status || 'Status Update',
+    message: event?.activity || event?.status || event?.current_status || order.order_status || 'Status Update',
+    location: event?.location || event?.city || '',
+    time: event?.date || event?.event_time || event?.updated_at || order.updated_at || order.created_at,
+  })
+
+  return {
+    history,
+    status: sanitizeString(event?.status || event?.current_status || order.order_status, 'In Transit'),
+    courier_name: sanitizeString(order.courier_partner || 'Xpressbees'),
+    edd: sanitizeString(event?.edd || order.edd || ''),
+    shipment_info: sanitizeString(event?.remarks || ''),
+  }
+}
+
+const mapIcarryTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
+  const history: TrackingHistoryItem[] = []
+  const event = raw?.data || raw?.tracking || raw || {}
+  pushHistoryEvent(history, {
+    statusCode: event?.status || event?.current_status || order.order_status || 'Status Update',
+    message: event?.message || event?.status || event?.current_status || order.order_status || 'Status Update',
+    location: event?.location || event?.city || '',
+    time: event?.updated_at || event?.event_time || order.updated_at || order.created_at,
+  })
+  return {
+    history,
+    status: sanitizeString(event?.status || event?.current_status || order.order_status, 'In Transit'),
+    courier_name: sanitizeString(order.courier_partner || 'iCarry'),
+    edd: sanitizeString(event?.expected_delivery_date || order.edd || ''),
+    shipment_info: sanitizeString(event?.remarks || ''),
+  }
+}
+
 const buildTrackingResponse = (
   order: OrderSummary,
   providerData: ProviderNormalizedTracking,
@@ -7823,12 +7887,20 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
 
   let providerKey = sanitizeString(order.integration_type ?? 'delhivery').toLowerCase()
 
-  if (!['delhivery', 'shipmozo', 'shiprocket', 'truxcargo'].includes(providerKey) && order.courier_partner) {
+  if (
+    !['delhivery', 'shipmozo', 'shiprocket', 'truxcargo', 'ekart', 'xpressbees', 'icarry'].includes(
+      providerKey,
+    ) &&
+    order.courier_partner
+  ) {
     const partner = order.courier_partner.toLowerCase()
     if (partner.includes('delhivery')) providerKey = 'delhivery'
     if (partner.includes('shipmozo')) providerKey = 'shipmozo'
     if (partner.includes('shiprocket')) providerKey = 'shiprocket'
     if (partner.includes('truxcargo')) providerKey = 'truxcargo'
+    if (partner.includes('ekart')) providerKey = 'ekart'
+    if (partner.includes('xpress')) providerKey = 'xpressbees'
+    if (partner.includes('icarry')) providerKey = 'icarry'
   }
 
   let providerData: ProviderNormalizedTracking
@@ -7850,6 +7922,25 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
       const truxcargoService = new TruxcargoService()
       const raw = await truxcargoService.trackShipment({ waybill: awb })
       providerData = mapTruxcargoTracking(raw, order)
+    } else if (providerKey === 'ekart') {
+      const ekartService = new EkartService()
+      const raw = await ekartService.trackWbn(awb)
+      providerData = mapEkartTracking(raw, order)
+    } else if (providerKey === 'xpressbees') {
+      const xpressbeesService = new XpressbeesService()
+      const raw = await xpressbeesService.trackShipment(awb)
+      providerData = mapXpressbeesTracking(raw, order)
+    } else if (providerKey === 'icarry') {
+      const shipmentId = Number(order.shipment_id || 0)
+      if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
+        throw new HttpError(
+          400,
+          'iCarry tracking requires shipment_id on order. Rebook or sync shipment mapping first.',
+        )
+      }
+      const icarryService = new IcarryService()
+      const raw = await icarryService.trackShipment({ shipment_id: shipmentId })
+      providerData = mapIcarryTracking(raw, order)
     } else {
       throw new HttpError(400, 'Unsupported integration_type for tracking')
     }
