@@ -55,6 +55,15 @@ const ACCENT = '#0D3B8E'
 const TEXT_PRIMARY = '#102A54'
 const TEXT_MUTED = '#496189'
 const BORDER = '#E2E8F0'
+const AGGREGATOR_LABELS: Record<string, string> = {
+  shiprocket: 'Shiprocket',
+  shipmozo: 'Shipmozo',
+  delhivery: 'Delhivery',
+  ekart: 'Ekart',
+  xpressbees: 'Xpressbees',
+  truxcargo: 'Truxcargo',
+  icarry: 'iCarry',
+}
 
 export default function CourierRateList({
   availableCouriers = [],
@@ -123,6 +132,14 @@ export default function CourierRateList({
 
       <Grid container spacing={3}>
         {availableCouriers?.map((courier) => {
+          const providerKey = String(
+            (courier as any)?.integration_type ||
+              (courier as any)?.service_provider ||
+              (courier as any)?.serviceProvider ||
+              '',
+          )
+            .trim()
+            .toLowerCase()
           const logo =
             Object.entries(courierLogos || {}).find(([key]) =>
               courier?.name?.toLowerCase().includes(key.toLowerCase()),
@@ -145,6 +162,8 @@ export default function CourierRateList({
           const eddText = courier?.edd ?? '—'
           const isClickable = Boolean(onSelect)
 
+          const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'Unknown Aggregator'
+
           return (
             <Grid size={{ xs: 12, sm: 6, md: 4 }} key={courier.id}>
               <Card
@@ -152,22 +171,23 @@ export default function CourierRateList({
                 sx={{
                   height: '100%',
                   overflow: 'hidden',
-                  borderRadius: 3,
-                  border: `1px solid ${BORDER}`,
-                  boxShadow: `0 2px 8px ${alpha('#000000', 0.05)}`,
+                  borderRadius: 0.75,
+                  border: `1px solid ${alpha('#0B2348', 0.2)}`,
+                  boxShadow: 'none',
                   transition: 'all 0.2s ease',
-                  background: '#FFFFFF',
+                  background: '#FCFEFF',
                   cursor: isClickable ? 'pointer' : 'default',
                   '&:hover': {
-                    boxShadow: `0 10px 24px ${alpha(ACCENT, 0.1)}`,
-                    borderColor: alpha(ACCENT, 0.28),
+                    boxShadow: `6px 6px 0 ${alpha('#0B2348', 0.12)}`,
+                    borderColor: alpha('#0B2348', 0.5),
+                    transform: 'translate(-2px, -2px)',
                   },
                 }}
               >
                 <Box
                   sx={{
-                    height: 3,
-                    background: alpha(ACCENT, 0.9),
+                    height: 5,
+                    background: '#0B2348',
                   }}
                 />
 
@@ -180,7 +200,7 @@ export default function CourierRateList({
                       sx={{
                         width: 56,
                         height: 56,
-                        borderRadius: 2,
+                        borderRadius: 0.75,
                         border: `1px solid ${alpha(ACCENT, 0.14)}`,
                       }}
                     />
@@ -216,11 +236,11 @@ export default function CourierRateList({
 
                   <Box
                     sx={{
-                      background: alpha(ACCENT, 0.04),
-                      borderRadius: 2,
+                      background: '#F3F7FE',
+                      borderRadius: 0.5,
                       p: 2,
                       mb: 2.5,
-                      border: `1px solid ${alpha(ACCENT, 0.14)}`,
+                      border: `1px solid ${alpha('#0B2348', 0.16)}`,
                     }}
                   >
                     <Stack direction="row" alignItems="baseline" spacing={1}>
@@ -261,7 +281,7 @@ export default function CourierRateList({
                         sx={{
                           p: 1.5,
                           borderRadius: 1.5,
-                          background: '#F8FAFC',
+                          background: '#FFFFFF',
                           border: `1px solid ${BORDER}`,
                         }}
                       >
@@ -302,7 +322,7 @@ export default function CourierRateList({
                         sx={{
                           p: 1.5,
                           borderRadius: 1.5,
-                          background: '#F8FAFC',
+                          background: '#FFFFFF',
                           border: `1px solid ${BORDER}`,
                         }}
                       >
@@ -376,6 +396,20 @@ export default function CourierRateList({
                       </Tooltip>
                     )}
                   </Stack>
+
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      mt: 2.25,
+                      display: 'block',
+                      textAlign: 'left',
+                      color: alpha(TEXT_MUTED, 0.95),
+                      letterSpacing: '0.01em',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Parent Company: {aggregatorName}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

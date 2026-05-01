@@ -1102,6 +1102,7 @@ export const fetchAvailableCouriersWithRates = async (
       'shipmozo',
       'shiprocket',
       'truxcargo',
+      'icarry',
     ]
     const systemCourierRows = await db
       .select({
@@ -1879,6 +1880,52 @@ export const fetchAvailableCouriersWithRates = async (
     }
 
     // Delhivery-only mode: no non-Delhivery live serviceability checks.
+
+    // Include enabled providers that rely on local rate cards but may not have live provider
+    // serviceability checks wired in this flow yet (e.g. iCarry/Truxcargo).
+    const addLocalOnlyProviderCouriers = (providerKey: string) => {
+      if (!enabledProviders.has(providerKey)) return
+      const bucket = providerCourierBuckets.get(providerKey)
+      if (!bucket?.rows?.length) return
+
+      for (const courier of bucket.rows) {
+        const alreadyPresent = combinedCouriers.some(
+          (existing: any) =>
+            Number(existing?.id) === Number(courier.id) &&
+            normalizeProviderKey(
+              existing?.integration_type ||
+                existing?.service_provider ||
+                existing?.serviceProvider ||
+                null,
+            ) === providerKey,
+        )
+        if (alreadyPresent) continue
+
+        combinedCouriers.push({
+          id: courier.id,
+          name: courier.name,
+          serviceProvider: providerKey,
+          service_provider: providerKey,
+          integration_type: providerKey,
+          cod: true,
+          prepaid: true,
+          edd: '3-6 Days',
+          approxZone: null,
+          createdAt: courier.createdAt,
+          courier_cost_estimate: null,
+          rateEstimate: null,
+          freight_charges: null,
+          cod_charges: null,
+          total_charges: null,
+          chargeable_weight: null,
+          provider_serviceability: null,
+          shipping_mode: null,
+        })
+      }
+    }
+
+    addLocalOnlyProviderCouriers('truxcargo')
+    addLocalOnlyProviderCouriers('icarry')
 
     // âœ… Local rate & zone logic - Fetch for ALL service providers
     let localRates: any[] = []

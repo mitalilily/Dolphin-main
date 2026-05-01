@@ -82,7 +82,6 @@ const Couriers = () => {
     limit: rowsPerPage,
     filters: {
       ...filters,
-      serviceProviders: ['icarry', 'shipmozo'],
     },
   })
 
