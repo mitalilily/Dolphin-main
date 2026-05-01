@@ -4183,30 +4183,18 @@ export const createB2CShipmentService = async (
         assignResp?.data?.courier_name ??
         'Shiprocket'
 
-      const pickupResp = await shiprocket.generatePickup({
-        shipment_id: [Number(shiprocketShipmentId)],
-      })
-      const manifestResp = await shiprocket.generateManifest({
-        shipment_id: [Number(shiprocketShipmentId)],
-      })
-      const printManifestResp = await shiprocket.printManifest({
-        order_ids: [Number(shiprocketOrderId)],
-      })
-      const labelResp = await shiprocket.generateLabel({
-        shipment_id: [Number(shiprocketShipmentId)],
-      })
-      const invoiceResp = await shiprocket.generateInvoice({
-        ids: [Number(shiprocketOrderId)],
-      })
-
+      // Manifest-first flow for Shiprocket:
+      // create + assign AWB on booking, then pickup/manifest/docs only via manifest action.
       shipmentData = {
         create: createOrderResp,
         assign: assignResp,
-        pickup: pickupResp,
-        manifest: manifestResp,
-        print_manifest: printManifestResp,
-        label: labelResp,
-        invoice: invoiceResp,
+        provider: 'shiprocket',
+        deferred_manifest: true,
+        booking_state: 'pending_manifest',
+        data: {
+          order_id: String(shiprocketOrderId),
+          shipment_id: String(shiprocketShipmentId),
+        },
       }
       shipmentSuccessPackage = assignResp?.response?.data || assignResp?.data || assignResp || {}
       providerCourierCost = Number(params?.courier_cost ?? 0) || null
@@ -4221,12 +4209,8 @@ export const createB2CShipmentService = async (
         awb_number: awbNumber,
         courier_name: courierName,
         courier_id: params.courier_id ? Number(params.courier_id) : null,
-        label: labelResp?.label_url ?? labelResp?.data?.label_url ?? undefined,
-        manifest:
-          manifestResp?.manifest_url ??
-          printManifestResp?.manifest_url ??
-          manifestResp?.data?.manifest_url ??
-          undefined,
+        label: undefined,
+        manifest: undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -4472,7 +4456,9 @@ export const createB2CShipmentService = async (
       // 4ï¸âƒ£ WALLET TRANSACTION
       // Delhivery forward orders use deferred manifest generation, so charge only after manifest succeeds.
       const shouldDeferWalletDebit =
-        (integrationType === 'delhivery' || integrationType === 'shipmozo') &&
+        (integrationType === 'delhivery' ||
+          integrationType === 'shipmozo' ||
+          integrationType === 'shiprocket') &&
         !isReverseShipment &&
         shipmentData?.deferred_manifest === true
       const finalWalletDebit = walletDebit ?? 0
@@ -5358,7 +5344,8 @@ export const generateManifestService = async (params: {
         if (
           integrationType === 'xpressbees' ||
           integrationType === 'ekart' ||
-          integrationType === 'shipmozo'
+          integrationType === 'shipmozo' ||
+          integrationType === 'shiprocket'
         ) {
           if (params.type !== 'b2c') {
             throw new Error('This manifest flow is only supported for B2C orders')
@@ -5379,7 +5366,9 @@ export const generateManifestService = async (params: {
               ? 'Ekart'
               : integrationType === 'shipmozo'
                 ? 'Shipmozo'
-                : 'Xpressbees'
+                : integrationType === 'shiprocket'
+                  ? 'Shiprocket'
+                  : 'Xpressbees'
 
           const normalizeDetails = (value: any) => {
             if (!value) return {}
@@ -5544,7 +5533,7 @@ export const generateManifestService = async (params: {
           }
 
           const providerManifestIds =
-            integrationType === 'ekart'
+            integrationType === 'ekart' || integrationType === 'shiprocket'
               ? fetchedOrders
                   .map((order) =>
                     String(order.shipment_id || order.awb_number || order.order_number || '').trim(),
@@ -5564,6 +5553,16 @@ export const generateManifestService = async (params: {
           } else if (integrationType === 'xpressbees') {
             const xpressbees = new XpressbeesService()
             await xpressbees.generateManifest(providerManifestIds)
+          } else if (integrationType === 'shiprocket') {
+            const shiprocket = new ShiprocketCourierService()
+            const shipmentIds = providerManifestIds
+              .map((id) => Number(id))
+              .filter((id) => Number.isFinite(id) && id > 0)
+            if (!shipmentIds.length) {
+              throw new HttpError(400, 'No valid Shiprocket shipment IDs found for manifest.')
+            }
+            await shiprocket.generatePickup({ shipment_id: shipmentIds })
+            await shiprocket.generateManifest({ shipment_id: shipmentIds })
           }
 
           const pickupDetails = normalizeDetails(fetchedOrders[0]?.pickup_details)
@@ -5755,128 +5754,23 @@ export const generateManifestService = async (params: {
               .where(eq(b2c_orders.id, order.id))
 
             if (!freshOrder) {
-              console.warn(
-                `âš ï¸ ${providerName} order ${order.order_number} not found in database, skipping label generation`,
-              )
-              manifestWarnings.push(
-                `${order.order_number}: label could not be generated because the order was not found after manifesting.`,
-              )
+              console.warn(`âš ï¸ ${providerName} order ${order.order_number} not found in database`)
               return
-            }
-
-            let labelKey: string | null =
-              typeof freshOrder.label === 'string' && freshOrder.label.trim()
-                ? freshOrder.label.trim()
-                : null
-
-            if (!labelKey && freshOrder.awb_number) {
-              try {
-                labelKey = await generateLabelForOrder(freshOrder, freshOrder.user_id, tx)
-                if (labelKey) {
-                  console.log(
-                    `âœ… [${providerName}] Custom label generated for order ${freshOrder.order_number}: ${labelKey}`,
-                  )
-                }
-              } catch (labelErr: any) {
-                console.error(
-                  `âŒ [${providerName}] Failed to generate custom label for order ${freshOrder.order_number}:`,
-                  labelErr?.message || labelErr,
-                )
-                manifestWarnings.push(
-                  `${freshOrder.order_number}: label could not be generated.`,
-                )
-              }
-            }
-
-            const updateDataXpress: any = {
-              manifest: manifestKey,
-              order_status: 'pickup_initiated',
-              updated_at: new Date(),
-            }
-
-            if (labelKey && typeof labelKey === 'string' && labelKey.trim().length > 0) {
-              const normalizedLabel = normalizeToR2Key(labelKey.trim())
-              if (normalizedLabel) {
-                updateDataXpress.label = normalizedLabel
-              }
             }
 
             await tx
               .update(b2c_orders)
-              .set(updateDataXpress)
+              .set({
+                manifest: manifestKey,
+                order_status: 'pickup_initiated',
+                updated_at: new Date(),
+              })
               .where(eq(b2c_orders.id, freshOrder.id))
 
             await debitManifestSuccessChargeIfNeeded({ tx, order: freshOrder })
           })
 
           await Promise.all(orderUpdatePromises)
-
-          const invoiceResults = await Promise.allSettled(
-            fetchedOrders.map((order) => generateInvoiceForOrder(order)),
-          )
-
-          const invoiceUpdateResults = await Promise.allSettled(
-            invoiceResults.map(async (result, index) => {
-              const order = fetchedOrders[index]
-
-              if (result.status !== 'fulfilled' || !result.value) {
-                console.warn(
-                  `âš ï¸ [Manifest] Invoice generation failed for ${providerName} order ${order.order_number}`,
-                )
-                manifestWarnings.push(`${order.order_number}: invoice could not be generated.`)
-                return
-              }
-
-              const invoiceResult = result.value as {
-                key: string
-                invoiceNumber?: string
-                invoiceDate?: string
-                invoiceAmount?: number
-              }
-              const invoiceKey = invoiceResult.key
-              if (!invoiceKey || typeof invoiceKey !== 'string' || !invoiceKey.trim()) {
-                manifestWarnings.push(`${order.order_number}: invoice file is missing.`)
-                return
-              }
-
-              const normalizedInvoiceKey = normalizeToR2Key(invoiceKey.trim())
-              if (!normalizedInvoiceKey) {
-                console.warn(
-                  `âš ï¸ [Manifest] Could not normalize invoice key for ${providerName} order ${order.order_number}: ${invoiceKey.trim()}`,
-                )
-                manifestWarnings.push(`${order.order_number}: invoice file could not be saved.`)
-                return
-              }
-
-              await db
-                .update(b2c_orders)
-                .set({
-                  invoice_link: normalizedInvoiceKey,
-                  invoice_number: invoiceResult.invoiceNumber ?? undefined,
-                  invoice_date: invoiceResult.invoiceDate ?? undefined,
-                  invoice_amount:
-                    invoiceResult.invoiceAmount !== undefined
-                      ? invoiceResult.invoiceAmount
-                      : undefined,
-                  updated_at: new Date(),
-                })
-                .where(eq(b2c_orders.id, order.id))
-
-              console.log(
-                `âœ… [Manifest] Invoice link updated for ${providerName} order ${order.order_number}: ${normalizedInvoiceKey}`,
-              )
-            }),
-          )
-
-          invoiceUpdateResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') return
-            const order = fetchedOrders[index]
-            console.error(
-              `âŒ [Manifest] Failed to update invoice_link for ${providerName} order ${order.order_number}:`,
-              result.reason?.message || result.reason,
-            )
-            manifestWarnings.push(`${order.order_number}: invoice could not be saved.`)
-          })
 
           const uniqueWarnings = Array.from(new Set(manifestWarnings))
 
