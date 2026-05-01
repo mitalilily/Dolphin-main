@@ -487,6 +487,8 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                       (courier as any)?.integration_type ||
                         (courier as any)?.service_provider ||
                         (courier as any)?.serviceProvider ||
+                        providerKey ||
+                        inferProviderFromName(courier?.name) ||
                         '',
                     )
                     setValue('zone', courier?.approxZone?.code ?? courier?.approxZone?.name ?? '')

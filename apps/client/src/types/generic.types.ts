@@ -128,7 +128,14 @@ export interface B2COrder {
   city: string
   state: string
   country: string
-  integration_type: 'delhivery' | 'shipmozo'
+  integration_type:
+    | 'delhivery'
+    | 'shipmozo'
+    | 'xpressbees'
+    | 'icarry'
+    | 'shiprocket'
+    | 'truxcargo'
+    | 'ekart'
   pincode: string
 
   // Product info

@@ -125,6 +125,29 @@ const upsertStaticProviderCouriers = async (
   return rows.length
 }
 
+const ensureProviderSeedRows = async (provider: string) => {
+  const normalized = String(provider || '').trim().toLowerCase()
+  if (!normalized) return 0
+
+  if (normalized === 'shiprocket') {
+    return upsertStaticProviderCouriers('shiprocket', SHIPROCKET_COURIER_SEEDS)
+  }
+  if (normalized === 'shipmozo') {
+    return upsertStaticProviderCouriers('shipmozo', SHIPMOZO_COURIER_SEEDS)
+  }
+  if (normalized === 'truxcargo') {
+    return upsertStaticProviderCouriers('truxcargo', TRUXCARGO_COURIER_SEEDS)
+  }
+  if (normalized === 'icarry') {
+    return upsertStaticProviderCouriers('icarry', ICARRY_COURIER_SEEDS)
+  }
+  if (normalized === 'juxcargo') {
+    return upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
+  }
+
+  return 0
+}
+
 export const fetchAvailableCouriersForAdmin = async (req: Request, res: Response) => {
   try {
     const {
@@ -500,18 +523,23 @@ export const updateServiceProviderStatusController = async (req: Request, res: R
 
   try {
     const allowedProviders: string[] = [...ADMIN_SUPPORTED_COURIER_PROVIDERS]
+    const normalizedProvider = String(serviceProvider || '').trim().toLowerCase()
 
-    if (!serviceProvider || typeof isEnabled !== 'boolean') {
+    if (!normalizedProvider || typeof isEnabled !== 'boolean') {
       return res.status(400).json({
         success: false,
         message: 'serviceProvider (param) and boolean isEnabled (body) are required',
       })
     }
-    if (!allowedProviders.includes(String(serviceProvider).toLowerCase())) {
+    if (!allowedProviders.includes(normalizedProvider)) {
       return res.status(400).json({
         success: false,
         message: `Only these providers are supported: ${allowedProviders.join(', ')}`,
       })
+    }
+
+    if (isEnabled) {
+      await ensureProviderSeedRows(normalizedProvider)
     }
 
     const updated = await db
@@ -520,17 +548,20 @@ export const updateServiceProviderStatusController = async (req: Request, res: R
         isEnabled,
         updatedAt: new Date(),
       })
-      .where(eq(couriers.serviceProvider, serviceProvider))
+      .where(eq(couriers.serviceProvider, normalizedProvider))
       .returning()
 
     if (!updated.length) {
-      return res.status(404).json({ success: false, message: 'No couriers found for provider' })
+      return res.status(404).json({
+        success: false,
+        message: `No couriers found for provider ${normalizedProvider}. Sync/add couriers first.`,
+      })
     }
 
     res.json({
       success: true,
       data: {
-        serviceProvider,
+        serviceProvider: normalizedProvider,
         isEnabled,
         affectedCouriers: updated.length,
       },

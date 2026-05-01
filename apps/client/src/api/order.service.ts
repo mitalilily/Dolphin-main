@@ -9,7 +9,14 @@ export interface CreateShipmentParams {
   package_breadth?: number
   package_height?: number
   transaction_fee?: number
-  integration_type?: 'delhivery' | 'xpressbees' | 'ekart' | 'shipmozo' | 'icarry'
+  integration_type?:
+    | 'delhivery'
+    | 'xpressbees'
+    | 'ekart'
+    | 'shipmozo'
+    | 'icarry'
+    | 'shiprocket'
+    | 'truxcargo'
   request_auto_pickup?: 'Yes' | 'No'
   gift_wrap?: number
   shipping_charges?: number // What seller charges customer (customer-facing price)

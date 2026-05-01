@@ -1790,6 +1790,112 @@ export const fetchAvailableCouriersWithRates = async (
       })
     }
 
+    let truxcargoAvailable = false
+    let truxcargoResp: any = null
+    let truxcargoRateRecords: any[] = []
+    if (enabledProviders.has('truxcargo')) {
+      const truxcargo = new TruxcargoService()
+      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
+      const destinationPincode = normalizePincode(
+        params.destination ?? params.destination_pincode,
+      )?.toString()
+      const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
+      const weightKg = normalizeWeightToKg(params.weight)
+
+      if (originPincode && destinationPincode && weightKg > 0) {
+        try {
+          truxcargoResp = await truxcargo.checkPincodeServiceability({
+            pickup_pincode: originPincode,
+            delivery_pincode: destinationPincode,
+            payment_type: params.payment_type === 'cod' ? 'cod' : 'prepaid',
+            weight: weightKg,
+            length: Number(params.length ?? 0) || undefined,
+            breadth: Number(params.breadth ?? 0) || undefined,
+            height: Number(params.height ?? 0) || undefined,
+            order_amount: orderAmountValue > 0 ? orderAmountValue : undefined,
+          })
+
+          truxcargoRateRecords = Array.isArray(truxcargoResp?.data)
+            ? truxcargoResp.data
+            : Array.isArray(truxcargoResp?.data?.records)
+              ? truxcargoResp.data.records
+              : Array.isArray(truxcargoResp?.records)
+                ? truxcargoResp.records
+                : []
+          truxcargoAvailable =
+            truxcargoRateRecords.length > 0 ||
+            truxcargoResp?.success === true ||
+            truxcargoResp?.status === true
+
+          if (truxcargoAvailable) {
+            registerServiceableProvider('truxcargo', {
+              providerId: 'truxcargo',
+              providerName: 'Truxcargo',
+              codAvailable: true,
+              prepaidAvailable: true,
+              edd: '3-6 Days',
+              raw: truxcargoResp,
+            })
+          }
+        } catch (err: any) {
+          console.error('❌ Truxcargo serviceability error:', err?.message || err)
+        }
+      }
+    }
+
+    let icarryAvailable = false
+    let icarryResp: any = null
+    let icarryRateRecords: any[] = []
+    if (enabledProviders.has('icarry')) {
+      const icarry = new IcarryService()
+      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
+      const destinationPincode = normalizePincode(
+        params.destination ?? params.destination_pincode,
+      )?.toString()
+      const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
+      const weightKg = normalizeWeightToKg(params.weight)
+
+      if (originPincode && destinationPincode && weightKg > 0) {
+        try {
+          icarryResp = await icarry.getEstimateSingleShipment({
+            origin_pincode: originPincode,
+            destination_pincode: destinationPincode,
+            origin_country_code: 'IN',
+            destination_country_code: 'IN',
+            shipment_mode: 'S',
+            shipment_type: 'P',
+            shipment_value: orderAmountValue > 0 ? orderAmountValue : 1,
+            weight: weightKg,
+            length: Number(params.length ?? 0) || 1,
+            breadth: Number(params.breadth ?? 0) || 1,
+            height: Number(params.height ?? 0) || 1,
+          } as any)
+
+          icarryRateRecords = Array.isArray((icarryResp as any)?.estimate)
+            ? (icarryResp as any).estimate
+            : Array.isArray((icarryResp as any)?.data?.estimate)
+              ? (icarryResp as any).data.estimate
+              : Array.isArray((icarryResp as any)?.data)
+                ? (icarryResp as any).data
+                : []
+          icarryAvailable = icarryRateRecords.length > 0
+
+          if (icarryAvailable) {
+            registerServiceableProvider('icarry', {
+              providerId: 'icarry',
+              providerName: 'iCarry',
+              codAvailable: true,
+              prepaidAvailable: true,
+              edd: '3-6 Days',
+              raw: icarryResp,
+            })
+          }
+        } catch (err: any) {
+          console.error('❌ iCarry serviceability error:', err?.message || err)
+        }
+      }
+    }
+
     for (const [providerKey, bucket] of providerCourierBuckets.entries()) {
       const providerMeta = serviceableProviders.get(providerKey)
       if (!providerMeta) continue
@@ -1822,6 +1928,24 @@ export const fetchAvailableCouriersWithRates = async (
                   String(courier.id).trim(),
               )
             : null
+        const truxcargoRecord =
+          providerKey === 'truxcargo'
+            ? truxcargoRateRecords?.find(
+                (record: any) =>
+                  String(
+                    record?.courier_id ?? record?.id ?? record?.service_id ?? record?.provider_id ?? '',
+                  ).trim() === String(courier.id).trim(),
+              )
+            : null
+        const icarryRecord =
+          providerKey === 'icarry'
+            ? icarryRateRecords?.find(
+                (record: any) =>
+                  String(
+                    record?.courier_id ?? record?.courierId ?? record?.id ?? record?.service_id ?? '',
+                  ).trim() === String(courier.id).trim(),
+              )
+            : null
         providerMeta.matchedCourierIds.add(Number(courier.id))
         combinedCouriers.push({
           id: courier.id,
@@ -1844,6 +1968,12 @@ export const fetchAvailableCouriersWithRates = async (
             shipmozoRecord?.total_charges ??
             shipmozoRecord?.shipping_charges ??
             shipmozoRecord?.amount ??
+            truxcargoRecord?.rate ??
+            truxcargoRecord?.freight_charges ??
+            truxcargoRecord?.shipping_charges ??
+            icarryRecord?.rate ??
+            icarryRecord?.courier_charges ??
+            icarryRecord?.shipping_charges ??
             xpressbeesRecord?.total_charges ??
             xpressbeesRecord?.freight_charges ??
             null,
@@ -1853,12 +1983,24 @@ export const fetchAvailableCouriersWithRates = async (
             shipmozoRecord?.total_charges ??
             shipmozoRecord?.shipping_charges ??
             shipmozoRecord?.amount ??
+            truxcargoRecord?.rate ??
+            truxcargoRecord?.freight_charges ??
+            truxcargoRecord?.shipping_charges ??
+            icarryRecord?.rate ??
+            icarryRecord?.courier_charges ??
+            icarryRecord?.shipping_charges ??
             null,
           freight_charges:
-            shiprocketRecord?.freight_charge ?? xpressbeesRecord?.freight_charges ?? null,
+            shiprocketRecord?.freight_charge ??
+            truxcargoRecord?.freight_charges ??
+            icarryRecord?.courier_charges ??
+            xpressbeesRecord?.freight_charges ??
+            null,
           cod_charges:
             shiprocketRecord?.cod_charges ??
             shipmozoRecord?.cod_charges ??
+            truxcargoRecord?.cod_charges ??
+            icarryRecord?.cod_charges ??
             xpressbeesRecord?.cod_charges ??
             null,
           total_charges:
@@ -1867,10 +2009,22 @@ export const fetchAvailableCouriersWithRates = async (
             shipmozoRecord?.total_charges ??
             shipmozoRecord?.shipping_charges ??
             shipmozoRecord?.amount ??
+            truxcargoRecord?.rate ??
+            truxcargoRecord?.total_charges ??
+            truxcargoRecord?.shipping_charges ??
+            icarryRecord?.rate ??
+            icarryRecord?.courier_charges ??
+            icarryRecord?.shipping_charges ??
             xpressbeesRecord?.total_charges ??
             null,
           chargeable_weight: xpressbeesRecord?.chargeable_weight ?? null,
-          provider_serviceability: shiprocketRecord ?? shipmozoRecord ?? xpressbeesRecord ?? null,
+          provider_serviceability:
+            shiprocketRecord ??
+            shipmozoRecord ??
+            truxcargoRecord ??
+            icarryRecord ??
+            xpressbeesRecord ??
+            null,
           shipping_mode:
             (shiprocketRecord?.is_surface === true || shiprocketRecord?.is_surface === 1
               ? 'Surface'
@@ -1899,8 +2053,8 @@ export const fetchAvailableCouriersWithRates = async (
 
     // Delhivery-only mode: no non-Delhivery live serviceability checks.
 
-    // Include enabled providers that rely on local rate cards but may not have live provider
-    // serviceability checks wired in this flow yet (e.g. iCarry/Truxcargo).
+    // Include enabled providers that rely on local rate cards or fallback cards when live
+    // provider serviceability/rates are unavailable in this request.
     const addLocalOnlyProviderCouriers = (providerKey: string) => {
       if (!enabledProviders.has(providerKey)) return
       const bucket = providerCourierBuckets.get(providerKey)
@@ -1942,6 +2096,7 @@ export const fetchAvailableCouriersWithRates = async (
       }
     }
 
+    addLocalOnlyProviderCouriers('shiprocket')
     addLocalOnlyProviderCouriers('truxcargo')
     addLocalOnlyProviderCouriers('icarry')
 

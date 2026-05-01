@@ -1,5 +1,4 @@
 import {
-  Badge,
   Flex,
   HStack,
   Spinner,
@@ -13,12 +12,9 @@ import {
   Thead,
   Tr,
   useToast,
-  Wrap,
-  WrapItem,
 } from '@chakra-ui/react'
 import { useMemo } from 'react'
 import {
-  useCouriers,
   useServiceProviders,
   useUpdateServiceProviderStatus,
 } from 'hooks/useCouriers'
@@ -43,7 +39,6 @@ const toProviderLabel = (value = '') =>
 
 const ServiceProviders = () => {
   const { data: providers = [], isLoading, error } = useServiceProviders()
-  const { data: couriers = [], isLoading: isCouriersLoading } = useCouriers()
   const updateStatus = useUpdateServiceProviderStatus()
   const toast = useToast()
 
@@ -79,27 +74,7 @@ const ServiceProviders = () => {
     )
   }, [providers])
 
-  const couriersByProvider = useMemo(() => {
-    const grouped = couriers.reduce((acc, courier) => {
-      const providerKey = (courier?.serviceProvider || '').toLowerCase()
-      if (!providerKey) return acc
-      if (!acc[providerKey]) {
-        acc[providerKey] = []
-      }
-      acc[providerKey].push(courier?.name || `${courier?.id || ''}`.trim())
-      return acc
-    }, {})
-
-    Object.keys(grouped).forEach((provider) => {
-      grouped[provider] = grouped[provider]
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-    })
-
-    return grouped
-  }, [couriers])
-
-  if (isLoading || isCouriersLoading) return <Spinner size="md" />
+  if (isLoading) return <Spinner size="md" />
   if (error) return <Text color="red.500">Failed to load service providers</Text>
 
   const handleToggle = (provider) => {
@@ -129,7 +104,7 @@ const ServiceProviders = () => {
       </Text>
       <HStack justify="space-between" align="center">
         <Text fontSize="sm" color="gray.500">
-          Manage provider status and review newly added couriers grouped under each provider.
+          Manage provider status at aggregator level.
         </Text>
       </HStack>
 
@@ -138,7 +113,6 @@ const ServiceProviders = () => {
           <Thead>
             <Tr>
               <Th minW="160px">Provider</Th>
-              <Th minW="280px">Couriers</Th>
               <Th isNumeric>Total Couriers</Th>
               <Th isNumeric>Enabled Couriers</Th>
               <Th>Status</Th>
@@ -148,35 +122,15 @@ const ServiceProviders = () => {
           <Tbody>
             {normalizedProviders.length === 0 ? (
               <Tr>
-                <Td colSpan={6} textAlign="center">
+                <Td colSpan={5} textAlign="center">
                   <Text color="gray.500">No service provider data found.</Text>
                 </Td>
               </Tr>
             ) : (
               normalizedProviders.map((provider) => {
-                const providerKey = (provider.serviceProvider || '').toLowerCase()
-                const names = couriersByProvider[providerKey] || []
-
                 return (
                   <Tr key={provider.serviceProvider}>
                     <Td>{toProviderLabel(provider.serviceProvider)}</Td>
-                    <Td>
-                      {names.length ? (
-                        <Wrap spacing={2}>
-                          {names.map((name) => (
-                            <WrapItem key={`${provider.serviceProvider}-${name}`}>
-                              <Badge colorScheme="blue" borderRadius="md" px={2} py={1}>
-                                {name}
-                              </Badge>
-                            </WrapItem>
-                          ))}
-                        </Wrap>
-                      ) : (
-                        <Text fontSize="sm" color="gray.500">
-                          No couriers mapped
-                        </Text>
-                      )}
-                    </Td>
                     <Td isNumeric>{provider.totalCouriers}</Td>
                     <Td isNumeric>{provider.enabledCouriers}</Td>
                     <Td>
