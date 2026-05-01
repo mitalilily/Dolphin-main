@@ -142,6 +142,41 @@ const summarizeManifestRefs = (values: Array<string | null | undefined>, maxVisi
 const getManifestFailureRefundReason = (orderNumber: string | null | undefined) =>
   `Refund for manifest failed order #${String(orderNumber || '').trim() || 'unknown'}`
 
+const isProductionEnvironment = () => {
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase()
+  const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase()
+  return nodeEnv === 'production' || appEnv === 'production'
+}
+
+const isShipmozoLiveBookingAllowedInCurrentEnvironment = () => {
+  if (isProductionEnvironment()) return true
+  const legacyOverride =
+    String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST || '').trim().toLowerCase() === 'true'
+  const nonProdOverride =
+    String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_NON_PROD || '').trim().toLowerCase() ===
+    'true'
+  return legacyOverride || nonProdOverride
+}
+
+const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCourierCost: number | null) => ({
+  shipmentData: {
+    provider: 'shipmozo',
+    deferred_manifest: true,
+    booking_state: 'pending_manifest',
+  },
+  shipmentMeta: {
+    shipment_id: params.order_number,
+    awb_number: undefined as string | undefined,
+    courier_name:
+      params.courier_partner || params.integration_type || 'Shipmozo (Pending Manifest)',
+    courier_id: params.courier_id ? Number(params.courier_id) : null,
+    label: undefined as string | undefined,
+    manifest: undefined as string | undefined,
+    courier_cost: providerCourierCost,
+    sort_code: null as string | null,
+  },
+})
+
 const getExpectedWalletDebitFromOrder = (order: {
   order_type?: string | null
   freight_charges?: number | string | null
@@ -3898,24 +3933,11 @@ export const createB2CShipmentService = async (
         // Manifest-first flow:
         // Do NOT create/assign/schedule directly on Shipmozo during order creation.
         // Booking happens only from manifest action in admin/client manifest endpoint.
-        shipmentData = {
-          provider: 'shipmozo',
-          deferred_manifest: true,
-          booking_state: 'pending_manifest',
-        }
-        shipmentSuccessPackage = shipmentData
         providerCourierCost = Number(params?.courier_cost ?? 0) || null
-        shipmentMeta = {
-          shipment_id: params.order_number,
-          awb_number: undefined,
-          courier_name:
-            params.courier_partner || params.integration_type || 'Shipmozo (Pending Manifest)',
-          courier_id: params.courier_id ? Number(params.courier_id) : null,
-          label: undefined,
-          manifest: undefined,
-          courier_cost: providerCourierCost,
-          sort_code: null,
-        }
+        const deferredPayload = buildShipmozoDeferredManifestPayload(params, providerCourierCost)
+        shipmentData = deferredPayload.shipmentData
+        shipmentSuccessPackage = shipmentData
+        shipmentMeta = deferredPayload.shipmentMeta
       }
     } else if (integrationType === 'shiprocket') {
       if (isReverseShipment) {
@@ -5372,22 +5394,13 @@ export const generateManifestService = async (params: {
           }
 
           if (integrationType === 'shipmozo') {
-            const allowLiveShipmozoBooking =
-              String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST || '').trim().toLowerCase() ===
-              'true'
-            const isLikelyTestEnv =
-              String(process.env.NODE_ENV || '')
-                .trim()
-                .toLowerCase() === 'test' ||
-              String(process.env.APP_ENV || '')
-                .trim()
-                .toLowerCase()
-                .includes('test')
-
-            if (isLikelyTestEnv && !allowLiveShipmozoBooking) {
+            // Safety policy:
+            // Live Shipmozo booking is allowed in production only.
+            // Non-production can opt-in only with explicit override flags.
+            if (!isShipmozoLiveBookingAllowedInCurrentEnvironment()) {
               throw new HttpError(
                 403,
-                'Shipmozo live booking is blocked in test environment. Set SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST=true only with explicit approval.',
+                'Shipmozo live booking is blocked in non-production environment. Set SHIPMOZO_ALLOW_LIVE_BOOKING_NON_PROD=true (or legacy SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST=true) only with explicit approval.',
               )
             }
 
