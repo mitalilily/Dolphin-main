@@ -14,6 +14,27 @@ const ACCENT = '#0D3B8E'
 const TEXT_PRIMARY = '#102A54'
 const TEXT_SECONDARY = '#4C6185'
 const SURFACE = '#F6F8FC'
+const AGGREGATOR_LABELS: Record<string, string> = {
+  shiprocket: 'Shiprocket',
+  shipmozo: 'Shipmozo',
+  delhivery: 'Delhivery',
+  ekart: 'Ekart',
+  xpressbees: 'Xpressbees',
+  truxcargo: 'Truxcargo',
+  icarry: 'iCarry',
+}
+
+const inferProviderFromName = (name?: string | null) => {
+  const n = String(name || '').toLowerCase()
+  if (n.includes('shiprocket')) return 'shiprocket'
+  if (n.includes('shipmozo')) return 'shipmozo'
+  if (n.includes('delhivery')) return 'delhivery'
+  if (n.includes('ekart')) return 'ekart'
+  if (n.includes('xpress')) return 'xpressbees'
+  if (n.includes('trux')) return 'truxcargo'
+  if (n.includes('icarry') || n.includes('i carry')) return 'icarry'
+  return ''
+}
 
 export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b2c' }) => {
   const { watch, setValue, clearErrors } = useFormContext<B2BFormData | B2CFormData>()
@@ -110,7 +131,6 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
     payment_type: orderType,
     orderAmount: courierPayloadOrderAmount,
     shipmentType: shipment_type,
-    serviceProviders: shipment_type === 'b2c' ? ['shipmozo'] : undefined,
   }
 
   if (shipment_type === 'b2c') {
@@ -425,6 +445,16 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
           <Stack spacing={2}>
             {availableCouriers?.map((courier) => {
               const local = courier?.localRates
+              const providerKeyRaw = String(
+                (courier as any)?.integration_type ||
+                  (courier as any)?.service_provider ||
+                  (courier as any)?.serviceProvider ||
+                  '',
+              )
+                .trim()
+                .toLowerCase()
+              const providerKey = providerKeyRaw || inferProviderFromName(courier?.name)
+              const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'Unknown'
               const courierOptionKey = String(
                 courier?.courier_option_key ?? courier?.id ?? courier?.courier_id ?? '',
               )
@@ -452,7 +482,13 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                       'courierCost',
                       courier?.courier_cost_estimate || courier?.rateEstimate || null,
                     ) // Estimated courier cost from serviceability
-                    setValue('integrationType', courier?.integration_type)
+                    setValue(
+                      'integrationType',
+                      (courier as any)?.integration_type ||
+                        (courier as any)?.service_provider ||
+                        (courier as any)?.serviceProvider ||
+                        '',
+                    )
                     setValue('zone', courier?.approxZone?.code ?? courier?.approxZone?.name ?? '')
                     setValue('zoneId', courier?.approxZone?.id ?? '')
                     setValue('chargeableWeight', courier?.chargeable_weight ?? null)
@@ -588,6 +624,19 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                         </Typography>
                       </Stack>
                     )}
+
+                    <Typography
+                      sx={{
+                        pt: 1.05,
+                        borderTop: '1px solid rgba(13,59,142,0.12)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#0B2348',
+                        textAlign: 'left',
+                      }}
+                    >
+                      {aggregatorName}
+                    </Typography>
                   </Stack>
                 </Paper>
               )
