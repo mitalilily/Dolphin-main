@@ -4457,6 +4457,13 @@ export const createB2CShipmentService = async (
         )
       }
 
+      const truxShipmentId =
+        truxPayload?.shipment_id ??
+        truxPayload?.order_id ??
+        truxPayload?.tracking_id ??
+        truxPayload?.reference_id ??
+        truxWaybill
+
       shipmentData = createOrderResp
       shipmentSuccessPackage = truxPayload
       providerCourierCost =
@@ -4470,13 +4477,7 @@ export const createB2CShipmentService = async (
       providerSortCode = truxPayload?.sort_code ?? truxPayload?.destination_code ?? null
 
       shipmentMeta = {
-        shipment_id:
-          String(
-            truxPayload?.shipment_id ??
-              truxPayload?.order_id ??
-              truxPayload?.reference_id ??
-              truxWaybill,
-          ) || undefined,
+        shipment_id: String(truxShipmentId || truxWaybill) || undefined,
         awb_number: String(truxWaybill),
         courier_name: truxPayload?.courier_name ?? 'Truxcargo',
         courier_id: params.courier_id ? Number(params.courier_id) : null,
@@ -6051,7 +6052,8 @@ export const generateManifestService = async (params: {
           integrationType === 'xpressbees' ||
           integrationType === 'ekart' ||
           integrationType === 'shipmozo' ||
-          integrationType === 'shiprocket'
+          integrationType === 'shiprocket' ||
+          integrationType === 'truxcargo'
         ) {
           if (params.type !== 'b2c') {
             throw new Error('This manifest flow is only supported for B2C orders')
@@ -6074,6 +6076,8 @@ export const generateManifestService = async (params: {
                 ? 'Shipmozo'
                 : integrationType === 'shiprocket'
                   ? 'Shiprocket'
+                  : integrationType === 'truxcargo'
+                    ? 'Truxcargo'
                   : 'Xpressbees'
 
           const normalizeDetails = (value: any) => {
@@ -6431,6 +6435,38 @@ export const generateManifestService = async (params: {
             }
             await shiprocket.generatePickup({ shipment_id: shipmentIds })
             await shiprocket.generateManifest({ shipment_id: shipmentIds })
+          } else if (integrationType === 'truxcargo') {
+            const truxcargo = new TruxcargoService()
+            for (const order of fetchedOrders) {
+              if (!String(order.awb_number || '').trim()) {
+                continue
+              }
+              try {
+                const packagingResp = await truxcargo.createPackagingSlip({
+                  waybill: String(order.awb_number).trim(),
+                })
+                const packagingData = packagingResp?.data ?? packagingResp
+                const packagingUrl =
+                  packagingData?.label ||
+                  packagingData?.label_url ||
+                  packagingData?.label_link ||
+                  packagingData?.invoice ||
+                  packagingData?.invoice_url ||
+                  packagingData?.invoice_link ||
+                  null
+                if (typeof packagingUrl === 'string' && packagingUrl.trim()) {
+                  const existingManifestValue = String(order.manifest || '').trim()
+                  if (!existingManifestValue) {
+                    order.manifest = packagingUrl.trim()
+                  }
+                }
+              } catch (truxManifestErr: any) {
+                console.warn(
+                  `⚠️ [Truxcargo] Packaging slip generation failed for order ${order.order_number}:`,
+                  truxManifestErr?.message || truxManifestErr,
+                )
+              }
+            }
           }
 
           const pickupDetails = normalizeDetails(fetchedOrders[0]?.pickup_details)
