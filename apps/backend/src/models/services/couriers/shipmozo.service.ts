@@ -117,6 +117,12 @@ export type ShipmozoOrderDetailResponse = Record<string, any>
 
 export type ShipmozoOrderLabelRecord = {
   label?: string
+  label_url?: string
+  label_link?: string
+  invoice?: string
+  invoice_url?: string
+  invoice_link?: string
+  invoiceLabel?: string
   created_at?: string
 }
 

@@ -4406,10 +4406,156 @@ export const createB2CShipmentService = async (
         sort_code: providerSortCode,
       }
     } else if (integrationType === 'icarry') {
-      throw new HttpError(
-        400,
-        'iCarry booking is not enabled in this flow yet. Please use an enabled provider like Delhivery, Shipmozo, Shiprocket, Truxcargo, Ekart, or Xpressbees.',
-      )
+      if (isReverseShipment) {
+        throw new HttpError(400, 'iCarry reverse shipments are not supported in this flow yet')
+      }
+
+      const icarry = new IcarryService()
+      const pickupAddressIdRaw =
+        (params as any)?.pickup_address_id ??
+        (params as any)?.pickupAddressId ??
+        (params as any)?.pickup_id ??
+        (params as any)?.pickupId ??
+        (params as any)?.pickup_location_id ??
+        null
+      const pickupAddressId = Number(pickupAddressIdRaw)
+      if (!Number.isFinite(pickupAddressId) || pickupAddressId <= 0) {
+        throw new HttpError(
+          400,
+          'iCarry booking requires pickup_address_id (or pickup_id) as a positive number.',
+        )
+      }
+
+      const selectedCourierId = String(params.courier_id ?? '').trim()
+      if (!selectedCourierId) {
+        throw new HttpError(
+          400,
+          'iCarry booking requires courier_id. Please pass courier_id from serviceability response.',
+        )
+      }
+
+      const shipmentWeightKg = normalizeWeightToKg(params.package_weight ?? params.weight ?? 0)
+      const firstItem = Array.isArray(params.order_items) && params.order_items.length > 0
+        ? params.order_items[0]
+        : null
+      const itemDescription = String(firstItem?.name || 'Parcel').trim() || 'Parcel'
+      const orderValue = Number(params.order_amount ?? 0) > 0 ? Number(params.order_amount) : 1
+
+      const createPayload = {
+        pickup_address_id: pickupAddressId,
+        courier_id: selectedCourierId,
+        client_order_id: params.order_number,
+        parcel: {
+          type: 'Prepaid' as const,
+          value: orderValue,
+          currency: 'INR' as const,
+          contents: itemDescription,
+          dimensions: {
+            length: Number(params.package_length ?? params.length ?? 1) || 1,
+            breadth: Number(params.package_breadth ?? params.breadth ?? 1) || 1,
+            height: Number(params.package_height ?? params.height ?? 1) || 1,
+            unit: 'cm' as const,
+          },
+          weight: {
+            weight: Math.max(1, Math.round(shipmentWeightKg * 1000)),
+            unit: 'gm' as const,
+          },
+        },
+        consignee: {
+          name: params.consignee?.name || 'Customer',
+          mobile: String(params.consignee?.phone || '').replace(/\D/g, ''),
+          address: params.consignee?.address || '',
+          city: params.consignee?.city || '',
+          pincode: params.consignee?.pincode || '',
+          state: params.consignee?.state || '',
+          country_code: String(params.consignee?.country || 'IN').trim().toUpperCase() || 'IN',
+        },
+      }
+
+      const createOrderResp: any = await icarry.bookInternationalShipment(createPayload as any)
+      const icarryPayload =
+        createOrderResp?.data ??
+        createOrderResp?.shipment ??
+        createOrderResp?.result ??
+        createOrderResp
+
+      const extractFirstNumeric = (...values: Array<any>): string | null => {
+        for (const value of values) {
+          if (value === undefined || value === null) continue
+          const normalized = String(value).trim()
+          if (normalized && /^\d+$/.test(normalized)) return normalized
+        }
+        return null
+      }
+
+      const icarryShipmentId =
+        extractFirstNumeric(
+          icarryPayload?.shipment_id,
+          icarryPayload?.shipmentId,
+          icarryPayload?.id,
+          createOrderResp?.shipment_id,
+          createOrderResp?.shipmentId,
+          createOrderResp?.id,
+        ) || null
+
+      if (!icarryShipmentId) {
+        throw new HttpError(
+          500,
+          String(
+            createOrderResp?.message ||
+              createOrderResp?.error ||
+              'iCarry booking did not return shipment_id',
+          ),
+        )
+      }
+
+      let labelUrl: string | undefined
+      try {
+        const labelResp: any = await icarry.printShipmentLabel({
+          shipment_id: Number(icarryShipmentId),
+        })
+        const rawLabel =
+          labelResp?.data?.label ??
+          labelResp?.label ??
+          labelResp?.data?.label_url ??
+          labelResp?.label_url ??
+          null
+        if (typeof rawLabel === 'string' && rawLabel.trim()) labelUrl = rawLabel.trim()
+      } catch (labelErr: any) {
+        console.warn(
+          `⚠️ [iCarry] Label generation failed for order ${params.order_number}:`,
+          labelErr?.message || labelErr,
+        )
+      }
+
+      shipmentData = createOrderResp
+      shipmentSuccessPackage = icarryPayload
+      providerCourierCost =
+        Number(
+          icarryPayload?.rate ??
+            icarryPayload?.courier_charges ??
+            icarryPayload?.shipping_charges ??
+            params?.courier_cost ??
+            0,
+        ) || null
+      providerSortCode = icarryPayload?.sort_code ?? icarryPayload?.destination_code ?? null
+
+      shipmentMeta = {
+        shipment_id: icarryShipmentId,
+        awb_number:
+          String(
+            icarryPayload?.awb_number ??
+              icarryPayload?.awb ??
+              icarryPayload?.tracking_id ??
+              icarryShipmentId,
+          ) || undefined,
+        courier_name: icarryPayload?.courier_name ?? 'iCarry',
+        courier_id: params.courier_id ? Number(params.courier_id) : null,
+        label: labelUrl,
+        manifest: icarryPayload?.manifest ?? undefined,
+        courier_cost: providerCourierCost,
+        sort_code: providerSortCode,
+      }
     } else if (integrationType === 'shiprocket') {
       if (isReverseShipment) {
         throw new HttpError(400, 'Shiprocket reverse shipments are not supported in this flow yet')

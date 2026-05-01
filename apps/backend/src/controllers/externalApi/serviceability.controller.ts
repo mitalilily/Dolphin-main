@@ -16,6 +16,24 @@ const buildServiceabilityOptions = (body: any): Record<string, any> => {
     options.isReverseShipment = true
   }
 
+  const extractServiceProviders = (raw: unknown): string[] => {
+    if (!raw) return []
+    const items = Array.isArray(raw) ? raw : String(raw).split(',')
+    return items
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean)
+  }
+
+  const serviceProviders =
+    extractServiceProviders(body?.service_providers ?? body?.serviceProviders).length > 0
+      ? extractServiceProviders(body?.service_providers ?? body?.serviceProviders)
+      : extractServiceProviders(
+          body?.service_provider ?? body?.serviceProvider ?? body?.integration_type ?? body?.integrationType,
+        )
+  if (serviceProviders.length > 0) {
+    options.service_providers = serviceProviders
+  }
+
   return options
 }
 
