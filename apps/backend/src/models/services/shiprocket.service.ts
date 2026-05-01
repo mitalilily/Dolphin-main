@@ -2296,11 +2296,26 @@ export const fetchAvailableCouriersWithRates = async (
       .filter((c) => c !== null && c !== undefined)
 
     const requireLocalRates = params.shipment_type === 'b2c'
+    const B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST = new Set([
+      'shipmozo',
+      'shiprocket',
+      'icarry',
+      'truxcargo',
+      'delhivery',
+      'ekart',
+      'xpressbees',
+    ])
     combined = combined.filter((c: any) => {
       const providerKey = (c.integration_type || '').toLowerCase()
       const inSystem = isCourierInSystem(providerKey, c.id)
       const requiredRateType = isReverseShipment ? 'rto' : 'forward'
-      const localRatesAvailable = !requireLocalRates || Boolean(c.localRates?.[requiredRateType])
+      const hasLocalRate = Boolean(c.localRates?.[requiredRateType])
+      const hasProviderEstimate = Number.isFinite(Number(c?.rate)) || Number.isFinite(Number(c?.courier_cost_estimate))
+      const localRatesAvailable =
+        !requireLocalRates ||
+        hasLocalRate ||
+        (B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST.has(providerKey) && hasProviderEstimate) ||
+        B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST.has(providerKey)
 
       if (!inSystem || !localRatesAvailable) {
         console.log('ðŸš« Removing courier from final list', {
