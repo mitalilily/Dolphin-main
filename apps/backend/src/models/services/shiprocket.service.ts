@@ -6385,8 +6385,19 @@ export const generateManifestService = async (params: {
             ? (signedManifestUrl[0] ?? null)
             : signedManifestUrl
           const manifestWarnings: string[] = []
+          const invoiceResults = await Promise.allSettled(
+            fetchedOrders.map((order) =>
+              generateInvoiceForOrder(order).catch((err) => {
+                console.error(
+                  `❌ [Manifest] Invoice generation failed for order ${order.order_number}:`,
+                  err?.message || err,
+                )
+                return null
+              }),
+            ),
+          )
 
-          const orderUpdatePromises = fetchedOrders.map(async (order) => {
+          const orderUpdatePromises = fetchedOrders.map(async (order, index) => {
             const [freshOrder] = await tx
               .select()
               .from(b2c_orders)
@@ -6397,13 +6408,58 @@ export const generateManifestService = async (params: {
               return
             }
 
+            let nextLabel = freshOrder.label
+            if (!nextLabel && freshOrder.awb_number) {
+              try {
+                const generatedLabel = await generateLabelForOrder(freshOrder, freshOrder.user_id, tx)
+                if (generatedLabel && typeof generatedLabel === 'string' && generatedLabel.trim()) {
+                  nextLabel = generatedLabel.trim()
+                }
+              } catch (labelErr: any) {
+                console.warn(
+                  `⚠️ [Manifest] Label generation failed for order ${freshOrder.order_number}:`,
+                  labelErr?.message || labelErr,
+                )
+              }
+            }
+
+            let normalizedLabel: string | null = null
+            if (typeof nextLabel === 'string' && nextLabel.trim()) {
+              normalizedLabel = normalizeToR2Key(nextLabel.trim()) || nextLabel.trim()
+            }
+
+            const invoiceResult =
+              invoiceResults[index]?.status === 'fulfilled'
+                ? (invoiceResults[index]?.value as
+                    | {
+                        key: string
+                        invoiceNumber?: string
+                        invoiceDate?: string
+                        invoiceAmount?: number
+                      }
+                    | null)
+                : null
+            const normalizedInvoice =
+              invoiceResult?.key && invoiceResult.key.trim()
+                ? normalizeToR2Key(invoiceResult.key.trim()) || invoiceResult.key.trim()
+                : null
+
+            const updatePayload: Record<string, any> = {
+              manifest: manifestKey,
+              order_status: 'pickup_initiated',
+              updated_at: new Date(),
+            }
+            if (normalizedLabel) updatePayload.label = normalizedLabel
+            if (normalizedInvoice) {
+              updatePayload.invoice_link = normalizedInvoice
+              updatePayload.invoice_number = invoiceResult?.invoiceNumber ?? undefined
+              updatePayload.invoice_date = invoiceResult?.invoiceDate ?? undefined
+              updatePayload.invoice_amount = invoiceResult?.invoiceAmount ?? undefined
+            }
+
             await tx
               .update(b2c_orders)
-              .set({
-                manifest: manifestKey,
-                order_status: 'pickup_initiated',
-                updated_at: new Date(),
-              })
+              .set(updatePayload)
               .where(eq(b2c_orders.id, freshOrder.id))
 
             await debitManifestSuccessChargeIfNeeded({ tx, order: freshOrder })
