@@ -1,11 +1,11 @@
-import { pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
 export const courier_credentials = pgTable('courier_credentials', {
   id: uuid('id').primaryKey().defaultRandom(),
   provider: varchar('provider', { length: 100 }).notNull().unique(),
   apiBase: varchar('api_base', { length: 255 }).notNull().default(''),
   clientName: varchar('client_name', { length: 255 }).notNull().default(''),
-  apiKey: varchar('api_key', { length: 255 }).notNull().default(''),
+  apiKey: text('api_key').notNull().default(''),
   clientId: varchar('client_id', { length: 255 }).notNull().default(''),
   username: varchar('username', { length: 255 }).notNull().default(''),
   password: varchar('password', { length: 255 }).notNull().default(''),

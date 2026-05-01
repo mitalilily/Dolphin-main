@@ -48,12 +48,15 @@
     "patch:kyc-columns": "ts-node src/scripts/patchKycColumns.ts",
     "patch:customer-roles": "ts-node src/scripts/patchCustomerRoles.ts",
     "patch:order-label-columns": "ts-node src/scripts/patchOrderLabelColumns.ts",
+    "patch:courier-credentials-api-key-type": "node -r ts-node/register src/scripts/patchCourierCredentialsApiKeyType.ts",
     "seed:holidays": "ts-node src/scripts/seedHolidays.ts",
     "seed:holidays:year": "ts-node src/scripts/seedHolidays.ts",
     "seed:delhivery-b2c": "ts-node src/scripts/seedDelhiveryB2CRatecard.ts",
     "seed:shipmozo-b2c-slabs": "ts-node src/scripts/seedShipmozoB2CSlabs.ts",
+    "seed:b2c-shiprocket-icarry-rates": "node -r ts-node/register src/scripts/seedB2CShiprocketIcarryRates.ts",
     "sync:xpressbees-couriers": "ts-node src/scripts/syncXpressbeesCouriers.ts",
-    "sync:shiprocket-icarry-couriers": "node -r ts-node/register src/scripts/syncShiprocketAndIcarryCouriers.ts"
+    "sync:shiprocket-icarry-couriers": "node -r ts-node/register src/scripts/syncShiprocketAndIcarryCouriers.ts",
+    "set:icarry-credentials": "node -r ts-node/register src/scripts/setIcarryCredentials.ts"
   },
   "keywords": [],
   "author": "",

@@ -63,6 +63,12 @@ const Couriers = () => {
   const [openPopoverId, setOpenPopoverId] = useState(null)
   const [formData, setFormData] = useState({ businessType: ['b2c', 'b2b'] })
   const toast = useToast()
+  const sortedCouriers = [...couriers].sort((a, b) => {
+    if (Boolean(a?.isEnabled) !== Boolean(b?.isEnabled)) {
+      return a?.isEnabled ? -1 : 1
+    }
+    return String(a?.name || '').localeCompare(String(b?.name || ''))
+  })
 
   const columnKeys = ['id', 'name', 'serviceProvider', 'businessType', 'isEnabled', 'createdAt']
   const captions = [
@@ -246,7 +252,7 @@ const Couriers = () => {
   if (error) return <Text color="red.500">Failed to load couriers</Text>
 
   // Check if there are Delhivery couriers and show info
-  const delhiveryCouriers = couriers.filter((c) => c.serviceProvider === 'delhivery')
+  const delhiveryCouriers = sortedCouriers.filter((c) => c.serviceProvider === 'delhivery')
   const hasDelhiveryExpress = delhiveryCouriers.some((c) => c.id === 100)
   const hasDelhiverySurface = delhiveryCouriers.some((c) => c.id === 99)
 
@@ -336,7 +342,7 @@ const Couriers = () => {
       {/* Couriers Table */}
       <GenericTable
         title="Couriers List"
-        data={couriers}
+        data={sortedCouriers}
         columnKeys={columnKeys}
         captions={captions}
         renderers={renderers}
