@@ -3895,209 +3895,23 @@ export const createB2CShipmentService = async (
           sort_code: null,
         }
       } else {
-        const shipmozo = new ShipmozoService()
-        const requestedWarehouseId = String(
-          params.pickup_location_id ?? params.pickup?.warehouse_name ?? '',
-        ).trim()
-        const configuredDefaultWarehouseId = shipmozo.getDefaultWarehouseId()
-        let warehouseId = requestedWarehouseId || configuredDefaultWarehouseId
-
-        try {
-          const warehousesResp = await shipmozo.getWarehouses()
-          const warehouses = Array.isArray(warehousesResp?.data) ? warehousesResp.data : []
-          const normalizedRequested = requestedWarehouseId.toLowerCase()
-          const toNormalized = (value: unknown) => String(value ?? '').trim().toLowerCase()
-          const isDefaultWarehouse = (warehouse: any) => {
-            const marker = toNormalized(warehouse?.default)
-            return marker === '1' || marker === 'true' || marker === 'yes' || marker === 'y'
-          }
-
-          const matchedRequestedWarehouse = requestedWarehouseId
-            ? warehouses.find((warehouse: any) => {
-                const id = String(warehouse?.id ?? '').trim()
-                const title = toNormalized(warehouse?.address_title)
-                const name = toNormalized(warehouse?.name)
-                return id === requestedWarehouseId || title === normalizedRequested || name === normalizedRequested
-              })
-            : null
-
-          const matchedConfiguredDefaultWarehouse = configuredDefaultWarehouseId
-            ? warehouses.find(
-                (warehouse: any) =>
-                  String(warehouse?.id ?? '').trim() === String(configuredDefaultWarehouseId).trim(),
-              )
-            : null
-
-          const apiDefaultWarehouse = warehouses.find((warehouse: any) => isDefaultWarehouse(warehouse))
-          const firstActiveWarehouse = warehouses.find((warehouse: any) => {
-            const status = toNormalized(warehouse?.status)
-            return !status || status === '1' || status === 'true' || status === 'active' || status === 'enabled'
-          })
-
-          if (matchedRequestedWarehouse) {
-            warehouseId = String(matchedRequestedWarehouse.id).trim()
-          } else if (matchedConfiguredDefaultWarehouse) {
-            warehouseId = String(matchedConfiguredDefaultWarehouse.id).trim()
-          } else if (apiDefaultWarehouse) {
-            warehouseId = String(apiDefaultWarehouse.id ?? '').trim() || warehouseId
-          } else if (firstActiveWarehouse) {
-            warehouseId = String(firstActiveWarehouse.id ?? '').trim() || warehouseId
-          }
-
-          console.log('Shipmozo warehouse resolved for booking', {
-            requestedWarehouseId: requestedWarehouseId || null,
-            configuredDefaultWarehouseId: configuredDefaultWarehouseId || null,
-            resolvedWarehouseId: warehouseId || null,
-            totalWarehouses: warehouses.length,
-          })
-        } catch (warehouseLookupError: any) {
-          console.warn('Shipmozo warehouse lookup failed, using configured warehouse fallback', {
-            message: warehouseLookupError?.message || warehouseLookupError,
-          })
-        }
-
-        if (!warehouseId) {
-          throw new HttpError(
-            400,
-            'Shipmozo default warehouse ID is missing. Save it in courier credentials before booking.',
-          )
-        }
-
-        const primaryConsigneePhone = String(params.consignee?.phone ?? '').trim()
-        const alternateConsigneePhone = String((params.consignee as any)?.alternate_phone ?? '').trim()
-
-        const pushPayload = {
-          order_id: params.order_number,
-          order_date:
-            params.invoice_date || new Date(params.order_date || new Date()).toISOString().slice(0, 10),
-          order_type: 'ESSENTIALS',
-          consignee_name: params.consignee?.name,
-          consignee_phone: Number(primaryConsigneePhone || 0),
-          consignee_alternate_phone:
-            alternateConsigneePhone && alternateConsigneePhone !== primaryConsigneePhone
-              ? Number(alternateConsigneePhone)
-              : '',
-          consignee_email: params.consignee?.email || '',
-          consignee_address_line_one: params.consignee?.address,
-          consignee_address_line_two: params.consignee?.address_2 || '',
-          consignee_pin_code: Number(params.consignee?.pincode || 0),
-          consignee_city: params.consignee?.city,
-          consignee_state: params.consignee?.state,
-          product_detail: (params.order_items || []).map((item) => ({
-            name: item.name,
-            sku_number: item.sku || '',
-            quantity: item.qty || item.quantity || 1,
-            discount: String(item.discount ?? ''),
-            hsn: item.hsn || item.hsnCode || '',
-            unit_price: item.price,
-            product_category: 'Other',
-          })),
-          payment_type: params.payment_type === 'cod' ? 'COD' : 'PREPAID',
-          cod_amount: params.payment_type === 'cod' ? String(params.order_amount ?? 0) : '',
-          weight: Number(params.package_weight ?? params.weight ?? 0),
-          length: Number(params.package_length ?? params.length ?? 0),
-          width: Number(params.package_breadth ?? params.breadth ?? 0),
-          height: Number(params.package_height ?? params.height ?? 0),
-          warehouse_id: warehouseId,
-          gst_ewaybill_number: params.ewbn_number || params.ewaybill_number || '',
-          gstin_number: params.company?.gst || '',
-        }
-
-        const pushResp = await shipmozo.pushOrder(pushPayload)
-        const shipmozoOrderId =
-          String(pushResp?.data?.order_id ?? '').trim() || params.order_number
-
-        const requestedCourierId = Number(params.courier_id || 0)
-        const isShipmozoWalletError = (message: unknown) =>
-          typeof message === 'string' &&
-          /insufficient\s+wallet\s+balance|recharge\s+your\s+wallet/i.test(message)
-
-        let assignResp: any = null
-        let autoAssignResp: any = null
-
-        try {
-          assignResp = await shipmozo.assignCourier({
-            order_id: shipmozoOrderId,
-            courier_id: requestedCourierId,
-          })
-        } catch (assignError: any) {
-          const assignErrorMessage = String(assignError?.message || '')
-          if (isShipmozoWalletError(assignErrorMessage)) {
-            console.warn('⚠️ Shipmozo assign-courier failed with wallet error, trying auto-assign', {
-              orderId: shipmozoOrderId,
-              requestedCourierId,
-              message: assignErrorMessage,
-            })
-            try {
-              autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
-            } catch (autoAssignError: any) {
-              throw new HttpError(
-                400,
-                `Shipmozo courier assignment failed. Requested courier ${requestedCourierId} could not be assigned and auto-assign also failed: ${autoAssignError?.message || 'unknown error'}`,
-              )
-            }
-          } else {
-            throw assignError
-          }
-        }
-
-        const pickedCourierName =
-          assignResp?.data?.courier ||
-          autoAssignResp?.data?.courier_company_service ||
-          autoAssignResp?.data?.courier_company ||
-          params.courier_partner ||
-          params.integration_type ||
-          'Shipmozo'
-
-        const scheduleResp = await shipmozo.schedulePickup({
-          order_id: shipmozoOrderId,
-        })
-        const detailResp = await shipmozo.getOrderDetail(shipmozoOrderId)
-
-        const awbNumber =
-          autoAssignResp?.data?.awb_number ||
-          scheduleResp?.data?.awb_number ||
-          detailResp?.data?.awb_number ||
-          detailResp?.data?.awb ||
-          detailResp?.data?.tracking_id ||
-          undefined
-
-        let labelDataUrl: string | undefined
-        if (awbNumber) {
-          try {
-            const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
-            const rawLabel = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : undefined
-            const normalizedLabel =
-              typeof rawLabel === 'string' && rawLabel.trim().length > 0
-                ? rawLabel.trim()
-                : undefined
-            // Do not persist very large inline data URLs in order rows.
-            labelDataUrl =
-              normalizedLabel && /^data:/i.test(normalizedLabel) ? undefined : normalizedLabel
-          } catch (labelError: any) {
-            console.warn('âš ï¸ Shipmozo label fetch failed:', labelError?.message || labelError)
-          }
-        }
-
+        // Manifest-first flow:
+        // Do NOT create/assign/schedule directly on Shipmozo during order creation.
+        // Booking happens only from manifest action in admin/client manifest endpoint.
         shipmentData = {
-          push: true,
-          assign: assignResp?.data || null,
-          auto_assign: autoAssignResp?.data || null,
-          schedule: scheduleResp?.data,
-          detail: detailResp?.data,
+          provider: 'shipmozo',
+          deferred_manifest: true,
+          booking_state: 'pending_manifest',
         }
-        shipmentSuccessPackage = shipmentData?.schedule || shipmentData?.detail || {}
+        shipmentSuccessPackage = shipmentData
         providerCourierCost = Number(params?.courier_cost ?? 0) || null
         shipmentMeta = {
-          shipment_id:
-            shipmentSuccessPackage?.reference_id ??
-            shipmozoOrderId ??
-            shipmentSuccessPackage?.order_id ??
-            params.order_number,
-          awb_number: awbNumber,
-          courier_name: pickedCourierName,
+          shipment_id: params.order_number,
+          awb_number: undefined,
+          courier_name:
+            params.courier_partner || params.integration_type || 'Shipmozo (Pending Manifest)',
           courier_id: params.courier_id ? Number(params.courier_id) : null,
-          label: labelDataUrl,
+          label: undefined,
           manifest: undefined,
           courier_cost: providerCourierCost,
           sort_code: null,
@@ -4636,7 +4450,9 @@ export const createB2CShipmentService = async (
       // 4ï¸âƒ£ WALLET TRANSACTION
       // Delhivery forward orders use deferred manifest generation, so charge only after manifest succeeds.
       const shouldDeferWalletDebit =
-        integrationType === 'delhivery' && !isReverseShipment && shipmentData?.deferred_manifest === true
+        (integrationType === 'delhivery' || integrationType === 'shipmozo') &&
+        !isReverseShipment &&
+        shipmentData?.deferred_manifest === true
       const finalWalletDebit = walletDebit ?? 0
       if (shouldDeferWalletDebit) {
         console.log('â„¹ï¸ Deferring wallet debit until manifest success for Delhivery order', {
@@ -5517,7 +5333,11 @@ export const generateManifestService = async (params: {
 
         const integrationType = integrationTypes[0] || 'delhivery'
 
-        if (integrationType === 'xpressbees' || integrationType === 'ekart') {
+        if (
+          integrationType === 'xpressbees' ||
+          integrationType === 'ekart' ||
+          integrationType === 'shipmozo'
+        ) {
           if (params.type !== 'b2c') {
             throw new Error('This manifest flow is only supported for B2C orders')
           }
@@ -5532,7 +5352,184 @@ export const generateManifestService = async (params: {
             throw new Error(`Unable to load ${integrationType} orders for manifest generation`)
           }
 
-          const providerName = integrationType === 'ekart' ? 'Ekart' : 'Xpressbees'
+          const providerName =
+            integrationType === 'ekart'
+              ? 'Ekart'
+              : integrationType === 'shipmozo'
+                ? 'Shipmozo'
+                : 'Xpressbees'
+
+          const normalizeDetails = (value: any) => {
+            if (!value) return {}
+            if (typeof value === 'string') {
+              try {
+                return JSON.parse(value)
+              } catch {
+                return {}
+              }
+            }
+            return value
+          }
+
+          if (integrationType === 'shipmozo') {
+            const allowLiveShipmozoBooking =
+              String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST || '').trim().toLowerCase() ===
+              'true'
+            const isLikelyTestEnv =
+              String(process.env.NODE_ENV || '')
+                .trim()
+                .toLowerCase() === 'test' ||
+              String(process.env.APP_ENV || '')
+                .trim()
+                .toLowerCase()
+                .includes('test')
+
+            if (isLikelyTestEnv && !allowLiveShipmozoBooking) {
+              throw new HttpError(
+                403,
+                'Shipmozo live booking is blocked in test environment. Set SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST=true only with explicit approval.',
+              )
+            }
+
+            const shipmozo = new ShipmozoService()
+            const isShipmozoWalletError = (message: unknown) =>
+              typeof message === 'string' &&
+              /insufficient\\s+wallet\\s+balance|recharge\\s+your\\s+wallet/i.test(message)
+
+            for (const order of fetchedOrders) {
+              if (String(order.awb_number || '').trim()) continue
+
+              const pickup = normalizeDetails(order.pickup_details)
+              const products = Array.isArray(order.products) ? order.products : []
+              const primaryConsigneePhone = String(order.buyer_phone ?? '').trim()
+              const warehouseIdRaw = String(
+                order.pickup_location_id || pickup?.warehouse_id || pickup?.warehouse_name || '',
+              ).trim()
+
+              if (!warehouseIdRaw) {
+                throw new HttpError(
+                  400,
+                  `Shipmozo manifest failed for order ${order.order_number}: pickup warehouse is missing.`,
+                )
+              }
+
+              const pushPayload = {
+                order_id: order.order_number,
+                order_date:
+                  order.invoice_date ||
+                  order.order_date ||
+                  new Date(order.created_at || new Date()).toISOString().slice(0, 10),
+                order_type: 'ESSENTIALS',
+                consignee_name: order.buyer_name,
+                consignee_phone: Number(primaryConsigneePhone || 0),
+                consignee_alternate_phone: '',
+                consignee_email: order.buyer_email || '',
+                consignee_address_line_one: order.address,
+                consignee_address_line_two: '',
+                consignee_pin_code: Number(order.pincode || 0),
+                consignee_city: order.city,
+                consignee_state: order.state,
+                product_detail: products.map((item: any) => ({
+                  name: item?.name || 'Item',
+                  sku_number: item?.sku || '',
+                  quantity: Number(item?.qty || item?.quantity || 1),
+                  discount: String(item?.discount ?? ''),
+                  hsn: item?.hsn || item?.hsnCode || '',
+                  unit_price: Number(item?.price || 0),
+                  product_category: 'Other',
+                })),
+                payment_type: String(order.order_type || '').toLowerCase() === 'cod' ? 'COD' : 'PREPAID',
+                cod_amount:
+                  String(order.order_type || '').toLowerCase() === 'cod'
+                    ? String(order.order_amount ?? 0)
+                    : '',
+                weight: Number(order.weight ?? 0),
+                length: Number(order.length ?? 0),
+                width: Number(order.breadth ?? 0),
+                height: Number(order.height ?? 0),
+                warehouse_id: warehouseIdRaw,
+                gst_ewaybill_number: '',
+                gstin_number: '',
+              }
+
+              const pushResp = await shipmozo.pushOrder(pushPayload as any)
+              const shipmozoOrderId =
+                String(pushResp?.data?.order_id ?? '').trim() || String(order.order_number).trim()
+
+              const requestedCourierId = Number(order.courier_id || 0)
+              let assignResp: any = null
+              let autoAssignResp: any = null
+              if (requestedCourierId > 0) {
+                try {
+                  assignResp = await shipmozo.assignCourier({
+                    order_id: shipmozoOrderId,
+                    courier_id: requestedCourierId,
+                  })
+                } catch (assignError: any) {
+                  const assignErrorMessage = String(assignError?.message || '')
+                  if (isShipmozoWalletError(assignErrorMessage)) {
+                    autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+                  } else {
+                    throw assignError
+                  }
+                }
+              } else {
+                autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+              }
+
+              const scheduleResp = await shipmozo.schedulePickup({ order_id: shipmozoOrderId })
+              const detailResp = await shipmozo.getOrderDetail(shipmozoOrderId)
+              const awbNumber =
+                autoAssignResp?.data?.awb_number ||
+                scheduleResp?.data?.awb_number ||
+                detailResp?.data?.awb_number ||
+                detailResp?.data?.awb ||
+                detailResp?.data?.tracking_id ||
+                null
+
+              let labelToStore: string | null = null
+              if (awbNumber) {
+                try {
+                  const labelResp = await shipmozo.getOrderLabel(String(awbNumber))
+                  const rawLabel = Array.isArray(labelResp?.data) ? labelResp.data[0]?.label : null
+                  if (typeof rawLabel === 'string' && rawLabel.trim() && !/^data:/i.test(rawLabel.trim())) {
+                    labelToStore = rawLabel.trim()
+                  }
+                } catch (labelErr: any) {
+                  console.warn(
+                    `⚠️ [Shipmozo] Label fetch failed for order ${order.order_number}:`,
+                    labelErr?.message || labelErr,
+                  )
+                }
+              }
+
+              const pickedCourierName =
+                assignResp?.data?.courier ||
+                autoAssignResp?.data?.courier_company_service ||
+                autoAssignResp?.data?.courier_company ||
+                order.courier_partner ||
+                'Shipmozo'
+
+              await tx
+                .update(b2c_orders)
+                .set({
+                  shipment_id: shipmozoOrderId,
+                  awb_number: awbNumber ? String(awbNumber) : null,
+                  courier_partner: pickedCourierName,
+                  label: labelToStore,
+                  order_status: 'booked',
+                  manifest_error: null,
+                  updated_at: new Date(),
+                })
+                .where(eq(b2c_orders.id, order.id))
+
+              order.shipment_id = shipmozoOrderId
+              order.awb_number = awbNumber ? String(awbNumber) : null
+              order.courier_partner = pickedCourierName
+              if (labelToStore) order.label = labelToStore
+            }
+          }
+
           const providerManifestIds =
             integrationType === 'ekart'
               ? fetchedOrders
@@ -5551,21 +5548,9 @@ export const generateManifestService = async (params: {
           if (integrationType === 'ekart') {
             const ekart = new EkartService()
             await ekart.generateManifest(providerManifestIds)
-          } else {
+          } else if (integrationType === 'xpressbees') {
             const xpressbees = new XpressbeesService()
             await xpressbees.generateManifest(providerManifestIds)
-          }
-
-          const normalizeDetails = (value: any) => {
-            if (!value) return {}
-            if (typeof value === 'string') {
-              try {
-                return JSON.parse(value)
-              } catch {
-                return {}
-              }
-            }
-            return value
           }
 
           const pickupDetails = normalizeDetails(fetchedOrders[0]?.pickup_details)
@@ -5807,6 +5792,8 @@ export const generateManifestService = async (params: {
               .update(b2c_orders)
               .set(updateDataXpress)
               .where(eq(b2c_orders.id, freshOrder.id))
+
+            await debitManifestSuccessChargeIfNeeded({ tx, order: freshOrder })
           })
 
           await Promise.all(orderUpdatePromises)
