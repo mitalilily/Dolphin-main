@@ -9,6 +9,7 @@ import {
   sendWeeklyWeightReconciliationEmails,
 } from './weightReconciliationEmails'
 import { pollEkartTracking } from './ekartTracking'
+import { pollTruxcargoTracking } from './truxcargoTracking'
 
 if (isRazorpayConfigured) {
   cron.schedule('*/20 * * * *', async () => {
@@ -53,6 +54,26 @@ cron.schedule('*/15 * * * *', async () => {
     await pollEkartTracking()
   } catch (err) {
     console.error('[Cron] Ekart tracking poll failed:', err)
+  }
+})
+
+cron.schedule('*/5 * * * *', async () => {
+  console.log('[Cron] Truxcargo tracking poll (fast bucket)')
+  try {
+    const stats = await pollTruxcargoTracking({ bucket: 'fast', batchSize: 100 })
+    console.log('[Cron] Truxcargo fast poll stats:', stats)
+  } catch (err) {
+    console.error('[Cron] Truxcargo fast tracking poll failed:', err)
+  }
+})
+
+cron.schedule('*/15 * * * *', async () => {
+  console.log('[Cron] Truxcargo tracking poll (normal bucket)')
+  try {
+    const stats = await pollTruxcargoTracking({ bucket: 'normal', batchSize: 200 })
+    console.log('[Cron] Truxcargo normal poll stats:', stats)
+  } catch (err) {
+    console.error('[Cron] Truxcargo normal tracking poll failed:', err)
   }
 })
 

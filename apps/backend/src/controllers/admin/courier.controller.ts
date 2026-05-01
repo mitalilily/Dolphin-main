@@ -24,6 +24,7 @@ import { ShiprocketCourierService } from '../../models/services/couriers/shiproc
 import { ShipmozoService } from '../../models/services/couriers/shipmozo.service'
 import { TruxcargoService } from '../../models/services/couriers/truxcargo.service'
 import { XpressbeesService } from '../../models/services/couriers/xpressbees.service'
+import { pollTruxcargoTracking } from '../../crons/truxcargoTracking'
 import { fetchAvailableCouriersWithRatesAdmin } from '../../models/services/shiprocket.service'
 import { courier_credentials } from '../../models/schema/courierCredentials'
 import { couriers } from '../../models/schema/couriers'
@@ -1691,6 +1692,40 @@ export const trackShipmozoOrderController = async (req: Request, res: Response) 
     async () => new ShipmozoService().trackOrder(String(req.query.awb_number || req.query.awb || '')),
     'Failed to track Shipmozo order',
   )
+
+export const syncTruxcargoTrackingController = async (req: Request, res: Response) => {
+  try {
+    const awb = String(req.body?.awb || req.body?.waybill || req.query?.awb || '').trim()
+    const bucketRaw = String(req.body?.bucket || req.query?.bucket || 'all').trim().toLowerCase()
+    const batchSizeRaw = Number(req.body?.batchSize || req.query?.batchSize || 100)
+    const bucket = bucketRaw === 'fast' || bucketRaw === 'normal' ? bucketRaw : 'all'
+    const batchSize = Number.isFinite(batchSizeRaw) && batchSizeRaw > 0 ? batchSizeRaw : 100
+
+    const stats = await pollTruxcargoTracking({
+      bucket,
+      batchSize,
+      awb: awb || undefined,
+    })
+
+    return res.json({
+      success: true,
+      message: 'Truxcargo tracking sync completed',
+      data: {
+        mode: awb ? 'single_awb' : 'batch',
+        awb: awb || null,
+        bucket,
+        batchSize,
+        stats,
+      },
+    })
+  } catch (err: any) {
+    console.error('Failed to sync Truxcargo tracking:', err)
+    return res.status(typeof err?.statusCode === 'number' ? err.statusCode : 500).json({
+      success: false,
+      message: err?.message || 'Failed to sync Truxcargo tracking',
+    })
+  }
+}
 
 export interface RateType {
   forward?: string | number

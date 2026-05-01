@@ -235,6 +235,7 @@ app.post('/api/webhook/shipmozo', express.json(), shipmozoWebhookHandler)
 app.post('/api/webhook/shipmozo/callback', express.json(), shipmozoWebhookHandler)
 app.post('/api/webhook/shiprocket', express.json(), shiprocketWebhookHandler)
 app.post('/api/webhook/shiprocket/callback', express.json(), shiprocketWebhookHandler)
+app.post('/api/webhook/tracking/callback', express.json(), shiprocketWebhookHandler)
 app.post('/api/webhook/truxcargo', express.json(), truxcargoWebhookHandler)
 app.post('/api/webhook/truxcargo/callback', express.json(), truxcargoWebhookHandler)
 app.post(

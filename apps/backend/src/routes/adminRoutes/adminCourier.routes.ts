@@ -35,6 +35,7 @@ import {
   pushShipmozoOrderController,
   pushShipmozoReturnOrderController,
   scheduleShipmozoPickupController,
+  syncTruxcargoTrackingController,
   shipmozoLoginController,
   trackShipmozoOrderController,
   updateDelhiveryCredentialsController,
@@ -579,6 +580,12 @@ router.get(
   getShipmozoOrderLabelController,
 )
 router.get('/shipmozo/track', requireAuth, isAdminMiddleware, trackShipmozoOrderController)
+router.post(
+  '/truxcargo/sync-tracking',
+  requireAuth,
+  isAdminMiddleware,
+  syncTruxcargoTrackingController,
+)
 router.delete(
   '/shipping-rates/:planId/:id',
   requireAuth,

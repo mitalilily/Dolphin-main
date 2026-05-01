@@ -73,6 +73,7 @@ router.post('/webhook/ekart/track', ekartWebhookHandler)
 router.post('/webhook/icarry/callback', icarryWebhookHandler)
 router.post('/webhook/shipmozo/callback', shipmozoWebhookHandler)
 router.post('/webhook/shiprocket/callback', shiprocketWebhookHandler)
+router.post('/webhook/tracking/callback', shiprocketWebhookHandler)
 router.post('/webhook/truxcargo/callback', truxcargoWebhookHandler)
 
 // ============================================================================
