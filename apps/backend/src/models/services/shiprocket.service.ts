@@ -79,6 +79,9 @@ import {
   normalizeB2CShippingMode,
 } from './b2cRateCard.service'
 import { calculateFreight } from './pricing/chargeableFreight'
+import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
+import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
+import { ICARRY_COURIER_SEEDS } from '../../constants/icarryCouriers'
 
 // Load correct .env based on NODE_ENV
 const env = process.env.NODE_ENV || 'development'
@@ -1122,15 +1125,66 @@ export const fetchAvailableCouriersWithRates = async (
       'truxcargo',
       'icarry',
     ]
-    const systemCourierRows = await db
-      .select({
-        id: couriers.id,
-        serviceProvider: couriers.serviceProvider,
-        name: couriers.name,
-        createdAt: couriers.createdAt,
-      })
-      .from(couriers)
-      .where(eq(couriers.isEnabled, true))
+    const fetchEnabledSystemCourierRows = async () =>
+      db
+        .select({
+          id: couriers.id,
+          serviceProvider: couriers.serviceProvider,
+          name: couriers.name,
+          createdAt: couriers.createdAt,
+        })
+        .from(couriers)
+        .where(eq(couriers.isEnabled, true))
+
+    const upsertProviderSeedRows = async (
+      provider: 'shiprocket' | 'truxcargo' | 'icarry',
+      rows: Array<{ id: number; name: string; businessType: readonly ('b2c' | 'b2b')[] }>,
+    ) => {
+      if (!rows.length) return
+      await db
+        .insert(couriers)
+        .values(
+          rows.map((row) => ({
+            id: row.id,
+            name: row.name,
+            serviceProvider: provider,
+            isEnabled: true,
+            businessType: [...row.businessType],
+            updatedAt: new Date(),
+          })) as any,
+        )
+        .onConflictDoUpdate({
+          target: [couriers.id, couriers.serviceProvider],
+          set: {
+            name: sql`excluded.name`,
+            // Keep manual disable intact where rows already exist.
+            isEnabled: sql`${couriers.isEnabled}`,
+            businessType: sql`excluded.business_type`,
+            updatedAt: new Date(),
+          },
+        })
+    }
+
+    let systemCourierRows = await fetchEnabledSystemCourierRows()
+    const existingProviders = new Set(
+      systemCourierRows
+        .map((row) => String(row?.serviceProvider || '').trim().toLowerCase())
+        .filter(Boolean),
+    )
+
+    // Bootstrap core aggregators so client courier cards are visible even before manual sync.
+    if (!existingProviders.has('shiprocket')) {
+      await upsertProviderSeedRows('shiprocket', SHIPROCKET_COURIER_SEEDS)
+    }
+    if (!existingProviders.has('truxcargo')) {
+      await upsertProviderSeedRows('truxcargo', TRUXCARGO_COURIER_SEEDS)
+    }
+    if (!existingProviders.has('icarry')) {
+      await upsertProviderSeedRows('icarry', ICARRY_COURIER_SEEDS)
+    }
+
+    // Reload after potential bootstrap so provider buckets include newly seeded rows.
+    systemCourierRows = await fetchEnabledSystemCourierRows()
 
     const normalizeProviderKey = (value?: string | null) => {
       if (!value) return ''
