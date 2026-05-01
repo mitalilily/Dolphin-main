@@ -1175,7 +1175,7 @@ export const fetchAvailableCouriersWithRates = async (
           target: [couriers.id, couriers.serviceProvider],
           set: {
             name: sql`excluded.name`,
-            isEnabled: true,
+            isEnabled: sql`${couriers.isEnabled}`,
             businessType: sql`excluded.business_type`,
             updatedAt: new Date(),
           },
@@ -1228,7 +1228,7 @@ export const fetchAvailableCouriersWithRates = async (
           target: [couriers.id, couriers.serviceProvider],
           set: {
             name: sql`excluded.name`,
-            isEnabled: true,
+            isEnabled: sql`${couriers.isEnabled}`,
             businessType: sql`excluded.business_type`,
             updatedAt: new Date(),
           },
@@ -5397,6 +5397,57 @@ export const generateManifestService = async (params: {
             const isShipmozoWalletError = (message: unknown) =>
               typeof message === 'string' &&
               /insufficient\\s+wallet\\s+balance|recharge\\s+your\\s+wallet/i.test(message)
+            const configuredDefaultWarehouseId = String(shipmozo.getDefaultWarehouseId() || '').trim()
+            let shipmozoWarehouseCache: any[] | null = null
+            const normalizeWarehouseText = (value: unknown) => String(value ?? '').trim().toLowerCase()
+            const getShipmozoWarehouses = async () => {
+              if (shipmozoWarehouseCache) return shipmozoWarehouseCache
+              try {
+                const response = await shipmozo.getWarehouses()
+                shipmozoWarehouseCache = Array.isArray(response?.data) ? response.data : []
+              } catch (warehouseErr: any) {
+                console.warn(
+                  '⚠️ [Shipmozo] Failed to fetch warehouses while resolving warehouse_id:',
+                  warehouseErr?.message || warehouseErr,
+                )
+                shipmozoWarehouseCache = []
+              }
+              return shipmozoWarehouseCache
+            }
+            const resolveShipmozoWarehouseId = async (order: any, pickup: any) => {
+              const explicitWarehouseId = String(order.pickup_location_id || pickup?.warehouse_id || '').trim()
+              const pickupWarehouseName = String(pickup?.warehouse_name || '').trim()
+              const warehouses = await getShipmozoWarehouses()
+              const warehouseById = new Map(
+                warehouses
+                  .map((warehouse: any) => [String(warehouse?.id ?? '').trim(), warehouse] as const)
+                  .filter(([id]) => id.length > 0),
+              )
+
+              if (explicitWarehouseId && warehouseById.has(explicitWarehouseId)) {
+                return explicitWarehouseId
+              }
+
+              if (pickupWarehouseName) {
+                const targetName = normalizeWarehouseText(pickupWarehouseName)
+                const matchedWarehouse = warehouses.find((warehouse: any) => {
+                  const name = normalizeWarehouseText(warehouse?.name)
+                  const title = normalizeWarehouseText(warehouse?.address_title)
+                  return (name && name === targetName) || (title && title === targetName)
+                })
+                if (matchedWarehouse?.id != null && String(matchedWarehouse.id).trim()) {
+                  return String(matchedWarehouse.id).trim()
+                }
+              }
+
+              if (configuredDefaultWarehouseId && warehouseById.has(configuredDefaultWarehouseId)) {
+                return configuredDefaultWarehouseId
+              }
+
+              if (explicitWarehouseId) return explicitWarehouseId
+              if (configuredDefaultWarehouseId) return configuredDefaultWarehouseId
+              return ''
+            }
 
             for (const order of fetchedOrders) {
               if (String(order.awb_number || '').trim()) continue
@@ -5404,9 +5455,7 @@ export const generateManifestService = async (params: {
               const pickup = normalizeDetails(order.pickup_details)
               const products = Array.isArray(order.products) ? order.products : []
               const primaryConsigneePhone = String(order.buyer_phone ?? '').trim()
-              const warehouseIdRaw = String(
-                order.pickup_location_id || pickup?.warehouse_id || pickup?.warehouse_name || '',
-              ).trim()
+              const warehouseIdRaw = await resolveShipmozoWarehouseId(order, pickup)
 
               if (!warehouseIdRaw) {
                 throw new HttpError(

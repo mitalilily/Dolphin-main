@@ -76,9 +76,9 @@ const Couriers = () => {
 
   const renderers = {
     isEnabled: (value) => (
-      <Text fontWeight="semibold" color={value ? 'green.500' : 'red.500'}>
+      <Badge colorScheme={value ? 'green' : 'red'} variant={value ? 'subtle' : 'solid'}>
         {value ? 'Enabled' : 'Disabled'}
-      </Text>
+      </Badge>
     ),
     businessType: (value, row) => {
       const types = Array.isArray(value) ? value : value ? [value] : ['b2c', 'b2b']

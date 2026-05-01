@@ -39,6 +39,7 @@ export const fetchAllCouriers = async () => {
 
 export const fetchAllCouriersList = async (filters = {}) => {
   const params = {}
+  params.syncIcarry = true
   if (filters.search) params.search = filters.search
   if (filters.serviceProvider) params.serviceProvider = filters.serviceProvider
   if (filters.businessType) params.businessType = filters.businessType

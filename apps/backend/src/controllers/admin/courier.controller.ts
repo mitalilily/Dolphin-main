@@ -34,6 +34,62 @@ export interface ShippingRateFilters {
   business_type?: 'b2b' | 'b2c'
 }
 
+const extractIcarryEstimateRows = (icarryResp: any) => {
+  return Array.isArray(icarryResp?.estimate)
+    ? icarryResp.estimate
+    : Array.isArray(icarryResp?.data?.estimate)
+      ? icarryResp.data.estimate
+      : Array.isArray(icarryResp?.data)
+        ? icarryResp.data
+        : []
+}
+
+const normalizeIcarryCourierRows = (estimateRows: any[]) =>
+  estimateRows
+    .map((record: any) => {
+      const courierId = Number(
+        record?.courier_id ??
+          record?.courierId ??
+          record?.id ??
+          record?.service_id ??
+          record?.provider_id ??
+          NaN,
+      )
+      const courierName = String(
+        record?.courier_name ?? record?.courier ?? record?.provider_name ?? record?.name ?? '',
+      ).trim()
+
+      if (!Number.isFinite(courierId) || !courierName) return null
+
+      return {
+        id: courierId,
+        name: courierName,
+        serviceProvider: 'icarry',
+        isEnabled: true,
+        businessType: ['b2c'],
+        updatedAt: new Date(),
+      }
+    })
+    .filter((row: any) => Boolean(row))
+
+const upsertIcarryCouriers = async (normalizedIcarryRows: any[]) => {
+  if (!normalizedIcarryRows.length) return 0
+  await db
+    .insert(couriers)
+    .values(normalizedIcarryRows as any)
+    .onConflictDoUpdate({
+      target: [couriers.id, couriers.serviceProvider],
+      set: {
+        name: sql`excluded.name`,
+        // Preserve manually disabled status instead of forcing re-enable on sync.
+        isEnabled: sql`${couriers.isEnabled}`,
+        businessType: sql`excluded.business_type`,
+        updatedAt: new Date(),
+      },
+    })
+  return normalizedIcarryRows.length
+}
+
 export const fetchAvailableCouriersForAdmin = async (req: Request, res: Response) => {
   try {
     const {
@@ -151,11 +207,42 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
         target: [couriers.id, couriers.serviceProvider],
         set: {
           name: sql`excluded.name`,
-          isEnabled: true,
+          isEnabled: sql`${couriers.isEnabled}`,
           businessType: sql`excluded.business_type`,
           updatedAt: new Date(),
         },
       })
+
+    const shouldSyncIcarry =
+      String(req.query.syncIcarry ?? 'true')
+        .trim()
+        .toLowerCase() !== 'false'
+
+    if (shouldSyncIcarry) {
+      try {
+        const icarry = new IcarryService()
+        const icarryResp = await icarry.getEstimateSingleShipment({
+          origin_pincode: 110001,
+          destination_pincode: 400001,
+          origin_country_code: 'IN',
+          destination_country_code: 'IN',
+          shipment_mode: 'S',
+          shipment_type: 'P',
+          shipment_value: 1000,
+          weight: 0.5,
+          length: 10,
+          breadth: 10,
+          height: 10,
+        })
+        const normalizedIcarryRows = normalizeIcarryCourierRows(extractIcarryEstimateRows(icarryResp))
+        await upsertIcarryCouriers(normalizedIcarryRows)
+      } catch (icarrySyncErr: any) {
+        console.warn(
+          '[Courier List] iCarry sync skipped due to API error:',
+          String(icarrySyncErr?.message || icarrySyncErr),
+        )
+      }
+    }
 
     const { search, serviceProvider, businessType } = req.query
 
@@ -853,61 +940,10 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
         height: Math.max(height, 1),
       })
 
-      const estimateRows = Array.isArray((icarryResp as any)?.estimate)
-        ? (icarryResp as any).estimate
-        : Array.isArray((icarryResp as any)?.data?.estimate)
-          ? (icarryResp as any).data.estimate
-          : Array.isArray((icarryResp as any)?.data)
-            ? (icarryResp as any).data
-            : []
-
-      const normalizedIcarryRows = estimateRows
-        .map((record: any) => {
-          const courierId = Number(
-            record?.courier_id ??
-              record?.courierId ??
-              record?.id ??
-              record?.service_id ??
-              record?.provider_id ??
-              NaN,
-          )
-          const courierName = String(
-            record?.courier_name ??
-              record?.courier ??
-              record?.provider_name ??
-              record?.name ??
-              '',
-          ).trim()
-
-          if (!Number.isFinite(courierId) || !courierName) return null
-
-          return {
-            id: courierId,
-            name: courierName,
-            serviceProvider: 'icarry',
-            isEnabled: true,
-            businessType: ['b2c'],
-            updatedAt: new Date(),
-          }
-        })
-        .filter((row: any) => Boolean(row))
-
-      if (normalizedIcarryRows.length) {
-        await db
-          .insert(couriers)
-          .values(normalizedIcarryRows as any)
-          .onConflictDoUpdate({
-            target: [couriers.id, couriers.serviceProvider],
-            set: {
-              name: sql`excluded.name`,
-              isEnabled: true,
-              businessType: sql`excluded.business_type`,
-              updatedAt: new Date(),
-            },
-          })
-      }
-
-      syncedIcarryCouriers = normalizedIcarryRows.length
+      const normalizedIcarryRows = normalizeIcarryCourierRows(
+        extractIcarryEstimateRows(icarryResp as any),
+      )
+      syncedIcarryCouriers = await upsertIcarryCouriers(normalizedIcarryRows)
     } catch (error: any) {
       providerErrors.push({
         provider: 'icarry',
