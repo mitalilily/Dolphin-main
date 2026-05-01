@@ -5,6 +5,8 @@ import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProvid
 import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { SHIPMOZO_COURIER_SEEDS } from '../../constants/shipmozoCouriers'
 import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
+import { ICARRY_COURIER_SEEDS } from '../../constants/icarryCouriers'
+import { JUXCARGO_COURIER_SEEDS } from '../../constants/juxcargoCouriers'
 import { db } from '../../models/client'
 import {
   deleteCourierService,
@@ -92,6 +94,35 @@ const upsertIcarryCouriers = async (normalizedIcarryRows: any[]) => {
       },
     })
   return normalizedIcarryRows.length
+}
+
+const upsertStaticProviderCouriers = async (
+  provider: string,
+  rows: Array<{ id: number; name: string; businessType: readonly ('b2c' | 'b2b')[] }>,
+) => {
+  if (!rows.length) return 0
+  await db
+    .insert(couriers)
+    .values(
+      rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        serviceProvider: provider,
+        isEnabled: true,
+        businessType: [...row.businessType],
+        updatedAt: new Date(),
+      })) as any,
+    )
+    .onConflictDoUpdate({
+      target: [couriers.id, couriers.serviceProvider],
+      set: {
+        name: sql`excluded.name`,
+        isEnabled: sql`${couriers.isEnabled}`,
+        businessType: sql`excluded.business_type`,
+        updatedAt: new Date(),
+      },
+    })
+  return rows.length
 }
 
 export const fetchAvailableCouriersForAdmin = async (req: Request, res: Response) => {
@@ -262,6 +293,9 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
           updatedAt: new Date(),
         },
       })
+
+    await upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
+    await upsertStaticProviderCouriers('icarry', ICARRY_COURIER_SEEDS)
 
     const shouldSyncIcarry =
       String(req.query.syncIcarry ?? 'true')
@@ -1034,6 +1068,15 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     }
 
     try {
+      await upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
+    } catch (error: any) {
+      providerErrors.push({
+        provider: 'juxcargo',
+        message: String(error?.message || 'Sync failed'),
+      })
+    }
+
+    try {
       const icarry = new IcarryService()
       const icarryResp = await icarry.getEstimateSingleShipment({
         origin_pincode: origin,
@@ -1054,9 +1097,10 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
       )
       syncedIcarryCouriers = await upsertIcarryCouriers(normalizedIcarryRows)
     } catch (error: any) {
+      syncedIcarryCouriers = await upsertStaticProviderCouriers('icarry', ICARRY_COURIER_SEEDS)
       providerErrors.push({
         provider: 'icarry',
-        message: String(error?.message || 'Sync failed'),
+        message: `${String(error?.message || 'Sync failed')}. Fallback seed applied.`,
       })
     }
 
