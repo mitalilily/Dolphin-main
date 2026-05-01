@@ -15,10 +15,12 @@ export const mockShiprocketSuccess = () => {
 
   nock(base)
     .post('/v1/external/auth/login')
+    .times(5)
     .reply(200, { token: 'shiprocket-token' })
 
   nock(base)
     .get('/v1/external/courier/serviceability')
+    .times(5)
     .query(true)
     .reply(200, {
       status: 200,
@@ -40,10 +42,12 @@ export const mockShiprocketFailure = (status = 500, message = 'Shiprocket failur
 
   nock(base)
     .post('/v1/external/auth/login')
+    .times(5)
     .reply(200, { token: 'shiprocket-token' })
 
   nock(base)
     .get('/v1/external/courier/serviceability')
+    .times(5)
     .query(true)
     .reply(status, { message })
 }
@@ -53,10 +57,12 @@ export const mockShiprocketSlow = (delayMs = 35000) => {
 
   nock(base)
     .post('/v1/external/auth/login')
+    .times(5)
     .reply(200, { token: 'shiprocket-token' })
 
   nock(base)
     .get('/v1/external/courier/serviceability')
+    .times(5)
     .query(true)
     .delay(delayMs)
     .reply(200, {

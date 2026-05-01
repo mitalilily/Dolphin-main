@@ -82,6 +82,7 @@ import { calculateFreight } from './pricing/chargeableFreight'
 import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
 import { ICARRY_COURIER_SEEDS } from '../../constants/icarryCouriers'
+import { getEffectiveCourierConfig, IcarryConfig } from './courierCredentials.service'
 
 // Load correct .env based on NODE_ENV
 const env = process.env.NODE_ENV || 'development'
@@ -407,6 +408,36 @@ interface PickupWarehouseRecord {
   contactPhone?: string | null
   gstNumber?: string | null
   country?: string | null
+}
+
+const toPositiveIntegerOrNull = (value: unknown): number | null => {
+  const normalized = Number(value)
+  if (!Number.isFinite(normalized) || normalized <= 0) return null
+  return Math.trunc(normalized)
+}
+
+let cachedIcarryDefaultPickupAddressId: number | null | undefined
+
+const resolveIcarryDefaultPickupAddressId = async (): Promise<number | null> => {
+  if (cachedIcarryDefaultPickupAddressId !== undefined) {
+    return cachedIcarryDefaultPickupAddressId
+  }
+
+  const envCandidate = toPositiveIntegerOrNull(process.env.ICARRY_PICKUP_ADDRESS_ID)
+  if (envCandidate) {
+    cachedIcarryDefaultPickupAddressId = envCandidate
+    return envCandidate
+  }
+
+  try {
+    const cfg = await getEffectiveCourierConfig<IcarryConfig>('icarry', 'b2c')
+    const fromClientId = toPositiveIntegerOrNull(cfg?.clientId)
+    cachedIcarryDefaultPickupAddressId = fromClientId
+    return fromClientId
+  } catch {
+    cachedIcarryDefaultPickupAddressId = null
+    return null
+  }
 }
 
 async function fetchPickupWarehouseRecord(
@@ -4418,11 +4449,14 @@ export const createB2CShipmentService = async (
         (params as any)?.pickupId ??
         (params as any)?.pickup_location_id ??
         null
-      const pickupAddressId = Number(pickupAddressIdRaw)
-      if (!Number.isFinite(pickupAddressId) || pickupAddressId <= 0) {
+      let pickupAddressId = toPositiveIntegerOrNull(pickupAddressIdRaw)
+      if (!pickupAddressId) {
+        pickupAddressId = await resolveIcarryDefaultPickupAddressId()
+      }
+      if (!pickupAddressId) {
         throw new HttpError(
           400,
-          'iCarry booking requires pickup_address_id (or pickup_id) as a positive number.',
+          'iCarry booking requires pickup_address_id (or pickup_id) as a positive number. Configure ICARRY_PICKUP_ADDRESS_ID or iCarry clientId in courier credentials for default mapping.',
         )
       }
 
