@@ -346,6 +346,19 @@ export class IcarryService {
       IcarryService.apiToken = apiToken
       return { apiToken, raw: responseData }
     } catch (err: any) {
+      const rawResponse =
+        typeof err?.response?.data === 'string' ? err.response.data.toLowerCase() : ''
+      const isCloudflareBlocked =
+        Number(err?.response?.status || 0) === 403 &&
+        (rawResponse.includes('just a moment') ||
+          rawResponse.includes('cloudflare') ||
+          rawResponse.includes('challenges.cloudflare.com'))
+      if (isCloudflareBlocked) {
+        throw new HttpError(
+          502,
+          'iCarry API is currently blocked by Cloudflare challenge from this server IP. Please contact iCarry support to allowlist your backend server IP.',
+        )
+      }
       this.log('Login failed', {
         status: err?.response?.status || null,
         statusText: err?.response?.statusText || null,

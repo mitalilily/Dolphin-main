@@ -3891,13 +3891,34 @@ export const createB2CShipmentService = async (
         destination_pincode: bookingDestinationPincode,
         courier_id: courierIdForRate,
       })
-      if (freightErr instanceof HttpError) {
+      const isRateCardMissing =
+        String(freightErr?.message || '')
+          .toLowerCase()
+          .includes('no rate card found') ||
+        String(freightErr?.message || '')
+          .toLowerCase()
+          .includes('no slab configured')
+      const requestFreight = Number(params?.freight_charges ?? totalShippingCharges)
+      if (isRateCardMissing && Number.isFinite(requestFreight) && requestFreight > 0) {
+        freightCharges = requestFreight
+        slabbedFreight = {
+          freight: requestFreight,
+          volumetric_weight: null,
+          chargeable_weight: null,
+          slabs: null,
+        }
+        console.warn('âš ï¸ Falling back to request freight_charges as rate card is missing', {
+          order_number: params.order_number,
+          fallback_freight: requestFreight,
+        })
+      } else if (freightErr instanceof HttpError) {
         throw freightErr
+      } else {
+        throw new HttpError(
+          400,
+          freightErr?.message || 'Unable to compute freight for selected courier/zone',
+        )
       }
-      throw new HttpError(
-        400,
-        freightErr?.message || 'Unable to compute freight for selected courier/zone',
-      )
     }
   }
 
@@ -4391,6 +4412,9 @@ export const createB2CShipmentService = async (
       }
 
       const truxcargo = new TruxcargoService()
+      const truxPaymentMode = String(
+        params?.payment_type === 'cod' ? 'COD' : params?.payment_type === 'prepaid' ? 'PREPAID' : '',
+      ).trim()
       const warehouseName = String(
         params?.pickup?.warehouse_name ||
           params?.pickup?.name ||
@@ -4403,6 +4427,8 @@ export const createB2CShipmentService = async (
         ...(params as Record<string, any>),
         warehouse: fallbackWarehouse,
         warehouse_name: fallbackWarehouse,
+        payment_mode: truxPaymentMode,
+        paymentMode: truxPaymentMode,
       }
       truxOrderPayload.pickup = {
         ...(params?.pickup || {}),
