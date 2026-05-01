@@ -497,7 +497,11 @@ export const getOrderLabelController = async (req: any, res: Response) => {
     // Generate presigned URL for label
     let labelUrl: string
     try {
-      const signed = await presignDownload(labelValue)
+      const signed = await presignDownload(labelValue, {
+        disposition: 'attachment',
+        downloadName: `label-${order.order_number || order.id}.pdf`,
+        contentType: 'application/pdf',
+      })
       labelUrl = Array.isArray(signed) ? signed[0] || labelValue : signed
     } catch (err) {
       // Fallback to stored URL if presigning fails
@@ -580,7 +584,11 @@ export const getOrderInvoiceController = async (req: any, res: Response) => {
 
     let invoiceUrl: string
     try {
-      const signed = await presignDownload(invoiceValue)
+      const signed = await presignDownload(invoiceValue, {
+        disposition: 'attachment',
+        downloadName: `invoice-${order.order_number || order.id}.pdf`,
+        contentType: 'application/pdf',
+      })
       invoiceUrl = Array.isArray(signed) ? signed[0] || invoiceValue : signed
     } catch {
       invoiceUrl = invoiceValue

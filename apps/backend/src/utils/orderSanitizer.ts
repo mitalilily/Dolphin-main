@@ -4,7 +4,10 @@ import { presignDownload } from '../models/services/upload.service'
  * Generates an accessible download URL for stored asset keys.
  * Falls back gracefully if the file cannot be presigned.
  */
-const ensureDownloadUrl = async (value?: string | null) => {
+const ensureDownloadUrl = async (
+  value?: string | null,
+  options?: { downloadName?: string; disposition?: 'inline' | 'attachment'; contentType?: string },
+) => {
   if (!value || typeof value !== 'string' || !value.trim()) {
     return null
   }
@@ -23,7 +26,7 @@ const ensureDownloadUrl = async (value?: string | null) => {
   }
 
   try {
-    const url = await presignDownload(value)
+    const url = await presignDownload(value, options)
     const finalUrl = Array.isArray(url) ? url[0] ?? null : url
 
     if (!finalUrl) {
@@ -69,10 +72,23 @@ export const sanitizeOrderForCustomer = async (order: any): Promise<any> => {
   if (order.invoice_link) sanitized.invoice_key = order.invoice_link
 
   try {
+    const orderRef = String(order?.order_number || order?.id || 'order').trim() || 'order'
     const [labelUrl, manifestUrl, invoiceUrl] = await Promise.all([
-      ensureDownloadUrl(order.label),
-      ensureDownloadUrl(order.manifest),
-      ensureDownloadUrl(order.invoice_link),
+      ensureDownloadUrl(order.label, {
+        disposition: 'attachment',
+        downloadName: `label-${orderRef}.pdf`,
+        contentType: 'application/pdf',
+      }),
+      ensureDownloadUrl(order.manifest, {
+        disposition: 'attachment',
+        downloadName: `manifest-${orderRef}.pdf`,
+        contentType: 'application/pdf',
+      }),
+      ensureDownloadUrl(order.invoice_link, {
+        disposition: 'attachment',
+        downloadName: `invoice-${orderRef}.pdf`,
+        contentType: 'application/pdf',
+      }),
     ])
 
     if (labelUrl) {
