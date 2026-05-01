@@ -4391,7 +4391,30 @@ export const createB2CShipmentService = async (
       }
 
       const truxcargo = new TruxcargoService()
-      const createOrderResp = await truxcargo.createOrder(params as Record<string, any>)
+      const warehouseName = String(
+        params?.pickup?.warehouse_name ||
+          params?.pickup?.name ||
+          (params as any)?.warehouse_name ||
+          (params as any)?.warehouse ||
+          '',
+      ).trim()
+      const fallbackWarehouse = warehouseName || String(params?.pickup_location_id || '').trim()
+      const truxOrderPayload: Record<string, any> = {
+        ...(params as Record<string, any>),
+        warehouse: fallbackWarehouse,
+        warehouse_name: fallbackWarehouse,
+      }
+      truxOrderPayload.pickup = {
+        ...(params?.pickup || {}),
+        warehouse: fallbackWarehouse,
+        warehouse_name: fallbackWarehouse,
+        name: String(params?.pickup?.name || fallbackWarehouse || '').trim(),
+      }
+      if ((params as any)?.warehouse_id) {
+        truxOrderPayload.warehouse_id = String((params as any).warehouse_id).trim()
+      }
+
+      const createOrderResp = await truxcargo.createOrder(truxOrderPayload)
       const truxPayload = createOrderResp?.data ?? createOrderResp
       const truxWaybill =
         truxPayload?.waybill ??
