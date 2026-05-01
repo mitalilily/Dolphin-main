@@ -26,8 +26,15 @@ export async function reserveInvoiceSequence(userId: string, tx?: DbClient): Pro
     })
     .returning({ lastSequence: invoiceSequences.lastSequence })
 
-  const sequence = result?.lastSequence ?? 1n
-  return Number(sequence)
+  const sequence = Number(result?.lastSequence ?? 1)
+  return Number.isFinite(sequence) && sequence > 0 ? sequence : 1
+}
+
+function fallbackInvoiceNumber(prefix?: string | null, suffix?: string | null) {
+  const trimmedPrefix = toSafeString(prefix) || DEFAULT_PREFIX
+  const trimmedSuffix = toSafeString(suffix)
+  const millis = Date.now().toString().slice(-8)
+  return `${trimmedPrefix}${millis}${trimmedSuffix ? trimmedSuffix : ''}`
 }
 
 export function formatInvoiceNumber(prefix: string | undefined, sequence: number, suffix: string | undefined) {
@@ -53,6 +60,15 @@ export async function resolveInvoiceNumber({
   const existing = toSafeString(existingInvoiceNumber)
   if (existing) return existing
 
-  const sequence = await reserveInvoiceSequence(userId, tx)
-  return formatInvoiceNumber(prefix ?? DEFAULT_PREFIX, sequence, suffix ?? '')
+  try {
+    const sequence = await reserveInvoiceSequence(userId, tx)
+    return formatInvoiceNumber(prefix ?? DEFAULT_PREFIX, sequence, suffix ?? '')
+  } catch (error: any) {
+    // Do not block label/invoice generation if sequence row is unavailable for legacy/broken users.
+    console.warn('[Invoice Sequence] Falling back to timestamp invoice number', {
+      userId,
+      message: error?.message || String(error),
+    })
+    return fallbackInvoiceNumber(prefix, suffix)
+  }
 }

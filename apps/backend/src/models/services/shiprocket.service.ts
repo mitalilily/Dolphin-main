@@ -163,6 +163,16 @@ const isShipmozoLiveBookingAllowedInCurrentEnvironment = () => {
   return legacyOverride || nonProdOverride
 }
 
+const normalizeIntegrationTypeAlias = (value?: string | null) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+  if (!normalized) return ''
+  if (normalized === 'icaarry') return 'icarry'
+  if (normalized === 'juxcargo') return 'truxcargo'
+  return normalized
+}
+
 const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCourierCost: number | null) => ({
   shipmentData: {
     provider: 'shipmozo',
@@ -1188,10 +1198,7 @@ export const fetchAvailableCouriersWithRates = async (
     // Reload after potential bootstrap so provider buckets include newly seeded rows.
     systemCourierRows = await fetchSystemCourierRows()
 
-    const normalizeProviderKey = (value?: string | null) => {
-      if (!value) return ''
-      return value.trim().toLowerCase()
-    }
+    const normalizeProviderKey = (value?: string | null) => normalizeIntegrationTypeAlias(value)
 
     const makeCourierIdentityKey = (courier: {
       id: number | string
@@ -3477,10 +3484,20 @@ export const createB2CShipmentService = async (
           console.log(
             `Ã¢Å“â€¦ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
+        } else if (serviceProvider === 'truxcargo' || serviceProvider === 'juxcargo') {
+          params.integration_type = 'truxcargo'
+          console.log(
+            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+          )
+        } else if (serviceProvider === 'icarry' || serviceProvider === 'icaarry') {
+          params.integration_type = 'icarry'
+          console.log(
+            `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
+          )
         } else {
           throw new HttpError(
             400,
-            `Unsupported serviceProvider: ${serviceProvider}. Supported providers: delhivery, ekart, xpressbees, shipmozo, shiprocket.`,
+            `Unsupported serviceProvider: ${serviceProvider}. Supported providers: delhivery, ekart, xpressbees, shipmozo, shiprocket, truxcargo, icarry.`,
           )
         }
       } else {
@@ -3959,7 +3976,8 @@ export const createB2CShipmentService = async (
 
   try {
     // 1ï¸âƒ£ CREATE SHIPMENT
-    const requestedIntegrationType = String(params.integration_type || '').toLowerCase()
+    const requestedIntegrationType = normalizeIntegrationTypeAlias(params.integration_type)
+    params.integration_type = requestedIntegrationType
     const allowedIntegrationTypes = [
       'delhivery',
       'ekart',
@@ -3967,10 +3985,11 @@ export const createB2CShipmentService = async (
       'shipmozo',
       'shiprocket',
       'truxcargo',
+      'icarry',
     ]
     if (!requestedIntegrationType || !allowedIntegrationTypes.includes(requestedIntegrationType)) {
       throw new Error(
-        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees, shipmozo, shiprocket, truxcargo.`,
+        `Invalid integration_type: ${params.integration_type}. Supported values: delhivery, ekart, xpressbees, shipmozo, shiprocket, truxcargo, icarry.`,
       )
     }
 
@@ -3980,16 +3999,22 @@ export const createB2CShipmentService = async (
       | 'xpressbees'
       | 'shipmozo'
       | 'shiprocket'
+      | 'truxcargo'
+      | 'icarry'
     const providerName =
       integrationType === 'delhivery'
         ? 'Delhivery'
-        : integrationType === 'ekart'
+      : integrationType === 'ekart'
           ? 'Ekart Logistics'
           : integrationType === 'xpressbees'
             ? 'Xpressbees'
             : integrationType === 'shipmozo'
               ? 'Shipmozo'
-              : 'Shiprocket'
+              : integrationType === 'truxcargo'
+                ? 'Truxcargo'
+                : integrationType === 'icarry'
+                  ? 'iCarry'
+                  : 'Shiprocket'
 
     let manifestFailure: DelhiveryManifestError | null = null
     let shipmentSuccessPackage: any = null
@@ -4329,6 +4354,62 @@ export const createB2CShipmentService = async (
         shipmentSuccessPackage = shipmentData
         shipmentMeta = deferredPayload.shipmentMeta
       }
+    } else if (integrationType === 'truxcargo') {
+      if (isReverseShipment) {
+        throw new HttpError(400, 'Truxcargo reverse shipments are not supported in this flow yet')
+      }
+
+      const truxcargo = new TruxcargoService()
+      const createOrderResp = await truxcargo.createOrder(params as Record<string, any>)
+      const truxPayload = createOrderResp?.data ?? createOrderResp
+      const truxWaybill =
+        truxPayload?.waybill ??
+        truxPayload?.awb_number ??
+        truxPayload?.awb ??
+        truxPayload?.tracking_id ??
+        truxPayload?.lr_number ??
+        null
+
+      if (!truxWaybill) {
+        throw new HttpError(
+          500,
+          String(createOrderResp?.message || 'Truxcargo order creation did not return waybill/AWB'),
+        )
+      }
+
+      shipmentData = createOrderResp
+      shipmentSuccessPackage = truxPayload
+      providerCourierCost =
+        Number(
+          truxPayload?.rate ??
+            truxPayload?.shipping_charges ??
+            truxPayload?.freight_charges ??
+            params?.courier_cost ??
+            0,
+        ) || null
+      providerSortCode = truxPayload?.sort_code ?? truxPayload?.destination_code ?? null
+
+      shipmentMeta = {
+        shipment_id:
+          String(
+            truxPayload?.shipment_id ??
+              truxPayload?.order_id ??
+              truxPayload?.reference_id ??
+              truxWaybill,
+          ) || undefined,
+        awb_number: String(truxWaybill),
+        courier_name: truxPayload?.courier_name ?? 'Truxcargo',
+        courier_id: params.courier_id ? Number(params.courier_id) : null,
+        label: truxPayload?.label ?? undefined,
+        manifest: truxPayload?.manifest ?? undefined,
+        courier_cost: providerCourierCost,
+        sort_code: providerSortCode,
+      }
+    } else if (integrationType === 'icarry') {
+      throw new HttpError(
+        400,
+        'iCarry booking is not enabled in this flow yet. Please use an enabled provider like Delhivery, Shipmozo, Shiprocket, Truxcargo, Ekart, or Xpressbees.',
+      )
     } else if (integrationType === 'shiprocket') {
       if (isReverseShipment) {
         throw new HttpError(400, 'Shiprocket reverse shipments are not supported in this flow yet')

@@ -243,13 +243,21 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
 
   let newLabelKey: string | null = null
   let newInvoiceKey: string | null = null
+  let inlineLabelDataUrl: string | null = null
+  let inlineInvoiceDataUrl: string | null = null
 
   if (regenerateLabel) {
     const labelKey = await generateLabelForOrder(order, userId, db)
     if (!labelKey || typeof labelKey !== 'string') {
       throw new Error('Label regeneration failed')
     }
-    newLabelKey = labelKey.trim()
+    const trimmedLabel = labelKey.trim()
+    if (/^data:application\/pdf;base64,/i.test(trimmedLabel)) {
+      inlineLabelDataUrl = trimmedLabel
+      newLabelKey = null
+    } else {
+      newLabelKey = trimmedLabel
+    }
   }
 
   let generatedInvoiceData: { number: string; date: string; amount: number } | null = null
@@ -396,7 +404,8 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
       console.warn(
         `⚠️ Storage unavailable while regenerating invoice for order ${order.order_number || order.id}. Using inline PDF data URL fallback.`,
       )
-      newInvoiceKey = `data:application/pdf;base64,${invoiceBuffer.toString('base64')}`
+      inlineInvoiceDataUrl = `data:application/pdf;base64,${invoiceBuffer.toString('base64')}`
+      newInvoiceKey = null
     }
   }
 
@@ -418,8 +427,8 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
   return {
     orderId,
     orderType,
-    label: newLabelKey,
-    invoice_link: newInvoiceKey,
+    label: newLabelKey || inlineLabelDataUrl,
+    invoice_link: newInvoiceKey || inlineInvoiceDataUrl,
   }
 }
 
