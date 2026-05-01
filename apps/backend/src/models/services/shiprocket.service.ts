@@ -1125,16 +1125,18 @@ export const fetchAvailableCouriersWithRates = async (
       'truxcargo',
       'icarry',
     ]
-    const fetchEnabledSystemCourierRows = async () =>
+    const CORE_FALLBACK_PROVIDERS = new Set(['shiprocket', 'truxcargo', 'icarry'])
+
+    const fetchSystemCourierRows = async () =>
       db
         .select({
           id: couriers.id,
           serviceProvider: couriers.serviceProvider,
           name: couriers.name,
+          isEnabled: couriers.isEnabled,
           createdAt: couriers.createdAt,
         })
         .from(couriers)
-        .where(eq(couriers.isEnabled, true))
 
     const upsertProviderSeedRows = async (
       provider: 'shiprocket' | 'truxcargo' | 'icarry',
@@ -1165,7 +1167,7 @@ export const fetchAvailableCouriersWithRates = async (
         })
     }
 
-    let systemCourierRows = await fetchEnabledSystemCourierRows()
+    let systemCourierRows = await fetchSystemCourierRows()
     const existingProviders = new Set(
       systemCourierRows
         .map((row) => String(row?.serviceProvider || '').trim().toLowerCase())
@@ -1184,7 +1186,7 @@ export const fetchAvailableCouriersWithRates = async (
     }
 
     // Reload after potential bootstrap so provider buckets include newly seeded rows.
-    systemCourierRows = await fetchEnabledSystemCourierRows()
+    systemCourierRows = await fetchSystemCourierRows()
 
     const normalizeProviderKey = (value?: string | null) => {
       if (!value) return ''
@@ -1211,6 +1213,7 @@ export const fetchAvailableCouriersWithRates = async (
       id: number
       serviceProvider: string | null
       name: string
+      isEnabled: boolean | null
       createdAt: Date | null
     }
 
@@ -1224,6 +1227,8 @@ export const fetchAvailableCouriersWithRates = async (
     for (const row of systemCourierRows) {
       const providerKey = normalizeProviderKey(row.serviceProvider)
       if (!providerKey || !SUPPORTED_PROVIDERS.includes(providerKey)) continue
+      const rowEnabled = Boolean((row as any)?.isEnabled)
+      if (!rowEnabled && !CORE_FALLBACK_PROVIDERS.has(providerKey)) continue
       if (providerKey === 'delhivery' && !DELHIVERY_ALLOWED_COURIER_IDS.includes(Number(row.id))) {
         continue
       }
@@ -1288,6 +1293,7 @@ export const fetchAvailableCouriersWithRates = async (
           id: row.id,
           name: row.name,
           serviceProvider: row.serviceProvider,
+          isEnabled: true,
           createdAt: new Date(),
         })),
         idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),
@@ -1341,6 +1347,7 @@ export const fetchAvailableCouriersWithRates = async (
           id: row.id,
           name: row.name,
           serviceProvider: row.serviceProvider,
+          isEnabled: true,
           createdAt: new Date(),
         })),
         idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),

@@ -15,13 +15,13 @@ const TEXT_PRIMARY = '#102A54'
 const TEXT_SECONDARY = '#4C6185'
 const SURFACE = '#F6F8FC'
 const AGGREGATOR_LABELS: Record<string, string> = {
-  shiprocket: 'Shiprocket',
-  shipmozo: 'Shipmozo',
-  delhivery: 'Delhivery',
-  ekart: 'Ekart',
-  xpressbees: 'Xpressbees',
-  truxcargo: 'Truxcargo',
-  icarry: 'iCarry',
+  shiprocket: 'shiprocket',
+  shipmozo: 'shipmozo',
+  delhivery: 'delhivery',
+  ekart: 'ekart',
+  xpressbees: 'xpressbees',
+  truxcargo: 'truxcargo',
+  icarry: 'icarry',
 }
 
 const inferProviderFromName = (name?: string | null) => {
@@ -454,7 +454,7 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                 .trim()
                 .toLowerCase()
               const providerKey = providerKeyRaw || inferProviderFromName(courier?.name)
-              const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'Unknown'
+              const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'unknown'
               const courierOptionKey = String(
                 courier?.courier_option_key ?? courier?.id ?? courier?.courier_id ?? '',
               )
