@@ -1030,11 +1030,28 @@ async function filterCouriersByBusinessType(
   )
 
   // Filter couriers to only include those with the expected business type
+  const B2C_PROVIDER_FALLBACK_ALLOWLIST = new Set([
+    'delhivery',
+    'ekart',
+    'xpressbees',
+    'shipmozo',
+    'shiprocket',
+    'truxcargo',
+    'icarry',
+  ])
+
   const filtered = courierList.filter((c: any) => {
     const types = businessTypeMap.get(c.id) || []
     const hasBusinessType = Array.isArray(types) && types.includes(expectedBusinessType)
+    const providerKey = String(c?.integration_type || c?.service_provider || c?.serviceProvider || '')
+      .trim()
+      .toLowerCase()
+    const allowByProviderFallback =
+      expectedBusinessType === 'b2c' &&
+      !hasBusinessType &&
+      B2C_PROVIDER_FALLBACK_ALLOWLIST.has(providerKey)
 
-    if (!hasBusinessType) {
+    if (!hasBusinessType && !allowByProviderFallback) {
       console.log('ðŸš« Removing courier - wrong business_type', {
         courierId: c.id,
         courierName: c.name,
@@ -1043,7 +1060,7 @@ async function filterCouriersByBusinessType(
       })
     }
 
-    return hasBusinessType
+    return hasBusinessType || allowByProviderFallback
   })
 
   return filtered
@@ -1113,7 +1130,7 @@ export const fetchAvailableCouriersWithRates = async (
         createdAt: couriers.createdAt,
       })
       .from(couriers)
-      .where(and(eq(couriers.isEnabled, true), sql`${couriers.businessType} @> '["b2c"]'::jsonb`))
+      .where(eq(couriers.isEnabled, true))
 
     const normalizeProviderKey = (value?: string | null) => {
       if (!value) return ''
@@ -1964,6 +1981,20 @@ export const fetchAvailableCouriersWithRates = async (
           .where(sql`lower(${plans.name}) = ${normalizedFallback}`)
           .limit(1)
         activePlanId = fallbackPlan?.id ?? null
+      }
+
+      if (!activePlanId) {
+        const [firstActivePlan] = await db
+          .select({ id: plans.id })
+          .from(plans)
+          .where(eq(plans.is_active, true))
+          .limit(1)
+        activePlanId = firstActivePlan?.id ?? null
+      }
+
+      if (!activePlanId) {
+        const [firstAnyPlan] = await db.select({ id: plans.id }).from(plans).limit(1)
+        activePlanId = firstAnyPlan?.id ?? null
       }
 
       if (activePlanId) {

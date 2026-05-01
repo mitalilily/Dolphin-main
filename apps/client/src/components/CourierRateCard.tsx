@@ -65,6 +65,18 @@ const AGGREGATOR_LABELS: Record<string, string> = {
   icarry: 'iCarry',
 }
 
+const inferProviderFromName = (name?: string | null) => {
+  const n = String(name || '').toLowerCase()
+  if (n.includes('shiprocket')) return 'shiprocket'
+  if (n.includes('shipmozo')) return 'shipmozo'
+  if (n.includes('delhivery')) return 'delhivery'
+  if (n.includes('ekart')) return 'ekart'
+  if (n.includes('xpress')) return 'xpressbees'
+  if (n.includes('trux')) return 'truxcargo'
+  if (n.includes('icarry') || n.includes('i carry')) return 'icarry'
+  return ''
+}
+
 export default function CourierRateList({
   availableCouriers = [],
   defaultLogo = '',
@@ -132,7 +144,7 @@ export default function CourierRateList({
 
       <Grid container spacing={3}>
         {availableCouriers?.map((courier) => {
-          const providerKey = String(
+          const providerKeyRaw = String(
             (courier as any)?.integration_type ||
               (courier as any)?.service_provider ||
               (courier as any)?.serviceProvider ||
@@ -140,6 +152,7 @@ export default function CourierRateList({
           )
             .trim()
             .toLowerCase()
+          const providerKey = providerKeyRaw || inferProviderFromName(courier?.name)
           const logo =
             Object.entries(courierLogos || {}).find(([key]) =>
               courier?.name?.toLowerCase().includes(key.toLowerCase()),
@@ -398,14 +411,16 @@ export default function CourierRateList({
                   </Stack>
 
                   <Typography
-                    variant="caption"
+                    variant="body2"
                     sx={{
                       mt: 2.25,
                       display: 'block',
                       textAlign: 'left',
-                      color: alpha(TEXT_MUTED, 0.95),
-                      letterSpacing: '0.01em',
-                      fontWeight: 600,
+                      color: '#0B2348',
+                      letterSpacing: '0.02em',
+                      fontWeight: 700,
+                      borderTop: `1px solid ${alpha('#0B2348', 0.14)}`,
+                      pt: 1.1,
                     }}
                   >
                     {aggregatorName}
