@@ -55,6 +55,7 @@
     "seed:delhivery-b2c": "ts-node src/scripts/seedDelhiveryB2CRatecard.ts",
     "seed:shipmozo-b2c-slabs": "ts-node src/scripts/seedShipmozoB2CSlabs.ts",
     "seed:b2c-shiprocket-icarry-rates": "node -r ts-node/register src/scripts/seedB2CShiprocketIcarryRates.ts",
+    "seed:b2c-icarry-truxcargo-rates": "node -r ts-node/register src/scripts/seedB2CShiprocketIcarryRates.ts",
     "sync:xpressbees-couriers": "ts-node src/scripts/syncXpressbeesCouriers.ts",
     "sync:shiprocket-icarry-couriers": "node -r ts-node/register src/scripts/syncShiprocketAndIcarryCouriers.ts",
     "set:icarry-credentials": "node -r ts-node/register src/scripts/setIcarryCredentials.ts"
