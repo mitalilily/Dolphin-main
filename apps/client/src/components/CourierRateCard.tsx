@@ -408,7 +408,7 @@ export default function CourierRateList({
                       fontWeight: 600,
                     }}
                   >
-                    Parent Company: {aggregatorName}
+                    {aggregatorName}
                   </Typography>
                 </CardContent>
               </Card>
