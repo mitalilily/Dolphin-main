@@ -10,6 +10,7 @@ import RTLLayout from 'layouts/RTL.js'
 import './index.css'
 
 const queryClient = new QueryClient()
+const isDev = process.env.NODE_ENV !== 'production'
 
 const root = createRoot(document.getElementById('root'))
 root.render(
@@ -23,7 +24,7 @@ root.render(
       </Switch>
     </BrowserRouter>
 
-    {/* React Query devtools are kept for local debugging */}
-    <ReactQueryDevtools initialIsOpen={false} />
+    {/* React Query devtools only in development to avoid extra runtime overhead */}
+    {isDev ? <ReactQueryDevtools initialIsOpen={false} /> : null}
   </QueryClientProvider>,
 )
