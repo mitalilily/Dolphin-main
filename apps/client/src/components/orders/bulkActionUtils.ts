@@ -50,6 +50,9 @@ const B2C_MANIFESTABLE_STATUSES = new Set([
 ])
 
 export const isHttpUrl = (value?: string | null) => typeof value === 'string' && /^https?:\/\//i.test(value)
+export const isDataUrl = (value?: string | null) =>
+  typeof value === 'string' && /^data:application\/pdf;base64,/i.test(value)
+export const isDirectDownloadUrl = (value?: string | null) => isHttpUrl(value) || isDataUrl(value)
 
 export const getB2CManifestIdentifier = (order: BulkOrderDocumentShape) =>
   order.order_number || order.awb_number || null
@@ -129,12 +132,12 @@ export const getDocumentReference = (order: BulkOrderDocumentShape, type: Docume
       key:
         typeof order.label_key === 'string'
           ? order.label_key
-          : typeof order.label === 'string' && !isHttpUrl(order.label)
+          : typeof order.label === 'string' && !isDirectDownloadUrl(order.label)
             ? order.label
             : null,
-      url: isHttpUrl(order.label_url)
+      url: isDirectDownloadUrl(order.label_url)
         ? order.label_url
-        : isHttpUrl(order.label)
+        : isDirectDownloadUrl(order.label)
           ? order.label
           : null,
     }
@@ -145,12 +148,12 @@ export const getDocumentReference = (order: BulkOrderDocumentShape, type: Docume
       key:
         typeof order.manifest_key === 'string'
           ? order.manifest_key
-          : typeof order.manifest === 'string' && !isHttpUrl(order.manifest)
+          : typeof order.manifest === 'string' && !isDirectDownloadUrl(order.manifest)
             ? order.manifest
             : null,
-      url: isHttpUrl(order.manifest_url)
+      url: isDirectDownloadUrl(order.manifest_url)
         ? order.manifest_url
-        : isHttpUrl(order.manifest)
+        : isDirectDownloadUrl(order.manifest)
           ? order.manifest
           : null,
     }
@@ -160,12 +163,12 @@ export const getDocumentReference = (order: BulkOrderDocumentShape, type: Docume
     key:
       typeof order.invoice_key === 'string'
         ? order.invoice_key
-        : typeof order.invoice_link === 'string' && !isHttpUrl(order.invoice_link)
+        : typeof order.invoice_link === 'string' && !isDirectDownloadUrl(order.invoice_link)
           ? order.invoice_link
           : null,
-    url: isHttpUrl(order.invoice_url)
+    url: isDirectDownloadUrl(order.invoice_url)
       ? order.invoice_url
-      : isHttpUrl(order.invoice_link)
+      : isDirectDownloadUrl(order.invoice_link)
         ? order.invoice_link
         : null,
   }

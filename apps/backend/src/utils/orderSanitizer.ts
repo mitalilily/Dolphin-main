@@ -8,6 +8,9 @@ const ensureDownloadUrl = async (value?: string | null) => {
   if (!value || typeof value !== 'string' || !value.trim()) {
     return null
   }
+  if (/^data:application\/pdf;base64,/i.test(value)) {
+    return value
+  }
 
   // If it's already a full URL from external source (not our R2), return as-is
   // But R2 URLs should be re-presigned since they expire

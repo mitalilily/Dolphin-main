@@ -12,6 +12,7 @@ import {
 import { usePresignedDownloadMutation } from '../../hooks/Uploads/usePresignedDownloadUrls'
 import { useRegenerateOrderDocuments } from '../../hooks/Orders/useOrders'
 import { toast } from '../UI/Toast'
+import { isDirectDownloadUrl } from './bulkActionUtils'
 
 interface OrderExpandedRowProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,7 +100,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
   ) => {
     try {
       // Validate URL before attempting download
-      if (!url || !url.startsWith('http')) {
+      if (!url || !isDirectDownloadUrl(url)) {
         toast.open({
           message: `Invalid ${fileType} URL`,
           severity: 'error',
@@ -170,7 +171,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
             variant="outlined"
             sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
             onClick={() => {
-              if (urlValue && /^https?:\/\//i.test(urlValue)) {
+              if (urlValue && isDirectDownloadUrl(urlValue)) {
                 handleDirectDownload(urlValue, type)
                 return
               }
@@ -374,7 +375,8 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
             {renderDocAction({
               title: 'Label',
               keyValue: row.label_key || row.label,
-              urlValue: row.label_url && /^https?:\/\//i.test(row.label_url) ? row.label_url : undefined,
+              urlValue:
+                row.label_url && isDirectDownloadUrl(row.label_url) ? row.label_url : undefined,
               type: 'label',
             })}
 
@@ -382,14 +384,19 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
               title: 'Manifest',
               keyValue: row.manifest_key || row.manifest,
               urlValue:
-                row.manifest_url && /^https?:\/\//i.test(row.manifest_url) ? row.manifest_url : undefined,
+                row.manifest_url && isDirectDownloadUrl(row.manifest_url)
+                  ? row.manifest_url
+                  : undefined,
               type: 'manifest',
             })}
 
             {renderDocAction({
               title: 'Invoice',
               keyValue: row.invoice_key || row.invoice_link,
-              urlValue: row.invoice_url && /^https?:\/\//i.test(row.invoice_url) ? row.invoice_url : undefined,
+              urlValue:
+                row.invoice_url && isDirectDownloadUrl(row.invoice_url)
+                  ? row.invoice_url
+                  : undefined,
               type: 'invoice',
             })}
           </Stack>
