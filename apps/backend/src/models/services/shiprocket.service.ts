@@ -296,6 +296,14 @@ const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
   })
 }
 
+const findFirstTruxcargoShipmentWithIdentifiers = (response: any) => {
+  const objects = flattenTruxcargoObjects(response)
+  return objects.find((row) => {
+    const identifiers = extractTruxcargoShipmentIdentifiers(row)
+    return Boolean(identifiers.awb)
+  })
+}
+
 const buildTruxcargoRemoteOrderId = (orderNumber: unknown) => {
   const base =
     String(orderNumber || 'ORD')
@@ -308,6 +316,48 @@ const buildTruxcargoRemoteOrderId = (orderNumber: unknown) => {
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
   return `${base}-TX${uniquePart}`.slice(0, 48)
+}
+
+const TRUXCARGO_INVOICE_KEYS = [
+  'seller_invoice_no',
+  'seller_invoiceno',
+  'sellerinvoiceno',
+  'seller_invoiceNo',
+  'sellerInvoiceNo',
+  'seller_invoice_number',
+  'sellerInvoiceNumber',
+  'seller_invoice',
+  'sellerInvoice',
+  'seller_inv_no',
+  'seller_inv',
+  'seller_invno',
+  'sellerInvNo',
+  'seller_inv_number',
+  'sellerInvNumber',
+  'seller_bill_no',
+  'seller_bill_number',
+  'sellerBillNo',
+  'invoice',
+  'invoice_no',
+  'invoiceNo',
+  'inv_no',
+  'invNo',
+  'invno',
+  'bill_no',
+  'billNo',
+  'bill_number',
+] as const
+
+const withTruxcargoRemoteIdentity = (payload: Record<string, any>, remoteOrderId: string) => {
+  const nextPayload: Record<string, any> = {
+    ...payload,
+    order_id: remoteOrderId,
+    order_number: remoteOrderId,
+  }
+  for (const key of TRUXCARGO_INVOICE_KEYS) {
+    nextPayload[key] = remoteOrderId
+  }
+  return nextPayload
 }
 
 const getExpectedWalletDebitFromOrder = (order: {
@@ -4616,11 +4666,9 @@ export const createB2CShipmentService = async (
             fallbackWarehouse ||
             'Seller',
         ).trim() || 'Seller'
-      const truxInvoiceNumber =
-        String(params.invoice_number || params.order_number || `INV-${Date.now()}`).trim() ||
-        `INV-${Date.now()}`
       const truxMerchantOrderNumber = String(params.order_number || '').trim()
       const truxRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+      const truxProviderInvoiceNumber = truxRemoteOrderId
       const truxProviderPayload: Record<string, any> = {
         order_id: truxRemoteOrderId,
         order_number: truxRemoteOrderId,
@@ -4674,33 +4722,33 @@ export const createB2CShipmentService = async (
         pin_code: truxConsigneePincode,
         consignee_pincode: [truxConsigneePincode],
         seller_name: truxSellerName,
-        seller_invoice_no: truxInvoiceNumber,
-        seller_invoiceno: truxInvoiceNumber,
-        sellerinvoiceno: truxInvoiceNumber,
-        seller_invoiceNo: truxInvoiceNumber,
-        sellerInvoiceNo: truxInvoiceNumber,
-        seller_invoice_number: truxInvoiceNumber,
-        sellerInvoiceNumber: truxInvoiceNumber,
-        seller_invoice: truxInvoiceNumber,
-        sellerInvoice: truxInvoiceNumber,
-        seller_inv_no: truxInvoiceNumber,
-        seller_inv: truxInvoiceNumber,
-        seller_invno: truxInvoiceNumber,
-        sellerInvNo: truxInvoiceNumber,
-        seller_inv_number: truxInvoiceNumber,
-        sellerInvNumber: truxInvoiceNumber,
-        seller_bill_no: truxInvoiceNumber,
-        seller_bill_number: truxInvoiceNumber,
-        sellerBillNo: truxInvoiceNumber,
-        invoice: truxInvoiceNumber,
-        invoice_no: truxInvoiceNumber,
-        invoiceNo: truxInvoiceNumber,
-        inv_no: truxInvoiceNumber,
-        invNo: truxInvoiceNumber,
-        invno: truxInvoiceNumber,
-        bill_no: truxInvoiceNumber,
-        billNo: truxInvoiceNumber,
-        bill_number: truxInvoiceNumber,
+        seller_invoice_no: truxProviderInvoiceNumber,
+        seller_invoiceno: truxProviderInvoiceNumber,
+        sellerinvoiceno: truxProviderInvoiceNumber,
+        seller_invoiceNo: truxProviderInvoiceNumber,
+        sellerInvoiceNo: truxProviderInvoiceNumber,
+        seller_invoice_number: truxProviderInvoiceNumber,
+        sellerInvoiceNumber: truxProviderInvoiceNumber,
+        seller_invoice: truxProviderInvoiceNumber,
+        sellerInvoice: truxProviderInvoiceNumber,
+        seller_inv_no: truxProviderInvoiceNumber,
+        seller_inv: truxProviderInvoiceNumber,
+        seller_invno: truxProviderInvoiceNumber,
+        sellerInvNo: truxProviderInvoiceNumber,
+        seller_inv_number: truxProviderInvoiceNumber,
+        sellerInvNumber: truxProviderInvoiceNumber,
+        seller_bill_no: truxProviderInvoiceNumber,
+        seller_bill_number: truxProviderInvoiceNumber,
+        sellerBillNo: truxProviderInvoiceNumber,
+        invoice: truxProviderInvoiceNumber,
+        invoice_no: truxProviderInvoiceNumber,
+        invoiceNo: truxProviderInvoiceNumber,
+        inv_no: truxProviderInvoiceNumber,
+        invNo: truxProviderInvoiceNumber,
+        invno: truxProviderInvoiceNumber,
+        bill_no: truxProviderInvoiceNumber,
+        billNo: truxProviderInvoiceNumber,
+        bill_number: truxProviderInvoiceNumber,
       }
 
       const recoverExistingTruxcargoOrder = async (reason: unknown) => {
@@ -4735,6 +4783,7 @@ export const createB2CShipmentService = async (
             const matchedOrder =
               findTruxcargoOrderInResponse(lookupResp, truxRemoteOrderId) ||
               findTruxcargoOrderInResponse(lookupResp, truxMerchantOrderNumber) ||
+              findFirstTruxcargoShipmentWithIdentifiers(lookupResp) ||
               lookupResp
             const identifiers = extractTruxcargoShipmentIdentifiers(matchedOrder)
             if (identifiers.awb) {
@@ -4781,11 +4830,9 @@ export const createB2CShipmentService = async (
             previous_remote_order_id: truxRemoteOrderId,
             retry_remote_order_id: retryRemoteOrderId,
           })
-          createOrderResp = await truxcargo.createOrder({
-            ...truxProviderPayload,
-            order_id: retryRemoteOrderId,
-            order_number: retryRemoteOrderId,
-          })
+          createOrderResp = await truxcargo.createOrder(
+            withTruxcargoRemoteIdentity(truxProviderPayload, retryRemoteOrderId),
+          )
         } else {
           throw createErr
         }
@@ -4818,11 +4865,9 @@ export const createB2CShipmentService = async (
             previous_remote_order_id: truxRemoteOrderId,
             retry_remote_order_id: retryRemoteOrderId,
           })
-          createOrderResp = await truxcargo.createOrder({
-            ...truxProviderPayload,
-            order_id: retryRemoteOrderId,
-            order_number: retryRemoteOrderId,
-          })
+          createOrderResp = await truxcargo.createOrder(
+            withTruxcargoRemoteIdentity(truxProviderPayload, retryRemoteOrderId),
+          )
         } else {
           throw new HttpError(400, rejectionMessage)
         }
