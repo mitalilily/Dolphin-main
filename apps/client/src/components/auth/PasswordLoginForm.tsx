@@ -142,7 +142,7 @@ export default function PasswordLoginForm({ setStep, step, setOpenTerms }: IPass
 
             setUserId(user?.id)
             setTokens(token, refreshToken)
-            navigate('/onboarding-questions', { replace: true })
+            navigate('/app', { replace: true })
           },
           onError: (error: any) => {
             toast.open({

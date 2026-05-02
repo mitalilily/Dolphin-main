@@ -143,7 +143,7 @@ export default function EmailVerificationForm({
             message: 'Email verified successfully',
             severity: 'success',
           })
-          navigate('/onboarding-questions', { replace: true })
+          navigate('/app', { replace: true })
         },
         onError: (err: any) => {
           setError(getAuthErrorMessage(err, 'Invalid code. Please try again.'))

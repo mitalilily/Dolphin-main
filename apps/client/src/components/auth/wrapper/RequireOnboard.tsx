@@ -22,7 +22,7 @@ export default function RequireOnboard({
 
   /* 3️⃣  Logged‑in AND already onboarded → send to main app */
   if (user?.onboardingComplete) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   /* 4️⃣  Logged‑in BUT NOT onboarded → let them see onboarding page */

@@ -50,7 +50,7 @@ export default function UserOnboarding() {
     if (!userData) return
 
     if (userData.onboardingComplete) {
-      navigate('/app')
+      navigate('/dashboard')
       return
     }
 
@@ -144,8 +144,9 @@ export default function UserOnboarding() {
       if (step < steps.length) {
         setStep((prev) => prev + 1)
       } else {
-        queryClient.invalidateQueries({ queryKey: ['currentUser'] })
-        navigate('/app')
+        queryClient.setQueryData(['userProfile'], response.user)
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+        navigate('/dashboard')
       }
     }
   }

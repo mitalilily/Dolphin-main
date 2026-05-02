@@ -144,7 +144,7 @@ export default function OtpForm({ email, onEditEmail }: Props) {
           sessionStorage.setItem('activeEmail', email)
           setUserId(user?.id)
           setTokens(token, refreshToken)
-          navigate('/onboarding-questions', { replace: true })
+          navigate('/app', { replace: true })
         },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onError: (err: any) => {

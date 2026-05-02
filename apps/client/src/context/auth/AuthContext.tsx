@@ -45,6 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const {
     data: user,
     isFetching: userFetching,
+    isError: userProfileError,
     refetch: refetchUser,
   } = useUserProfile(isAuthenticated)
 
@@ -84,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const value: AuthCtx = {
     user: user ?? { ...emptyUserProfile },
-    loading: userFetching,
+    loading: isAuthenticated && (userFetching || (!user?.id && !userProfileError)),
     isAuthenticated,
     setUserId,
     setTokens,
