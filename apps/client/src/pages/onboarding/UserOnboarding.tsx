@@ -11,6 +11,7 @@ import StepTwoForm from '../../components/onboarding/StepTwoForm'
 import SwitchAccountButton from '../../components/onboarding/SwitchAccountButton'
 import CustomIconLoadingButton from '../../components/UI/button/CustomLoadingButton'
 import FullScreenLoader from '../../components/UI/loader/FullScreenLoader'
+import { toast } from '../../components/UI/Toast'
 import { useAuth } from '../../context/auth/AuthContext'
 import { useCompleteUserOnboarding } from '../../hooks/useCompleteUserOnboarding'
 import { clearOnboardingPrefill, getOnboardingPrefill } from '../../utils/onboardingPrefill'
@@ -137,19 +138,30 @@ export default function UserOnboarding() {
     const errors = validateOnboardingFields(formData, step)
     setFormErrors(errors)
 
-    if (hasValidationErrors(errors)) return
+    if (hasValidationErrors(errors)) {
+      toast.open({
+        message: 'Please complete the highlighted onboarding fields before continuing.',
+        severity: 'error',
+        duration: 6000,
+      })
+      return
+    }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const response: any = await completeOnboarding({ step, data: formData })
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const response: any = await completeOnboarding({ step, data: formData })
 
-    if (response?.user) {
-      if (step < steps.length) {
-        setStep((prev) => prev + 1)
-      } else {
+      if (response?.user) {
         queryClient.setQueryData(['userProfile'], response.user)
-        queryClient.invalidateQueries({ queryKey: ['userProfile'] })
-        navigate('/dashboard')
+        if (step < steps.length) {
+          setStep((prev) => prev + 1)
+        } else {
+          queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+          navigate('/dashboard')
+        }
       }
+    } catch {
+      // useCompleteUserOnboarding already shows the API error toast.
     }
   }
 

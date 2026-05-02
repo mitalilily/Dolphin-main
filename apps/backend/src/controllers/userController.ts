@@ -108,7 +108,7 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
             profilePicture: user?.profilePicture,
           },
           onboardingStep: 1,
-          profileCompletion: false,
+          profileComplete: false,
           onboardingComplete: false,
         }
         break
