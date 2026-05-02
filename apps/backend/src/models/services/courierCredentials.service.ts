@@ -43,6 +43,8 @@ export type ShiprocketConfig = {
   apiBase?: string
   username?: string
   password?: string
+  authToken?: string
+  apiKey?: string
   defaultPickupLocation?: string
   defaultChannelId?: string
 }
@@ -166,7 +168,8 @@ const hasEnvForProviderAndType = (provider: ServiceProviderId, _type: BusinessTy
     return !!(
       process.env.SHIPROCKET_API_BASE ||
       process.env.SHIPROCKET_EMAIL ||
-      process.env.SHIPROCKET_PASSWORD
+      process.env.SHIPROCKET_PASSWORD ||
+      process.env.SHIPROCKET_AUTH_TOKEN
     )
   }
   if (provider === 'juxcargo') {
@@ -258,6 +261,8 @@ const buildConfigFromRow = (provider: ServiceProviderId, row: typeof courierCred
       apiBase: normalize(row.apiBase),
       username: normalize(row.username),
       password: normalize(row.password),
+      authToken: normalize(row.apiKey),
+      apiKey: normalize(row.apiKey),
       defaultPickupLocation: normalize(row.clientName),
       defaultChannelId: normalize(row.clientId),
     }
@@ -314,7 +319,7 @@ const rowHasUsableCredentials = (
   const apiBase = normalize(row.apiBase)
 
   if (provider === 'shiprocket') {
-    return Boolean(username && password)
+    return Boolean((username && password) || apiKey)
   }
 
   if (provider === 'shipmozo') {

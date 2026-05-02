@@ -1273,12 +1273,19 @@ export const updateShipmozoCredentialsController = async (req: Request, res: Res
 }
 
 export const updateShiprocketCredentialsController = async (req: Request, res: Response) => {
-  const { apiBase, username, password, defaultPickupLocation, defaultChannelId } = req.body || {}
+  const { apiBase, username, password, authToken, apiKey, defaultPickupLocation, defaultChannelId } =
+    req.body || {}
 
   try {
     const nextApiBase = typeof apiBase === 'string' ? apiBase.trim() : undefined
     const nextUsername = typeof username === 'string' ? username.trim() : undefined
     const nextPassword = typeof password === 'string' ? password.trim() : undefined
+    const nextAuthToken =
+      typeof authToken === 'string'
+        ? authToken.trim()
+        : typeof apiKey === 'string'
+          ? apiKey.trim()
+          : undefined
     const nextDefaultPickupLocation =
       typeof defaultPickupLocation === 'string' ? defaultPickupLocation.trim() : undefined
     const nextDefaultChannelId =
@@ -1304,6 +1311,9 @@ export const updateShiprocketCredentialsController = async (req: Request, res: R
       if (hasPassword) {
         updatePayload.password = nextPassword
       }
+      if (nextAuthToken !== undefined) {
+        updatePayload.apiKey = nextAuthToken
+      }
       if (nextDefaultPickupLocation !== undefined) {
         updatePayload.clientName = nextDefaultPickupLocation
       }
@@ -1321,7 +1331,7 @@ export const updateShiprocketCredentialsController = async (req: Request, res: R
         apiBase: nextApiBase || 'https://apiv2.shiprocket.in/v1/external',
         clientName: nextDefaultPickupLocation || '',
         clientId: nextDefaultChannelId || '',
-        apiKey: '',
+        apiKey: nextAuthToken || '',
         username: nextUsername || '',
         password: hasPassword ? nextPassword : '',
         webhookSecret: '',
@@ -1333,6 +1343,7 @@ export const updateShiprocketCredentialsController = async (req: Request, res: R
     const [saved] = await db
       .select({
         apiBase: courier_credentials.apiBase,
+        authToken: courier_credentials.apiKey,
         username: courier_credentials.username,
         password: courier_credentials.password,
         defaultPickupLocation: courier_credentials.clientName,
@@ -1348,6 +1359,7 @@ export const updateShiprocketCredentialsController = async (req: Request, res: R
       data: {
         provider: 'shiprocket',
         apiBase: saved?.apiBase || 'https://apiv2.shiprocket.in/v1/external',
+        hasAuthToken: Boolean((saved?.authToken || '').trim()),
         username: saved?.username || '',
         hasPassword: Boolean((saved?.password || '').trim()),
         defaultPickupLocation: saved?.defaultPickupLocation || '',

@@ -94,6 +94,11 @@ export const createOrderController = async (req: any, res: Response) => {
       String(error?.message || '')
         .toLowerCase()
         .includes('kyc verification is mandated')
+    const isShiprocketCredentialError =
+      error?.code === 'SHIPROCKET_INVALID_CREDENTIALS' ||
+      String(error?.message || '')
+        .toLowerCase()
+        .includes('shiprocket credentials are invalid')
     const statusCode =
       typeof error?.statusCode === 'number'
         ? error.statusCode
@@ -102,6 +107,8 @@ export const createOrderController = async (req: any, res: Response) => {
           : 500
     const message = isShiprocketKycError
       ? 'Shipment cannot be created because Shiprocket account KYC is incomplete. Complete KYC in your Shiprocket panel and retry.'
+      : isShiprocketCredentialError
+        ? 'Shipment cannot be created because Shiprocket credentials are invalid. Update the Shiprocket API email/password or auth token in admin courier settings and retry.'
       : error.message || 'Internal server error'
 
     console.error('Error creating order via API:', error)
@@ -110,6 +117,7 @@ export const createOrderController = async (req: any, res: Response) => {
       error: 'Failed to create order',
       message,
       ...(isShiprocketKycError ? { error_code: 'SHIPROCKET_KYC_REQUIRED' } : {}),
+      ...(isShiprocketCredentialError ? { error_code: 'SHIPROCKET_INVALID_CREDENTIALS' } : {}),
     })
   }
 }

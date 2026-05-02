@@ -99,6 +99,7 @@ export class ShiprocketCourierService {
       this.baseApi = cfg.apiBase || this.baseApi
       this.username = cfg.username || this.username
       this.password = cfg.password || this.password
+      this.configuredAuthToken = cfg.authToken || cfg.apiKey || this.configuredAuthToken
       this.defaultPickupLocation = cfg.defaultPickupLocation || this.defaultPickupLocation
       this.defaultChannelId = cfg.defaultChannelId || this.defaultChannelId
     }
@@ -163,9 +164,13 @@ export class ShiprocketCourierService {
       ShiprocketCourierService.authTokenExpiresAt = now + 23 * 60 * 60 * 1000
       return token
     } catch (err: any) {
+      const message = this.extractErrorMessage(err, 'Shiprocket login failed')
+      const normalizedMessage = message.toLowerCase()
       throw new HttpError(
         Number(err?.response?.status || 502),
-        this.extractErrorMessage(err, 'Shiprocket login failed'),
+        normalizedMessage.includes('invalid email and password')
+          ? 'Shiprocket credentials are invalid. Update the Shiprocket API email/password or save a valid auth token before booking Shiprocket shipments.'
+          : message,
       )
     }
   }
@@ -251,13 +256,22 @@ export class ShiprocketCourierService {
     )
     const normalizedMessage = String(extractedMessage || '').toLowerCase()
     const isKycBlocked = normalizedMessage.includes('kyc verification is mandated')
+    const isInvalidCredentials =
+      normalizedMessage.includes('invalid email and password') ||
+      normalizedMessage.includes('credentials are invalid')
 
     const httpError: any = new HttpError(
       upstreamStatus,
-      isKycBlocked
+      isInvalidCredentials
+        ? 'Shiprocket credentials are invalid. Update the Shiprocket API email/password or save a valid auth token before booking Shiprocket shipments.'
+        : isKycBlocked
         ? 'Shiprocket account KYC is incomplete. Complete KYC in Shiprocket panel to create shipments.'
         : extractedMessage,
     )
+    if (isInvalidCredentials) {
+      httpError.code = 'SHIPROCKET_INVALID_CREDENTIALS'
+      httpError.integration_type = 'shiprocket'
+    }
     if (isKycBlocked) {
       httpError.code = 'SHIPROCKET_KYC_REQUIRED'
       httpError.integration_type = 'shiprocket'

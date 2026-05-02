@@ -39,6 +39,11 @@ export const createB2CShipmentController = async (req: any, res: Response) => {
       String(error?.message || '')
         .toLowerCase()
         .includes('kyc verification is mandated')
+    const isShiprocketCredentialError =
+      error?.code === 'SHIPROCKET_INVALID_CREDENTIALS' ||
+      String(error?.message || '')
+        .toLowerCase()
+        .includes('shiprocket credentials are invalid')
 
     const statusCode =
       typeof error?.statusCode === 'number'
@@ -49,6 +54,8 @@ export const createB2CShipmentController = async (req: any, res: Response) => {
 
     const errorMessage = isShiprocketKycError
       ? 'Shipment cannot be created because Shiprocket account KYC is incomplete. Complete KYC in your Shiprocket panel and retry.'
+      : isShiprocketCredentialError
+        ? 'Shipment cannot be created because Shiprocket credentials are invalid. Update the Shiprocket API email/password or auth token in admin courier settings and retry.'
       : error.message?.includes('timeout') || error.code === 'ECONNABORTED'
         ? 'Order creation is taking longer than expected. Please try again or contact support if the issue persists.'
         : error.message || 'Failed to create order. Please try again.'
@@ -70,6 +77,7 @@ export const createB2CShipmentController = async (req: any, res: Response) => {
       success: false,
       message: errorMessage,
       ...(isShiprocketKycError ? { error_code: 'SHIPROCKET_KYC_REQUIRED' } : {}),
+      ...(isShiprocketCredentialError ? { error_code: 'SHIPROCKET_INVALID_CREDENTIALS' } : {}),
     })
   }
 }
