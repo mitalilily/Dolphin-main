@@ -147,18 +147,30 @@ export default function UserOnboarding() {
       return
     }
 
+    if (step < steps.length) {
+      const submittedStep = step
+      setStep((prev) => prev + 1)
+
+      completeOnboarding({ step: submittedStep, data: formData })
+        .then((response: any) => {
+          if (response?.user) {
+            queryClient.setQueryData(['userProfile'], response.user)
+          }
+        })
+        .catch(() => {
+          // The mutation hook already shows a toast. Do not trap the user on
+          // Step 1; the final submit sends the complete onboarding payload.
+        })
+      return
+    }
+
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const response: any = await completeOnboarding({ step, data: formData })
 
       if (response?.user) {
         queryClient.setQueryData(['userProfile'], response.user)
-        if (step < steps.length) {
-          setStep((prev) => prev + 1)
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['userProfile'] })
-          navigate('/dashboard')
-        }
+        queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+        navigate('/dashboard')
       }
     } catch {
       // useCompleteUserOnboarding already shows the API error toast.

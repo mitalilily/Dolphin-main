@@ -133,8 +133,20 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
         updates = {
           onboardingStep: -1,
           onboardingComplete: true,
+          businessType: data?.businessLegal?.businessCategory,
+          monthlyOrderCount: data?.businessLegal?.monthlyShipments,
           companyInfo: {
             ...userProfile?.companyInfo,
+            contactPerson:
+              `${data?.basicInfo?.firstName ?? ''} ${data?.basicInfo?.lastName ?? ''}`.trim() ||
+              userProfile?.companyInfo?.contactPerson,
+            contactEmail: emailLower || userProfile?.companyInfo?.contactEmail || user.email,
+            contactNumber: phoneDigits || userProfile?.companyInfo?.contactNumber || user.phone,
+            pincode: data?.basicInfo?.pincode || userProfile?.companyInfo?.pincode,
+            state: data?.basicInfo?.state || userProfile?.companyInfo?.state,
+            businessName: data?.basicInfo?.companyName || userProfile?.companyInfo?.businessName,
+            city: data?.basicInfo?.city || userProfile?.companyInfo?.city,
+            brandName: data?.businessLegal?.brandName || userProfile?.companyInfo?.brandName,
             website: data?.basicInfo?.personalWebsite,
           },
         }
