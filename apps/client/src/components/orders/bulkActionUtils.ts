@@ -45,8 +45,6 @@ const B2C_MANIFESTABLE_STATUSES = new Set([
   'booked',
   'shipment_created',
   'manifest_failed',
-  'pickup_initiated',
-  'manifest_generated',
 ])
 
 export const isHttpUrl = (value?: string | null) => typeof value === 'string' && /^https?:\/\//i.test(value)
@@ -60,6 +58,22 @@ export const getB2CManifestIdentifier = (order: BulkOrderDocumentShape) =>
 export const getB2CManifestProvider = (order: BulkOrderDocumentShape) => {
   const integrationType = String(order.integration_type || '').trim().toLowerCase()
   const courierPartner = String(order.courier_partner || '').trim().toLowerCase()
+
+  if (integrationType.includes('shiprocket') || courierPartner.includes('shiprocket')) {
+    return 'shiprocket'
+  }
+
+  if (integrationType.includes('truxcargo') || courierPartner.includes('truxcargo')) {
+    return 'truxcargo'
+  }
+
+  if (integrationType.includes('icarry') || courierPartner.includes('icarry')) {
+    return 'icarry'
+  }
+
+  if (integrationType.includes('shipmozo') || courierPartner.includes('shipmozo')) {
+    return 'shipmozo'
+  }
 
   if (integrationType.includes('xpressbees') || courierPartner.includes('xpressbees')) {
     return 'xpressbees'

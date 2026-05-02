@@ -74,7 +74,7 @@ export const statusColorMap: Record<string, 'success' | 'pending' | 'error' | 'i
   pending: 'pending',
   booked: 'info',
   manifest_failed: 'error',
-  pickup_initiated: 'pending',
+  pickup_initiated: 'success',
   shipment_created: 'info', // legacy
   in_transit: 'pending',
   out_for_delivery: 'pending',
@@ -85,7 +85,7 @@ export const statusColorMap: Record<string, 'success' | 'pending' | 'error' | 'i
   rto_in_transit: 'pending',
   rto_delivered: 'info',
   cancellation_requested: 'info',
-  manifest_generated: 'info', // legacy
+  manifest_generated: 'success', // legacy
 }
 
 /* ───────────── Shipping Statuses ───────────── */
@@ -93,7 +93,7 @@ const shippingStatusMap: Record<string, string> = {
   pending: 'Pending',
   booked: 'Booked',
   manifest_failed: 'Manifest Failed',
-  pickup_initiated: 'Pending Pickup',
+  pickup_initiated: 'Manifested',
   shipment_created: 'Shipment Created',
   in_transit: 'In Transit',
   out_for_delivery: 'Out For Delivery',
@@ -104,6 +104,7 @@ const shippingStatusMap: Record<string, string> = {
   rto_delivered: 'RTO Delivered',
   cancellation_requested: 'Cancellation Requested',
   cancelled: 'Cancelled',
+  manifest_generated: 'Manifested',
 }
 
 const B2COrdersList = () => {
@@ -664,9 +665,17 @@ const B2COrdersList = () => {
       render: (_, row) => {
         // 1) Build actions compactly; include Reverse + Manifest + Cancel where applicable
         const actions: ReactNode[] = []
+        const currentStatus = String(row.order_status || '').toLowerCase()
+        const isManifested = [
+          'pickup_initiated',
+          'manifest_generated',
+          'in_transit',
+          'out_for_delivery',
+          'delivered',
+        ].includes(currentStatus)
 
         // Show Reverse for delivered (all providers)
-        if ((row.order_status || '').toLowerCase() === 'delivered') {
+        if (currentStatus === 'delivered') {
           actions.push(
             <Button
               key="reverse"
@@ -680,7 +689,20 @@ const B2COrdersList = () => {
           )
         }
 
-        if (isB2CManifestEligible(row)) {
+        if (isManifested) {
+          actions.push(
+            <Button
+              key="manifested"
+              size="small"
+              variant="outlined"
+              color="success"
+              disabled
+              sx={{ px: 1.25, minWidth: 0 }}
+            >
+              Manifested
+            </Button>,
+          )
+        } else if (isB2CManifestEligible(row)) {
           actions.push(
             <Button
               key="manifest"
@@ -700,7 +722,7 @@ const B2COrdersList = () => {
           row.can_retry_manifest === true &&
           String(row.integration_type || '').toLowerCase() === 'delhivery'
 
-        if (String(row.order_status || '').toLowerCase() === 'manifest_failed' && canRetryManifest) {
+        if (currentStatus === 'manifest_failed' && canRetryManifest) {
           actions.push(
             <Button
               key="retry-manifest"
@@ -734,8 +756,8 @@ const B2COrdersList = () => {
         // If the provider already returned a manifest/label flow and there are no direct actions, show info text
         if (
           actions.length === 0 &&
-          String(row.order_status || '').toLowerCase() !== 'manifest_failed' &&
-          ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].includes(
+          currentStatus !== 'manifest_failed' &&
+          ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo', 'icarry'].includes(
             String(row.integration_type || '').toLowerCase(),
           )
         ) {
@@ -753,7 +775,7 @@ const B2COrdersList = () => {
 
         if (
           actions.length === 0 &&
-          String(row.order_status || '').toLowerCase() === 'manifest_failed' &&
+          currentStatus === 'manifest_failed' &&
           String(row.integration_type || '').toLowerCase() === 'delhivery'
         ) {
           return (

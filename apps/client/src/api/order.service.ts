@@ -222,6 +222,7 @@ export interface GenerateManifestParams {
 export interface GenerateManifestResponse {
   manifest_id: string
   manifest_url: string
+  manifest_key?: string | null
   warnings?: string[]
 }
 
