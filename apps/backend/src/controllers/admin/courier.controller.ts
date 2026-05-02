@@ -627,6 +627,8 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
         provider: 'shiprocket',
         apiBase: 'https://apiv2.shiprocket.in/v1/external',
         username: '',
+        hasAuthToken: false,
+        authTokenMasked: '',
         hasPassword: false,
         defaultPickupLocation: '',
         defaultChannelId: '',
@@ -714,11 +716,16 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
           defaultWarehouseId: row.clientName || '',
         }
       } else if (provider === 'shiprocket') {
+        const authToken = row.apiKey || ''
         const hasPassword = Boolean((row.password || '').trim())
         acc.shiprocket = {
           provider: 'shiprocket',
           apiBase: row.apiBase || 'https://apiv2.shiprocket.in/v1/external',
           username: row.username || '',
+          hasAuthToken: Boolean(authToken.trim()),
+          authTokenMasked: authToken
+            ? `${authToken.slice(0, 4)}${'*'.repeat(Math.max(authToken.length - 8, 0))}${authToken.slice(-4)}`
+            : '',
           hasPassword,
           defaultPickupLocation: row.clientName || '',
           defaultChannelId: row.clientId || '',

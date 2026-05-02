@@ -98,6 +98,7 @@ const CourierCredentials = () => {
     apiBase: '',
     username: '',
     password: '',
+    authToken: '',
     defaultPickupLocation: '',
     defaultChannelId: '',
   })
@@ -155,6 +156,7 @@ const CourierCredentials = () => {
         apiBase: data.shiprocket.apiBase || '',
         username: data.shiprocket.username || '',
         password: '',
+        authToken: '',
         defaultPickupLocation: data.shiprocket.defaultPickupLocation || '',
         defaultChannelId: data.shiprocket.defaultChannelId || '',
       })
@@ -303,13 +305,14 @@ const CourierCredentials = () => {
         apiBase: shiprocketForm.apiBase,
         username: shiprocketForm.username,
         ...(shiprocketForm.password ? { password: shiprocketForm.password } : {}),
+        ...(shiprocketForm.authToken ? { authToken: shiprocketForm.authToken } : {}),
         defaultPickupLocation: shiprocketForm.defaultPickupLocation,
         defaultChannelId: shiprocketForm.defaultChannelId,
       },
       {
         onSuccess: () => {
           toast({ title: 'Shiprocket credentials updated', status: 'success' })
-          setShiprocketForm((prev) => ({ ...prev, password: '' }))
+          setShiprocketForm((prev) => ({ ...prev, password: '', authToken: '' }))
         },
         onError: (err) => {
           toast({
@@ -676,8 +679,16 @@ const CourierCredentials = () => {
 
         <ProviderCard
           title="Shiprocket"
-          badgeColorScheme={data?.shiprocket?.hasPassword ? 'green' : 'orange'}
-          badgeLabel={data?.shiprocket?.hasPassword ? 'Credentials set' : 'Missing password'}
+          badgeColorScheme={
+            data?.shiprocket?.hasAuthToken || data?.shiprocket?.hasPassword ? 'green' : 'orange'
+          }
+          badgeLabel={
+            data?.shiprocket?.hasAuthToken
+              ? 'Token set'
+              : data?.shiprocket?.hasPassword
+                ? 'Password set'
+                : 'Missing credentials'
+          }
         >
           <FormControl>
             <FormLabel>API Base URL</FormLabel>
@@ -711,6 +722,23 @@ const CourierCredentials = () => {
               }
               placeholder="Leave blank to keep existing password"
             />
+          </FormControl>
+
+          <FormControl>
+            <FormLabel>Auth Token / API Key</FormLabel>
+            <Input
+              type="password"
+              value={shiprocketForm.authToken}
+              onChange={(e) =>
+                setShiprocketForm((prev) => ({ ...prev, authToken: e.target.value }))
+              }
+              placeholder={data?.shiprocket?.authTokenMasked || 'Paste Shiprocket auth token'}
+            />
+            {!!data?.shiprocket?.authTokenMasked && (
+              <Text fontSize="xs" color="gray.500" mt={1}>
+                Current token: {data.shiprocket.authTokenMasked}
+              </Text>
+            )}
           </FormControl>
 
           <FormControl>
