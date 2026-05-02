@@ -193,6 +193,109 @@ const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCo
   },
 })
 
+const isTruxcargoDuplicateOrderError = (value: unknown) =>
+  /duplicate\s*order|order\s*id.*duplicate|duplicate\s*order\s*id/i.test(String(value || ''))
+
+const getFirstTruxcargoValue = (source: any, keys: string[]): any => {
+  if (!source || typeof source !== 'object') return undefined
+  for (const key of keys) {
+    const direct = source[key]
+    if (direct !== undefined && direct !== null && String(direct).trim() !== '') return direct
+  }
+  const loweredKeys = new Set(keys.map((key) => key.toLowerCase()))
+  for (const [key, value] of Object.entries(source)) {
+    if (loweredKeys.has(key.toLowerCase()) && value !== undefined && value !== null) {
+      const trimmed = String(value).trim()
+      if (trimmed) return value
+    }
+  }
+  return undefined
+}
+
+const flattenTruxcargoObjects = (value: any, depth = 0): any[] => {
+  if (!value || depth > 6) return []
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => flattenTruxcargoObjects(item, depth + 1))
+  }
+  if (typeof value !== 'object') return []
+
+  const nested = Object.values(value).flatMap((item) => flattenTruxcargoObjects(item, depth + 1))
+  return [value, ...nested]
+}
+
+const extractTruxcargoShipmentIdentifiers = (source: any) => {
+  const row = source?.data && typeof source.data === 'object' && !Array.isArray(source.data)
+    ? { ...source, ...source.data }
+    : source
+  const awb =
+    getFirstTruxcargoValue(row, [
+      'waybill',
+      'waybill_number',
+      'awb_number',
+      'awb',
+      'tracking_id',
+      'tracking_number',
+      'lr_number',
+      'wbn',
+      'cn_number',
+    ]) ?? null
+  const shipmentId =
+    getFirstTruxcargoValue(row, [
+      'shipment_id',
+      'shipmentId',
+      'order_id',
+      'order_number',
+      'reference_id',
+      'tracking_id',
+    ]) ?? awb
+  const label =
+    getFirstTruxcargoValue(row, ['label', 'label_url', 'label_link', 'packaging_slip']) ?? null
+  const manifest =
+    getFirstTruxcargoValue(row, ['manifest', 'manifest_url', 'manifest_link', 'packaging_slip']) ??
+    null
+  const courierName =
+    getFirstTruxcargoValue(row, ['courier_name', 'courier', 'courier_partner', 'partner_name']) ??
+    'Truxcargo'
+  const sortCode = getFirstTruxcargoValue(row, ['sort_code', 'sortCode', 'destination_code']) ?? null
+  const courierCost =
+    Number(
+      getFirstTruxcargoValue(row, [
+        'rate',
+        'shipping_charges',
+        'freight_charges',
+        'total_charges',
+        'amount',
+      ]) ?? 0,
+    ) || null
+
+  return {
+    awb: awb ? String(awb).trim() : '',
+    shipmentId: shipmentId ? String(shipmentId).trim() : '',
+    label: label ? String(label).trim() : undefined,
+    manifest: manifest ? String(manifest).trim() : undefined,
+    courierName: courierName ? String(courierName).trim() : 'Truxcargo',
+    sortCode: sortCode ? String(sortCode).trim() : null,
+    courierCost,
+    raw: row,
+  }
+}
+
+const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
+  const normalizedOrderNumber = orderNumber.trim().toLowerCase()
+  const objects = flattenTruxcargoObjects(response)
+
+  return objects.find((row) => {
+    const ids = [
+      getFirstTruxcargoValue(row, ['order_id', 'order_number', 'client_order_id', 'reference_id']),
+      getFirstTruxcargoValue(row, ['seller_order_id', 'customer_order_id', 'invoice_no']),
+    ]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+
+    return ids.includes(normalizedOrderNumber)
+  })
+}
+
 const getExpectedWalletDebitFromOrder = (order: {
   order_type?: string | null
   freight_charges?: number | string | null
@@ -4580,7 +4683,76 @@ export const createB2CShipmentService = async (
         bill_number: truxInvoiceNumber,
       }
 
-      const createOrderResp = await truxcargo.createOrder(truxProviderPayload)
+      const recoverExistingTruxcargoOrder = async (reason: unknown) => {
+        if (!isTruxcargoDuplicateOrderError(reason)) return null
+
+        console.warn('[Truxcargo] Duplicate order detected, attempting remote recovery', {
+          order_number: params.order_number,
+          courier_id: params.courier_id,
+          reason: String(reason || '').slice(0, 300),
+        })
+
+        const lookupAttempts = [
+          () =>
+            truxcargo.trackShipment({
+              order_id: String(params.order_number || '').trim(),
+            }),
+          () =>
+            truxcargo.fetchAllWaybills({
+              order_id: String(params.order_number || '').trim(),
+              order_number: String(params.order_number || '').trim(),
+            }),
+          () =>
+            truxcargo.fetchAllWaybills({
+              search: String(params.order_number || '').trim(),
+            }),
+        ]
+
+        for (const lookup of lookupAttempts) {
+          try {
+            const lookupResp = await lookup()
+            const matchedOrder =
+              findTruxcargoOrderInResponse(lookupResp, String(params.order_number || '')) ||
+              lookupResp
+            const identifiers = extractTruxcargoShipmentIdentifiers(matchedOrder)
+            if (identifiers.awb) {
+              console.warn('[Truxcargo] Recovered duplicate remote order', {
+                order_number: params.order_number,
+                awb_number: identifiers.awb,
+                shipment_id: identifiers.shipmentId,
+              })
+              return {
+                status: true,
+                recovered_duplicate: true,
+                data: {
+                  ...identifiers.raw,
+                  waybill: identifiers.awb,
+                  awb_number: identifiers.awb,
+                  shipment_id: identifiers.shipmentId || identifiers.awb,
+                  courier_name: identifiers.courierName,
+                  label: identifiers.label,
+                  manifest: identifiers.manifest,
+                  sort_code: identifiers.sortCode,
+                  rate: identifiers.courierCost,
+                },
+              }
+            }
+          } catch (lookupErr: any) {
+            console.warn('[Truxcargo] Duplicate recovery lookup failed:', lookupErr?.message || lookupErr)
+          }
+        }
+
+        return null
+      }
+
+      let createOrderResp: any
+      try {
+        createOrderResp = await truxcargo.createOrder(truxProviderPayload)
+      } catch (createErr: any) {
+        const recovered = await recoverExistingTruxcargoOrder(createErr?.message || createErr)
+        if (!recovered) throw createErr
+        createOrderResp = recovered
+      }
       const truxPayload = createOrderResp?.data ?? createOrderResp
       const truxRejected =
         createOrderResp?.status === false ||
@@ -4592,23 +4764,50 @@ export const createB2CShipmentService = async (
         truxPayload?.status === 'false' ||
         truxPayload?.success === 'false'
       if (truxRejected) {
+        const rejectionMessage = String(
+          createOrderResp?.message ||
+            truxPayload?.message ||
+            createOrderResp?.error ||
+            truxPayload?.error ||
+            'Truxcargo rejected the order creation request.',
+        )
+        const recovered = await recoverExistingTruxcargoOrder(rejectionMessage)
+        if (recovered) {
+          createOrderResp = recovered
+        } else {
+          throw new HttpError(400, rejectionMessage)
+        }
+      }
+
+      const recoveredPayload = createOrderResp?.data ?? createOrderResp
+      if (
+        createOrderResp?.status === false ||
+        createOrderResp?.success === false ||
+        createOrderResp?.status === 'false' ||
+        createOrderResp?.success === 'false' ||
+        recoveredPayload?.status === false ||
+        recoveredPayload?.success === false ||
+        recoveredPayload?.status === 'false' ||
+        recoveredPayload?.success === 'false'
+      ) {
         throw new HttpError(
           400,
           String(
             createOrderResp?.message ||
-              truxPayload?.message ||
+              recoveredPayload?.message ||
               createOrderResp?.error ||
-              truxPayload?.error ||
+              recoveredPayload?.error ||
               'Truxcargo rejected the order creation request.',
           ),
         )
       }
+      const finalTruxPayload = recoveredPayload
       const truxWaybill =
-        truxPayload?.waybill ??
-        truxPayload?.awb_number ??
-        truxPayload?.awb ??
-        truxPayload?.tracking_id ??
-        truxPayload?.lr_number ??
+        finalTruxPayload?.waybill ??
+        finalTruxPayload?.awb_number ??
+        finalTruxPayload?.awb ??
+        finalTruxPayload?.tracking_id ??
+        finalTruxPayload?.lr_number ??
         null
 
       if (!truxWaybill) {
@@ -4619,31 +4818,31 @@ export const createB2CShipmentService = async (
       }
 
       const truxShipmentId =
-        truxPayload?.shipment_id ??
-        truxPayload?.order_id ??
-        truxPayload?.tracking_id ??
-        truxPayload?.reference_id ??
+        finalTruxPayload?.shipment_id ??
+        finalTruxPayload?.order_id ??
+        finalTruxPayload?.tracking_id ??
+        finalTruxPayload?.reference_id ??
         truxWaybill
 
       shipmentData = createOrderResp
-      shipmentSuccessPackage = truxPayload
+      shipmentSuccessPackage = finalTruxPayload
       providerCourierCost =
         Number(
-          truxPayload?.rate ??
-            truxPayload?.shipping_charges ??
-            truxPayload?.freight_charges ??
+          finalTruxPayload?.rate ??
+            finalTruxPayload?.shipping_charges ??
+            finalTruxPayload?.freight_charges ??
             params?.courier_cost ??
             0,
         ) || null
-      providerSortCode = truxPayload?.sort_code ?? truxPayload?.destination_code ?? null
+      providerSortCode = finalTruxPayload?.sort_code ?? finalTruxPayload?.destination_code ?? null
 
       shipmentMeta = {
         shipment_id: String(truxShipmentId || truxWaybill) || undefined,
         awb_number: String(truxWaybill),
-        courier_name: truxPayload?.courier_name ?? 'Truxcargo',
+        courier_name: finalTruxPayload?.courier_name ?? 'Truxcargo',
         courier_id: params.courier_id ? Number(params.courier_id) : null,
-        label: truxPayload?.label ?? undefined,
-        manifest: truxPayload?.manifest ?? undefined,
+        label: finalTruxPayload?.label ?? undefined,
+        manifest: finalTruxPayload?.manifest ?? undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -6580,6 +6779,11 @@ export const generateManifestService = async (params: {
             throw new Error(`No ${providerName} identifiers found for manifest generation`)
           }
 
+          const providerDocumentByOrderId = new Map<
+            string,
+            { label?: string | null; invoice?: string | null; manifest?: string | null }
+          >()
+
           if (integrationType === 'ekart') {
             const ekart = new EkartService()
             await ekart.generateManifest(providerManifestIds)
@@ -6608,6 +6812,10 @@ export const generateManifestService = async (params: {
                   order_id: String(order.shipment_id || order.order_number || '').trim(),
                 })
                 const packagingData = packagingResp?.data ?? packagingResp
+                const packagingLabel =
+                  packagingData?.label || packagingData?.label_url || packagingData?.label_link || null
+                const packagingInvoice =
+                  packagingData?.invoice || packagingData?.invoice_url || packagingData?.invoice_link || null
                 const packagingUrl =
                   packagingData?.label ||
                   packagingData?.label_url ||
@@ -6621,6 +6829,17 @@ export const generateManifestService = async (params: {
                   if (!existingManifestValue) {
                     order.manifest = packagingUrl.trim()
                   }
+                  providerDocumentByOrderId.set(String(order.id), {
+                    label:
+                      typeof packagingLabel === 'string' && packagingLabel.trim()
+                        ? packagingLabel.trim()
+                        : null,
+                    invoice:
+                      typeof packagingInvoice === 'string' && packagingInvoice.trim()
+                        ? packagingInvoice.trim()
+                        : null,
+                    manifest: packagingUrl.trim(),
+                  })
                 }
               } catch (truxManifestErr: any) {
                 console.warn(
@@ -6836,6 +7055,10 @@ export const generateManifestService = async (params: {
             }
 
             let nextLabel = freshOrder.label
+            const providerDocuments = providerDocumentByOrderId.get(String(freshOrder.id))
+            if (!nextLabel && providerDocuments?.label) {
+              nextLabel = providerDocuments.label
+            }
             if (!nextLabel && freshOrder.awb_number) {
               try {
                 const generatedLabel = await generateLabelForOrder(freshOrder, freshOrder.user_id, tx)
@@ -6869,7 +7092,9 @@ export const generateManifestService = async (params: {
             const normalizedInvoice =
               invoiceResult?.key && invoiceResult.key.trim()
                 ? normalizeToR2Key(invoiceResult.key.trim()) || invoiceResult.key.trim()
-                : null
+                : providerDocuments?.invoice
+                  ? normalizeToR2Key(providerDocuments.invoice) || providerDocuments.invoice
+                  : null
 
             const updatePayload: Record<string, any> = {
               manifest: manifestKey,
