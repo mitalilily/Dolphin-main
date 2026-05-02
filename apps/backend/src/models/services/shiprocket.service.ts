@@ -360,6 +360,44 @@ const withTruxcargoRemoteIdentity = (payload: Record<string, any>, remoteOrderId
   return nextPayload
 }
 
+const extractShiprocketOrderIdentifiers = (source: any) => {
+  const rows = flattenTruxcargoObjects(source)
+  const findValue = (keys: string[]) => {
+    const loweredKeys = new Set(keys.map((key) => key.toLowerCase()))
+    for (const row of rows) {
+      if (!row || typeof row !== 'object') continue
+      for (const [key, value] of Object.entries(row)) {
+        if (!loweredKeys.has(key.toLowerCase())) continue
+        const trimmed = String(value ?? '').trim()
+        if (trimmed) return trimmed
+      }
+    }
+    return ''
+  }
+
+  return {
+    orderId: findValue(['order_id', 'id', 'shiprocket_order_id']),
+    shipmentId: findValue(['shipment_id', 'shiprocket_shipment_id']),
+    awb: findValue(['awb_code', 'awb', 'awb_number', 'tracking_number']),
+    courierName: findValue(['courier_name', 'courier_company_name', 'courier']) || 'Shiprocket',
+    routingCode: findValue(['routing_code', 'routingCode', 'sort_code']),
+  }
+}
+
+const extractShiprocketDocumentUrl = (source: any, keys: string[]) => {
+  const rows = flattenTruxcargoObjects(source)
+  const loweredKeys = new Set(keys.map((key) => key.toLowerCase()))
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue
+    for (const [key, value] of Object.entries(row)) {
+      if (!loweredKeys.has(key.toLowerCase())) continue
+      const trimmed = String(value ?? '').trim()
+      if (trimmed) return trimmed
+    }
+  }
+  return null
+}
+
 const getExpectedWalletDebitFromOrder = (order: {
   order_type?: string | null
   freight_charges?: number | string | null
@@ -3406,7 +3444,7 @@ export async function createB2COrder({
 
         // Order info
         order_number: normalizedOrderNumber,
-        order_id: shipmentData?.data?.order_id ?? null,
+        order_id: shipmentData?.data?.order_id ?? shipmentData?.order_id ?? null,
         order_date: params.order_date ?? new Date().toISOString().slice(0, 10), // 'YYYY-MM-DD'
         order_amount: orderAmount,
         cod_charges: storedCodCharges,
@@ -4178,6 +4216,7 @@ export const createB2CShipmentService = async (
 
   let shipmentData: any = null
   let shipmentMeta: {
+    order_id?: string
     shipment_id?: string
     awb_number?: string
     courier_name?: string
@@ -5263,6 +5302,10 @@ export const createB2CShipmentService = async (
       } catch (shiprocketCreateErr: any) {
         const providerMessage = String(shiprocketCreateErr?.message || '').toLowerCase()
         const providerResponse = shiprocketCreateErr?.response ?? null
+        const looksLikeDuplicateOrder =
+          providerMessage.includes('already exists') ||
+          providerMessage.includes('duplicate') ||
+          providerMessage.includes('order id')
         const looksLikeWrongPickup = providerMessage.includes('wrong pickup location')
         const suggestedPickupNames = extractShiprocketSuggestedPickupNames(providerResponse)
         if (!availablePickupNames.length) {
@@ -5288,15 +5331,43 @@ export const createB2CShipmentService = async (
           createOrderResp = defaultChannelId
             ? await shiprocket.createChannelSpecificOrder(createOrderPayload)
             : await shiprocket.createCustomOrder(createOrderPayload)
+        } else if (looksLikeDuplicateOrder) {
+          console.warn('⚠️ Shiprocket order already exists remotely; attempting recovery', {
+            order_number: params.order_number,
+            channel_id: defaultChannelId || null,
+          })
+          const recoveredOrder = await shiprocket.trackByOrderId({
+            order_id: String(params.order_number || '').trim(),
+            channel_id: defaultChannelId ? Number(defaultChannelId) : undefined,
+          })
+          const recovered = extractShiprocketOrderIdentifiers(recoveredOrder)
+          if (!recovered.orderId && !recovered.shipmentId) {
+            throw shiprocketCreateErr
+          }
+          createOrderResp = {
+            recovered_duplicate: true,
+            order_id: recovered.orderId,
+            shipment_id: recovered.shipmentId,
+            courier_name: recovered.courierName,
+            awb_code: recovered.awb,
+            raw: recoveredOrder,
+          }
         } else {
           throw shiprocketCreateErr
         }
       }
 
+      const createIdentifiers = extractShiprocketOrderIdentifiers(createOrderResp)
       const shiprocketOrderId =
-        createOrderResp?.order_id ?? createOrderResp?.data?.order_id ?? createOrderResp?.id
+        createOrderResp?.order_id ??
+        createOrderResp?.data?.order_id ??
+        createOrderResp?.id ??
+        createIdentifiers.orderId
       const shiprocketShipmentId =
-        createOrderResp?.shipment_id ?? createOrderResp?.data?.shipment_id ?? null
+        createOrderResp?.shipment_id ??
+        createOrderResp?.data?.shipment_id ??
+        createIdentifiers.shipmentId ??
+        null
 
       if (!shiprocketOrderId || !shiprocketShipmentId) {
         const providerMessage = String(
@@ -5321,22 +5392,50 @@ export const createB2CShipmentService = async (
         )
       }
 
-      const assignResp = await shiprocket.assignAwb({
-        shipment_id: Number(shiprocketShipmentId),
-        courier_id: params.courier_id ? Number(params.courier_id) : undefined,
-      })
+      let assignResp: any
+      try {
+        assignResp = await shiprocket.assignAwb({
+          shipment_id: Number(shiprocketShipmentId),
+          courier_id: params.courier_id ? Number(params.courier_id) : undefined,
+        })
+      } catch (assignErr: any) {
+        const assignMessage = String(assignErr?.message || '').toLowerCase()
+        if (
+          !assignMessage.includes('already') &&
+          !assignMessage.includes('assigned') &&
+          !assignMessage.includes('awb')
+        ) {
+          throw assignErr
+        }
+        console.warn('⚠️ Shiprocket AWB assignment appears already completed; recovering via tracking', {
+          order_number: params.order_number,
+          shipment_id: shiprocketShipmentId,
+        })
+        assignResp = await shiprocket.trackByShipmentId(shiprocketShipmentId)
+      }
+      const assignIdentifiers = extractShiprocketOrderIdentifiers(assignResp)
 
       const awbNumber =
         assignResp?.response?.data?.awb_code ??
         assignResp?.awb_code ??
         assignResp?.data?.awb_code ??
+        assignIdentifiers.awb ??
+        createIdentifiers.awb ??
         undefined
 
       const courierName =
         assignResp?.response?.data?.courier_name ??
         assignResp?.courier_name ??
         assignResp?.data?.courier_name ??
+        assignIdentifiers.courierName ??
         'Shiprocket'
+
+      if (!String(awbNumber || '').trim()) {
+        throw new HttpError(
+          502,
+          'Shiprocket AWB assignment did not return a trackable AWB number. Please retry after confirming courier serviceability.',
+        )
+      }
 
       // Manifest-first flow for Shiprocket:
       // create + assign AWB on booking, then pickup/manifest/docs only via manifest action.
@@ -5357,9 +5456,11 @@ export const createB2CShipmentService = async (
         assignResp?.response?.data?.routing_code ??
         assignResp?.routing_code ??
         assignResp?.data?.routing_code ??
+        assignIdentifiers.routingCode ??
         null
 
       shipmentMeta = {
+        order_id: String(shiprocketOrderId),
         shipment_id: String(shiprocketShipmentId),
         awb_number: awbNumber,
         courier_name: courierName,
@@ -6892,8 +6993,93 @@ export const generateManifestService = async (params: {
             if (!shipmentIds.length) {
               throw new HttpError(400, 'No valid Shiprocket shipment IDs found for manifest.')
             }
-            await shiprocket.generatePickup({ shipment_id: shipmentIds })
-            await shiprocket.generateManifest({ shipment_id: shipmentIds })
+            try {
+              await shiprocket.generatePickup({ shipment_id: shipmentIds })
+            } catch (pickupErr: any) {
+              const pickupMessage = String(pickupErr?.message || '').toLowerCase()
+              if (
+                !pickupMessage.includes('already') &&
+                !pickupMessage.includes('pickup') &&
+                !pickupMessage.includes('generated')
+              ) {
+                throw pickupErr
+              }
+              console.warn('⚠️ [Shiprocket] Pickup already generated or accepted; continuing manifest', {
+                shipment_ids: shipmentIds,
+                message: pickupErr?.message || pickupErr,
+              })
+            }
+
+            const manifestResp = await shiprocket.generateManifest({ shipment_id: shipmentIds })
+            const manifestMessage = String(manifestResp?.message || '').toLowerCase()
+            if (
+              manifestMessage.includes('not generated') ||
+              manifestResp?.status === false ||
+              manifestResp?.success === false
+            ) {
+              throw new HttpError(
+                400,
+                manifestResp?.message || 'Shiprocket manifest was not generated for the selected shipments.',
+              )
+            }
+
+            let printedManifestUrl: string | null = null
+            try {
+              const orderIds = fetchedOrders
+                .map((order) => Number(order.order_id || 0))
+                .filter((id) => Number.isFinite(id) && id > 0)
+              const printManifestResp = await shiprocket.printManifest(
+                orderIds.length ? { order_ids: orderIds } : { shipment_id: shipmentIds },
+              )
+              printedManifestUrl = extractShiprocketDocumentUrl(printManifestResp, [
+                'manifest_url',
+                'manifest',
+                'download_url',
+                'url',
+              ])
+            } catch (printErr: any) {
+              console.warn('⚠️ [Shiprocket] Manifest print URL fetch failed:', printErr?.message || printErr)
+            }
+
+            for (const order of fetchedOrders) {
+              const shipmentId = Number(order.shipment_id || 0)
+              if (!Number.isFinite(shipmentId) || shipmentId <= 0) continue
+              const docs: { label?: string | null; invoice?: string | null; manifest?: string | null } = {
+                manifest: printedManifestUrl,
+              }
+              try {
+                const labelResp = await shiprocket.generateLabel({ shipment_id: [shipmentId] })
+                docs.label = extractShiprocketDocumentUrl(labelResp, [
+                  'label_url',
+                  'label',
+                  'download_url',
+                  'url',
+                ])
+              } catch (labelErr: any) {
+                console.warn(
+                  `⚠️ [Shiprocket] Label generation failed for order ${order.order_number}:`,
+                  labelErr?.message || labelErr,
+                )
+              }
+              try {
+                const invoiceOrderId = Number(order.order_id || 0)
+                const invoiceResp = await shiprocket.generateInvoice({
+                  ids: [Number.isFinite(invoiceOrderId) && invoiceOrderId > 0 ? invoiceOrderId : shipmentId],
+                })
+                docs.invoice = extractShiprocketDocumentUrl(invoiceResp, [
+                  'invoice_url',
+                  'invoice',
+                  'download_url',
+                  'url',
+                ])
+              } catch (invoiceErr: any) {
+                console.warn(
+                  `⚠️ [Shiprocket] Invoice print failed for order ${order.order_number}:`,
+                  invoiceErr?.message || invoiceErr,
+                )
+              }
+              providerDocumentByOrderId.set(String(order.id), docs)
+            }
           } else if (integrationType === 'truxcargo') {
             const truxcargo = new TruxcargoService()
             for (const order of fetchedOrders) {
