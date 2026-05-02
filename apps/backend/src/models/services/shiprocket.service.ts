@@ -7108,22 +7108,36 @@ export const generateManifestService = async (params: {
             pdfDoc.end()
           })
 
-          const { uploadUrl, key } = await presignUpload({
-            filename: `manifest-${integrationType}-${Date.now()}.pdf`,
-            contentType: 'application/pdf',
-            userId: fetchedOrders[0].user_id,
-            folderKey: 'manifests',
-          })
-          const putUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
-          await axios.put(putUrl, pdfBuffer, {
-            headers: { 'Content-Type': 'application/pdf' },
-            timeout: 60000,
-          })
-          const manifestKey = Array.isArray(key) ? key[0] : key
-          const signedManifestUrl = await presignDownload(manifestKey)
-          const manifestDownloadUrl = Array.isArray(signedManifestUrl)
-            ? (signedManifestUrl[0] ?? null)
-            : signedManifestUrl
+          let manifestKey: string
+          let manifestDownloadUrl: string | null
+          try {
+            const { uploadUrl, key } = await presignUpload({
+              filename: `manifest-${integrationType}-${Date.now()}.pdf`,
+              contentType: 'application/pdf',
+              userId: fetchedOrders[0].user_id,
+              folderKey: 'manifests',
+            })
+            const putUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
+            await axios.put(putUrl, pdfBuffer, {
+              headers: { 'Content-Type': 'application/pdf' },
+              timeout: 60000,
+            })
+            manifestKey = Array.isArray(key) ? key[0] : key
+            const signedManifestUrl = await presignDownload(manifestKey)
+            manifestDownloadUrl = Array.isArray(signedManifestUrl)
+              ? (signedManifestUrl[0] ?? null)
+              : signedManifestUrl
+          } catch (manifestUploadErr: any) {
+            const message = String(manifestUploadErr?.message || '')
+            if (!/Storage is not configured/i.test(message)) {
+              throw manifestUploadErr
+            }
+            console.warn(
+              `⚠️ [Manifest] Storage unavailable; using inline generated manifest PDF for ${integrationType}.`,
+            )
+            manifestKey = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
+            manifestDownloadUrl = manifestKey
+          }
           const manifestWarnings: string[] = []
           const invoiceResults = await Promise.allSettled(
             fetchedOrders.map((order) =>
@@ -7499,13 +7513,29 @@ export const generateManifestService = async (params: {
               `ðŸ“¤ [Manifest] Uploading invoice PDF for order ${order.order_number} (size: ${invoiceBuffer.length} bytes)...`,
             )
 
-            // Upload invoice to R2
-            const { uploadUrl, key } = await presignUpload({
-              filename: `invoice-${order.id}.pdf`,
-              contentType: 'application/pdf',
-              userId: order.user_id,
-              folderKey: 'invoices',
-            })
+            // Upload invoice to R2 when configured. If storage is missing, keep the
+            // manifest flow successful and let provider invoice/label fallback handle downloads.
+            let uploadUrl: string | string[] | undefined
+            let key: string | string[] | undefined
+            try {
+              const upload = await presignUpload({
+                filename: `invoice-${order.id}.pdf`,
+                contentType: 'application/pdf',
+                userId: order.user_id,
+                folderKey: 'invoices',
+              })
+              uploadUrl = upload.uploadUrl
+              key = upload.key
+            } catch (uploadInitErr: any) {
+              const message = String(uploadInitErr?.message || '')
+              if (/Storage is not configured/i.test(message)) {
+                console.warn(
+                  `⚠️ [Manifest] Storage unavailable; invoice PDF generated but not persisted for order ${order.order_number}.`,
+                )
+                return null
+              }
+              throw uploadInitErr
+            }
 
             if (!uploadUrl || !key) {
               throw new Error('Failed to get presigned upload URL for invoice')
