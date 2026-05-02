@@ -296,6 +296,20 @@ const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
   })
 }
 
+const buildTruxcargoRemoteOrderId = (orderNumber: unknown) => {
+  const base =
+    String(orderNumber || 'ORD')
+      .trim()
+      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 28) || 'ORD'
+  const uniquePart = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  return `${base}-TX${uniquePart}`.slice(0, 48)
+}
+
 const getExpectedWalletDebitFromOrder = (order: {
   order_type?: string | null
   freight_charges?: number | string | null
@@ -4605,9 +4619,15 @@ export const createB2CShipmentService = async (
       const truxInvoiceNumber =
         String(params.invoice_number || params.order_number || `INV-${Date.now()}`).trim() ||
         `INV-${Date.now()}`
+      const truxMerchantOrderNumber = String(params.order_number || '').trim()
+      const truxRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
       const truxProviderPayload: Record<string, any> = {
-        order_id: params.order_number,
-        order_number: params.order_number,
+        order_id: truxRemoteOrderId,
+        order_number: truxRemoteOrderId,
+        client_order_id: truxMerchantOrderNumber,
+        reference_id: truxMerchantOrderNumber,
+        seller_order_id: truxMerchantOrderNumber,
+        merchant_order_id: truxMerchantOrderNumber,
         courier_id: params.courier_id,
         warehouse: fallbackWarehouse,
         payment_type: truxPaymentMode,
@@ -4634,7 +4654,7 @@ export const createB2CShipmentService = async (
         qty: truxQuantity,
         product_quantity: truxQuantity,
         product_price: [truxUnitPrice],
-        sku: [truxFirstItem?.sku || params.order_number],
+        sku: [truxFirstItem?.sku || truxMerchantOrderNumber || truxRemoteOrderId],
         hsn: truxHsn,
         hsn_code: [truxHsn],
         hsnCode: truxHsn,
@@ -4692,27 +4712,29 @@ export const createB2CShipmentService = async (
           reason: String(reason || '').slice(0, 300),
         })
 
-        const lookupAttempts = [
+        const lookupIds = Array.from(new Set([truxRemoteOrderId, truxMerchantOrderNumber].filter(Boolean)))
+        const lookupAttempts = lookupIds.flatMap((lookupOrderId) => [
           () =>
             truxcargo.trackShipment({
-              order_id: String(params.order_number || '').trim(),
+              order_id: lookupOrderId,
             }),
           () =>
             truxcargo.fetchAllWaybills({
-              order_id: String(params.order_number || '').trim(),
-              order_number: String(params.order_number || '').trim(),
+              order_id: lookupOrderId,
+              order_number: lookupOrderId,
             }),
           () =>
             truxcargo.fetchAllWaybills({
-              search: String(params.order_number || '').trim(),
+              search: lookupOrderId,
             }),
-        ]
+        ])
 
         for (const lookup of lookupAttempts) {
           try {
             const lookupResp = await lookup()
             const matchedOrder =
-              findTruxcargoOrderInResponse(lookupResp, String(params.order_number || '')) ||
+              findTruxcargoOrderInResponse(lookupResp, truxRemoteOrderId) ||
+              findTruxcargoOrderInResponse(lookupResp, truxMerchantOrderNumber) ||
               lookupResp
             const identifiers = extractTruxcargoShipmentIdentifiers(matchedOrder)
             if (identifiers.awb) {
@@ -4750,8 +4772,23 @@ export const createB2CShipmentService = async (
         createOrderResp = await truxcargo.createOrder(truxProviderPayload)
       } catch (createErr: any) {
         const recovered = await recoverExistingTruxcargoOrder(createErr?.message || createErr)
-        if (!recovered) throw createErr
-        createOrderResp = recovered
+        if (recovered) {
+          createOrderResp = recovered
+        } else if (isTruxcargoDuplicateOrderError(createErr?.message || createErr)) {
+          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+          console.warn('[Truxcargo] Duplicate recovery failed; retrying with fresh remote order id', {
+            order_number: truxMerchantOrderNumber,
+            previous_remote_order_id: truxRemoteOrderId,
+            retry_remote_order_id: retryRemoteOrderId,
+          })
+          createOrderResp = await truxcargo.createOrder({
+            ...truxProviderPayload,
+            order_id: retryRemoteOrderId,
+            order_number: retryRemoteOrderId,
+          })
+        } else {
+          throw createErr
+        }
       }
       const truxPayload = createOrderResp?.data ?? createOrderResp
       const truxRejected =
@@ -4774,6 +4811,18 @@ export const createB2CShipmentService = async (
         const recovered = await recoverExistingTruxcargoOrder(rejectionMessage)
         if (recovered) {
           createOrderResp = recovered
+        } else if (isTruxcargoDuplicateOrderError(rejectionMessage)) {
+          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+          console.warn('[Truxcargo] Duplicate rejection recovery failed; retrying with fresh remote order id', {
+            order_number: truxMerchantOrderNumber,
+            previous_remote_order_id: truxRemoteOrderId,
+            retry_remote_order_id: retryRemoteOrderId,
+          })
+          createOrderResp = await truxcargo.createOrder({
+            ...truxProviderPayload,
+            order_id: retryRemoteOrderId,
+            order_number: retryRemoteOrderId,
+          })
         } else {
           throw new HttpError(400, rejectionMessage)
         }
