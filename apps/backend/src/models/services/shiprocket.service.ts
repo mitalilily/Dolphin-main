@@ -4412,9 +4412,16 @@ export const createB2CShipmentService = async (
       }
 
       const truxcargo = new TruxcargoService()
-      const truxPaymentMode = String(
-        params?.payment_type === 'cod' ? 'COD' : params?.payment_type === 'prepaid' ? 'PREPAID' : '',
-      ).trim()
+      const paymentTypeRaw = String(params?.payment_type || '').trim().toLowerCase()
+      const truxPaymentMode =
+        paymentTypeRaw === 'cod'
+          ? 'COD'
+          : paymentTypeRaw === 'prepaid'
+            ? 'PREPAID'
+            : paymentTypeRaw.toUpperCase()
+      if (!truxPaymentMode) {
+        throw new HttpError(400, 'Payment mode is required for Truxcargo order creation.')
+      }
       const warehouseName = String(
         params?.pickup?.warehouse_name ||
           params?.pickup?.name ||
@@ -4422,26 +4429,180 @@ export const createB2CShipmentService = async (
           (params as any)?.warehouse ||
           '',
       ).trim()
-      const fallbackWarehouse = warehouseName || String(params?.pickup_location_id || '').trim()
-      const truxOrderPayload: Record<string, any> = {
-        ...(params as Record<string, any>),
+      let fallbackWarehouse = warehouseName || String(params?.pickup_location_id || '').trim()
+      let truxProviderWarehouse: any = null
+      try {
+        const warehouseResp = await truxcargo.getWarehousePoints({})
+        const warehouseRows =
+          Array.isArray(warehouseResp?.data?.info)
+            ? warehouseResp.data.info
+            : Array.isArray(warehouseResp?.data)
+              ? warehouseResp.data
+              : Array.isArray(warehouseResp?.info)
+                ? warehouseResp.info
+                : []
+        const normalizedWarehouse = fallbackWarehouse.toLowerCase()
+        const pickupPincode = String(params.pickup?.pincode || params.pickup_pincode || '').trim()
+        truxProviderWarehouse =
+          warehouseRows.find((row: any) =>
+            [row?.warehouse, row?.name]
+              .map((value) => String(value || '').trim().toLowerCase())
+              .filter(Boolean)
+              .includes(normalizedWarehouse),
+          ) ||
+          warehouseRows.find((row: any) => String(row?.pincode || '').trim() === pickupPincode) ||
+          warehouseRows[0] ||
+          null
+        const providerWarehouseName = String(truxProviderWarehouse?.warehouse || '').trim()
+        if (providerWarehouseName) {
+          fallbackWarehouse = providerWarehouseName
+        }
+      } catch (warehouseErr: any) {
+        console.warn(
+          `⚠️ [Truxcargo] Unable to fetch warehouse points for order ${params.order_number}:`,
+          warehouseErr?.message || warehouseErr,
+        )
+      }
+      const truxItems = Array.isArray(params.order_items) ? params.order_items : []
+      const truxFirstItem: any = truxItems[0] || {}
+      const truxProductDescription =
+        String(
+          truxFirstItem?.name ||
+            truxFirstItem?.productName ||
+            truxFirstItem?.description ||
+            (params as any)?.product_description ||
+            'Product',
+        ).trim() || 'Product'
+      const truxQuantity = Number(truxFirstItem?.qty ?? truxFirstItem?.quantity ?? 1) || 1
+      const truxUnitPrice =
+        Number(truxFirstItem?.price ?? truxFirstItem?.selling_price ?? params.order_amount ?? 0) || 0
+      const truxHsn = String(truxFirstItem?.hsn || truxFirstItem?.hsnCode || '6201').trim() || '6201'
+      const truxOrderAmount = Number(params.order_amount ?? truxUnitPrice) || truxUnitPrice || 1
+      const truxCodAmount = truxPaymentMode === 'COD' ? Number(params.order_amount ?? 0) || 0 : 0
+      const truxWeightKg = normalizeWeightToKg(params.package_weight ?? params.weight ?? 0)
+      const truxLength = Number(params.package_length ?? params.length ?? 1) || 1
+      const truxBreadth = Number(params.package_breadth ?? params.breadth ?? 1) || 1
+      const truxHeight = Number(params.package_height ?? params.height ?? 1) || 1
+      const truxConsigneeName = String(params.consignee?.name || 'Customer').trim() || 'Customer'
+      const truxConsigneePhone = String(params.consignee?.phone || '').replace(/\D/g, '')
+      const truxConsigneeAddress = params.consignee?.address || ''
+      const truxConsigneeCity = params.consignee?.city || ''
+      const truxConsigneeState = params.consignee?.state || ''
+      const truxConsigneePincode = String(params.consignee?.pincode || '')
+      const truxSellerName =
+        String(
+          truxProviderWarehouse?.name ||
+            params.pickup?.name ||
+            params.pickup?.warehouse_name ||
+            (params.company as any)?.name ||
+            (params.company as any)?.brandName ||
+            fallbackWarehouse ||
+            'Seller',
+        ).trim() || 'Seller'
+      const truxInvoiceNumber =
+        String(params.invoice_number || params.order_number || `INV-${Date.now()}`).trim() ||
+        `INV-${Date.now()}`
+      const truxProviderPayload: Record<string, any> = {
+        order_id: params.order_number,
+        order_number: params.order_number,
+        courier_id: params.courier_id,
         warehouse: fallbackWarehouse,
-        warehouse_name: fallbackWarehouse,
+        payment_type: truxPaymentMode,
         payment_mode: truxPaymentMode,
+        paymentmode: truxPaymentMode,
         paymentMode: truxPaymentMode,
-      }
-      truxOrderPayload.pickup = {
-        ...(params?.pickup || {}),
-        warehouse: fallbackWarehouse,
-        warehouse_name: fallbackWarehouse,
-        name: String(params?.pickup?.name || fallbackWarehouse || '').trim(),
-      }
-      if ((params as any)?.warehouse_id) {
-        truxOrderPayload.warehouse_id = String((params as any).warehouse_id).trim()
+        paymentModeType: truxPaymentMode,
+        payment_method: truxPaymentMode,
+        paymentMethod: truxPaymentMode,
+        mode: truxPaymentMode,
+        order_type: truxPaymentMode,
+        total_amount: truxOrderAmount,
+        cod_amount: truxCodAmount,
+        collectable_amount: truxCodAmount,
+        invoice_value: truxOrderAmount,
+        insurance: params.is_insurance ? 'YES' : 'NO',
+        product_description: truxProductDescription,
+        productDescription: truxProductDescription,
+        product_desc: truxProductDescription,
+        description: truxProductDescription,
+        item_description: truxProductDescription,
+        quantity: [truxQuantity],
+        count: [truxQuantity],
+        qty: truxQuantity,
+        product_quantity: truxQuantity,
+        product_price: [truxUnitPrice],
+        sku: [truxFirstItem?.sku || params.order_number],
+        hsn: truxHsn,
+        hsn_code: [truxHsn],
+        hsnCode: truxHsn,
+        product_hsn: truxHsn,
+        weight: truxWeightKg,
+        length: [truxLength],
+        breadth: [truxBreadth],
+        width: [truxBreadth],
+        height: [truxHeight],
+        name: truxConsigneeName,
+        phone: truxConsigneePhone,
+        address: truxConsigneeAddress,
+        city: truxConsigneeCity,
+        state: truxConsigneeState,
+        pincode: truxConsigneePincode,
+        pin: truxConsigneePincode,
+        pin_code: truxConsigneePincode,
+        consignee_pincode: [truxConsigneePincode],
+        seller_name: truxSellerName,
+        seller_invoice_no: truxInvoiceNumber,
+        seller_invoiceno: truxInvoiceNumber,
+        sellerinvoiceno: truxInvoiceNumber,
+        seller_invoiceNo: truxInvoiceNumber,
+        sellerInvoiceNo: truxInvoiceNumber,
+        seller_invoice_number: truxInvoiceNumber,
+        sellerInvoiceNumber: truxInvoiceNumber,
+        seller_invoice: truxInvoiceNumber,
+        sellerInvoice: truxInvoiceNumber,
+        seller_inv_no: truxInvoiceNumber,
+        seller_inv: truxInvoiceNumber,
+        seller_invno: truxInvoiceNumber,
+        sellerInvNo: truxInvoiceNumber,
+        seller_inv_number: truxInvoiceNumber,
+        sellerInvNumber: truxInvoiceNumber,
+        seller_bill_no: truxInvoiceNumber,
+        seller_bill_number: truxInvoiceNumber,
+        sellerBillNo: truxInvoiceNumber,
+        invoice: truxInvoiceNumber,
+        invoice_no: truxInvoiceNumber,
+        invoiceNo: truxInvoiceNumber,
+        inv_no: truxInvoiceNumber,
+        invNo: truxInvoiceNumber,
+        invno: truxInvoiceNumber,
+        bill_no: truxInvoiceNumber,
+        billNo: truxInvoiceNumber,
+        bill_number: truxInvoiceNumber,
       }
 
-      const createOrderResp = await truxcargo.createOrder(truxOrderPayload)
+      const createOrderResp = await truxcargo.createOrder(truxProviderPayload)
       const truxPayload = createOrderResp?.data ?? createOrderResp
+      const truxRejected =
+        createOrderResp?.status === false ||
+        createOrderResp?.success === false ||
+        createOrderResp?.status === 'false' ||
+        createOrderResp?.success === 'false' ||
+        truxPayload?.status === false ||
+        truxPayload?.success === false ||
+        truxPayload?.status === 'false' ||
+        truxPayload?.success === 'false'
+      if (truxRejected) {
+        throw new HttpError(
+          400,
+          String(
+            createOrderResp?.message ||
+              truxPayload?.message ||
+              createOrderResp?.error ||
+              truxPayload?.error ||
+              'Truxcargo rejected the order creation request.',
+          ),
+        )
+      }
       const truxWaybill =
         truxPayload?.waybill ??
         truxPayload?.awb_number ??
@@ -6444,6 +6605,7 @@ export const generateManifestService = async (params: {
               try {
                 const packagingResp = await truxcargo.createPackagingSlip({
                   waybill: String(order.awb_number).trim(),
+                  order_id: String(order.shipment_id || order.order_number || '').trim(),
                 })
                 const packagingData = packagingResp?.data ?? packagingResp
                 const packagingUrl =

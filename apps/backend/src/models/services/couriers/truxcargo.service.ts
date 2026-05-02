@@ -84,13 +84,21 @@ export class TruxcargoService {
   }
 
   private extractErrorMessage(err: any, fallback: string) {
+    const stripHtml = (value: string) =>
+      value
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
     const candidates = [
       err?.response?.data?.message,
       err?.response?.data?.error,
+      typeof err?.response?.data === 'string' ? stripHtml(err.response.data) : undefined,
       err?.message,
     ]
     for (const candidate of candidates) {
-      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+      if (typeof candidate === 'string' && candidate.trim()) return candidate.trim().slice(0, 500)
     }
     return fallback
   }
