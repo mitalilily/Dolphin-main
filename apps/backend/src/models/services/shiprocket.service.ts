@@ -7032,6 +7032,73 @@ export const generateManifestService = async (params: {
             { label?: string | null; invoice?: string | null; manifest?: string | null }
           >()
 
+          const persistProviderDocument = async (
+            rawValue: unknown,
+            order: any,
+            opts: {
+              folderKey: 'labels' | 'invoices' | 'manifests'
+              filenamePrefix: 'label' | 'invoice' | 'manifest'
+              fallbackContentType?: string
+            },
+          ): Promise<string | null> => {
+            if (typeof rawValue !== 'string') return null
+            const source = rawValue.trim()
+            if (!source) return null
+
+            if (!/^data:/i.test(source) && !/^https?:\/\//i.test(source)) {
+              return source
+            }
+
+            try {
+              let documentBuffer: Buffer | null = null
+              let contentType = opts.fallbackContentType || 'application/pdf'
+
+              if (/^data:/i.test(source)) {
+                const match = source.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/i)
+                if (!match) return null
+                contentType = match[1] || contentType
+                documentBuffer = match[2]
+                  ? Buffer.from(match[3], 'base64')
+                  : Buffer.from(decodeURIComponent(match[3]), 'utf8')
+              } else {
+                const docResponse = await axios.get(source, {
+                  responseType: 'arraybuffer',
+                  timeout: 60000,
+                })
+                documentBuffer = Buffer.from(docResponse.data)
+                const responseContentType = String(docResponse.headers?.['content-type'] || '').trim()
+                if (responseContentType) contentType = responseContentType
+              }
+
+              if (!documentBuffer?.length) return null
+
+              const extension = contentType.includes('png')
+                ? 'png'
+                : contentType.includes('jpeg') || contentType.includes('jpg')
+                  ? 'jpg'
+                  : 'pdf'
+              const { uploadUrl, key } = await presignUpload({
+                filename: `${opts.filenamePrefix}-${order.order_number || order.id}.${extension}`,
+                contentType,
+                userId: order.user_id,
+                folderKey: opts.folderKey,
+              })
+              const putUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
+              await axios.put(putUrl, documentBuffer, {
+                headers: { 'Content-Type': contentType },
+                timeout: 60000,
+              })
+              const finalKey = Array.isArray(key) ? key[0] : key
+              return typeof finalKey === 'string' && finalKey.trim() ? finalKey.trim() : null
+            } catch (docErr: any) {
+              console.warn(
+                `⚠️ [Manifest] Failed to persist ${opts.filenamePrefix} document for order ${order.order_number}:`,
+                docErr?.message || docErr,
+              )
+              return /^data:/i.test(source) ? null : source
+            }
+          }
+
           if (integrationType === 'ekart') {
             const ekart = new EkartService()
             await ekart.generateManifest(providerManifestIds)
@@ -7158,20 +7225,33 @@ export const generateManifestService = async (params: {
                   packagingData?.invoice_link ||
                   null
                 if (typeof packagingUrl === 'string' && packagingUrl.trim()) {
+                  const persistedLabel = await persistProviderDocument(packagingLabel, order, {
+                    folderKey: 'labels',
+                    filenamePrefix: 'label',
+                    fallbackContentType: /^data:image\//i.test(String(packagingLabel || ''))
+                      ? 'image/png'
+                      : 'application/pdf',
+                  })
+                  const persistedInvoice = await persistProviderDocument(packagingInvoice, order, {
+                    folderKey: 'invoices',
+                    filenamePrefix: 'invoice',
+                    fallbackContentType: 'application/pdf',
+                  })
+                  const persistedManifest = await persistProviderDocument(packagingUrl, order, {
+                    folderKey: 'manifests',
+                    filenamePrefix: 'manifest',
+                    fallbackContentType: /^data:image\//i.test(packagingUrl)
+                      ? 'image/png'
+                      : 'application/pdf',
+                  })
                   const existingManifestValue = String(order.manifest || '').trim()
-                  if (!existingManifestValue) {
-                    order.manifest = packagingUrl.trim()
+                  if (!existingManifestValue && persistedManifest) {
+                    order.manifest = persistedManifest
                   }
                   providerDocumentByOrderId.set(String(order.id), {
-                    label:
-                      typeof packagingLabel === 'string' && packagingLabel.trim()
-                        ? packagingLabel.trim()
-                        : null,
-                    invoice:
-                      typeof packagingInvoice === 'string' && packagingInvoice.trim()
-                        ? packagingInvoice.trim()
-                        : null,
-                    manifest: packagingUrl.trim(),
+                    label: persistedLabel,
+                    invoice: persistedInvoice,
+                    manifest: persistedManifest,
                   })
                 }
               } catch (truxManifestErr: any) {
@@ -7422,7 +7502,7 @@ export const generateManifestService = async (params: {
 
             let normalizedLabel: string | null = null
             if (typeof nextLabel === 'string' && nextLabel.trim()) {
-              normalizedLabel = normalizeToR2Key(nextLabel.trim()) || nextLabel.trim()
+              normalizedLabel = normalizeToR2Key(nextLabel.trim())
             }
 
             const invoiceResult =
@@ -7438,16 +7518,18 @@ export const generateManifestService = async (params: {
                 : null
             const normalizedInvoice =
               invoiceResult?.key && invoiceResult.key.trim()
-                ? normalizeToR2Key(invoiceResult.key.trim()) || invoiceResult.key.trim()
+                ? normalizeToR2Key(invoiceResult.key.trim())
                 : providerDocuments?.invoice
-                  ? normalizeToR2Key(providerDocuments.invoice) || providerDocuments.invoice
+                  ? normalizeToR2Key(providerDocuments.invoice)
                   : null
 
             const updatePayload: Record<string, any> = {
-              manifest: manifestKey,
               order_status: 'pickup_initiated',
               updated_at: new Date(),
             }
+            const normalizedManifestKey =
+              normalizeToR2Key(providerDocuments?.manifest) || normalizeToR2Key(manifestKey)
+            if (normalizedManifestKey) updatePayload.manifest = normalizedManifestKey
             if (normalizedLabel) updatePayload.label = normalizedLabel
             if (normalizedInvoice) {
               updatePayload.invoice_link = normalizedInvoice
@@ -7500,6 +7582,13 @@ export const generateManifestService = async (params: {
           }
 
           const trimmed = value.trim()
+
+          // Inline data URIs are document payloads, not durable storage keys.
+          // They may be returned in the API response when storage is unavailable,
+          // but writing them into order rows can exceed live DB column limits.
+          if (/^data:/i.test(trimmed)) {
+            return null
+          }
 
           // If it's already a key (doesn't start with http), return as-is
           if (!/^https?:\/\//i.test(trimmed)) {
