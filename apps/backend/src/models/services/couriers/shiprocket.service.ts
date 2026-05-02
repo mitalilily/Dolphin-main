@@ -1,6 +1,9 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
+import { eq } from 'drizzle-orm'
 import { HttpError } from '../../../utils/classes'
 import { withRetry } from '../../../utils/httpRetry'
+import { db } from '../../client'
+import { courier_credentials } from '../../schema/courierCredentials'
 import {
   getEffectiveCourierConfig,
   ShiprocketConfig,
@@ -120,9 +123,26 @@ export class ShiprocketCourierService {
     return fallback
   }
 
+  private async persistGeneratedToken(token: string) {
+    try {
+      await db
+        .update(courier_credentials)
+        .set({
+          apiKey: token,
+          updatedAt: new Date(),
+        })
+        .where(eq(courier_credentials.provider, 'shiprocket'))
+      this.configuredAuthToken = token
+      this.log('Persisted generated auth token to courier credentials', {
+        tokenPreview: `${token.slice(0, 4)}...${token.slice(-4)}`,
+      })
+    } catch (err: any) {
+      this.log('Token persist skipped', { message: err?.message || err })
+    }
+  }
+
   private async getToken(forceRefresh = false) {
     await this.ensureConfigLoaded()
-    if (!forceRefresh && this.configuredAuthToken) return this.configuredAuthToken
 
     const now = Date.now()
     if (
@@ -132,6 +152,12 @@ export class ShiprocketCourierService {
       now < ShiprocketCourierService.authTokenExpiresAt
     ) {
       return ShiprocketCourierService.authToken
+    }
+
+    // Prefer regenerating tokens from API user credentials so the system does
+    // not depend on a manually pasted token that expires every 10 days.
+    if ((!this.username || !this.password) && !forceRefresh && this.configuredAuthToken) {
+      return this.configuredAuthToken
     }
 
     const authUrl = `${this.baseApi}/auth/login`
@@ -162,6 +188,7 @@ export class ShiprocketCourierService {
 
       ShiprocketCourierService.authToken = token
       ShiprocketCourierService.authTokenExpiresAt = now + 23 * 60 * 60 * 1000
+      await this.persistGeneratedToken(token)
       return token
     } catch (err: any) {
       const message = this.extractErrorMessage(err, 'Shiprocket login failed')

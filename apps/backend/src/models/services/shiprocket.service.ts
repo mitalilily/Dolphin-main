@@ -5143,6 +5143,8 @@ export const createB2CShipmentService = async (
         String(
           params.pickup_location_alias ||
             params.pickup?.warehouse_name ||
+            params.pickup?.name ||
+            params.pickup_location_id ||
             shiprocket.getDefaultPickupLocation() ||
             '',
         ).trim() || null
@@ -5150,8 +5152,42 @@ export const createB2CShipmentService = async (
       if (!pickupLocation) {
         throw new HttpError(
           400,
-          'Shiprocket default pickup location is missing. Save it in courier credentials before booking.',
+          'Shiprocket pickup location is missing. Select or create a pickup address before booking.',
         )
+      }
+
+      const buildShiprocketPickupPayload = () => {
+        const pickupDetails = params.pickup
+        const pickupName =
+          String(
+            pickupLocation ||
+              pickupDetails.warehouse_name ||
+              pickupDetails.name ||
+              pickupDetails.addressNickname ||
+              'Default Pickup',
+          ).trim() || `Pickup-${Date.now()}`
+        const contactName = String(pickupDetails.name || pickupName).trim() || pickupName
+        const phone = String(pickupDetails.phone || '').replace(/\D/g, '')
+        const pinCode = String(pickupDetails.pincode || params.pickup_pincode || params.source_pincode || '').trim()
+        const address = String(pickupDetails.address || '').trim()
+        const email = 'no-reply@dolphin.com'
+
+        if (!phone || !pinCode || !address || !pickupDetails.city || !pickupDetails.state) {
+          return null
+        }
+
+        return {
+          pickup_location: pickupName,
+          name: contactName,
+          email,
+          phone,
+          address,
+          address_2: String(pickupDetails.address_2 || '').trim(),
+          city: String(pickupDetails.city || '').trim(),
+          state: String(pickupDetails.state || '').trim(),
+          country: 'India',
+          pin_code: Number(pinCode),
+        }
       }
 
       const extractPickupLocationNames = (input: any): string[] => {
@@ -5224,24 +5260,41 @@ export const createB2CShipmentService = async (
       // generic downstream failures like missing order_id/shipment_id.
       let availablePickupNames: string[] = await loadAvailablePickupNames()
 
-      if (availablePickupNames.length) {
+      const ensureShiprocketPickupLocation = async () => {
         const matchedPickup = availablePickupNames.find(
           (name) => name.toLowerCase() === String(pickupLocation).toLowerCase(),
         )
-        if (!matchedPickup) {
-          const fallbackDefault = String(shiprocket.getDefaultPickupLocation() || '').trim()
-          const matchedDefault = availablePickupNames.find(
-            (name) => name.toLowerCase() === fallbackDefault.toLowerCase(),
-          )
-          const fallbackPickup = matchedDefault || availablePickupNames[0]
-          console.warn(
-            `Requested Shiprocket pickup "${pickupLocation}" not found. Falling back to "${fallbackPickup}".`,
-          )
-          pickupLocation = fallbackPickup
-        } else {
+        if (matchedPickup) {
           pickupLocation = matchedPickup
+          return
         }
+
+        const pickupPayload = buildShiprocketPickupPayload()
+        if (!pickupPayload) {
+          if (availablePickupNames.length) {
+            const fallbackDefault = String(shiprocket.getDefaultPickupLocation() || '').trim()
+            const matchedDefault = availablePickupNames.find(
+              (name) => name.toLowerCase() === fallbackDefault.toLowerCase(),
+            )
+            pickupLocation = matchedDefault || availablePickupNames[0]
+            console.warn(
+              `Requested Shiprocket pickup not found and local pickup details are incomplete. Falling back to "${pickupLocation}".`,
+            )
+            return
+          }
+          throw new HttpError(
+            400,
+            'Shiprocket pickup location does not exist and local pickup details are incomplete. Add phone, pincode, city, state and address to the pickup address.',
+          )
+        }
+
+        console.warn(`Shiprocket pickup "${pickupLocation}" not found. Creating it from local pickup address.`)
+        await shiprocket.addPickupLocation(pickupPayload)
+        pickupLocation = pickupPayload.pickup_location
+        availablePickupNames = await loadAvailablePickupNames()
       }
+
+      await ensureShiprocketPickupLocation()
 
       const defaultChannelId = shiprocket.getDefaultChannelId()
       const shipmentWeightKg = normalizeWeightToKg(params.package_weight ?? params.weight ?? 0)
