@@ -156,75 +156,40 @@ export default function StepOneForm({ formData, onChange, errors, setFormData, s
         />
       </Box>
 
-      {userData?.companyInfo?.contactEmail && userData?.companyInfo?.POCEmailVerified ? (
-        <Grid container spacing={{ xs: 1.5, md: 2 }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={fieldCardSx}>
-              <CustomInput
-                label="Email"
-                name="email"
-                type="email"
-                value={formData?.basicInfo.email}
-                onChange={(e) => onChange(e, 'basicInfo')}
-                disabled
-                required
-                error={!!errors.basicInfo.email}
-                helperText={errors.basicInfo.email}
-                prefix={<MdEmail color={DE_BLUE} />}
-              />
-            </Box>
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={fieldCardSx}>
-              <CustomInput
-                label="Phone"
-                name="phone"
-                type="tel"
-                value={formData?.basicInfo?.phone}
-                onChange={(e) => onChange(createSyntheticEvent('phone', e.target.value), 'basicInfo')}
-                required
-                error={!!errors.basicInfo.phone}
-                helperText={errors.basicInfo.phone}
-                prefix={<MdPhone color={DE_BLUE} />}
-              />
-            </Box>
-          </Grid>
+      <Grid container spacing={{ xs: 1.5, md: 2 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Box sx={fieldCardSx}>
+            <CustomInput
+              label="Email"
+              name="email"
+              type="email"
+              value={formData?.basicInfo.email}
+              onChange={(e) => onChange(e, 'basicInfo')}
+              disabled={Boolean(userData?.companyInfo?.contactEmail && userData?.companyInfo?.POCEmailVerified)}
+              required
+              error={!!errors.basicInfo.email}
+              helperText={errors.basicInfo.email}
+              prefix={<MdEmail color={DE_BLUE} />}
+            />
+          </Box>
         </Grid>
-      ) : userData?.companyInfo?.contactNumber && userData?.companyInfo?.POCPhoneVerified ? (
-        <Grid container spacing={{ xs: 1.5, md: 2 }}>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={fieldCardSx}>
-              <CustomInput
-                label="Email"
-                name="email"
-                type="email"
-                value={formData?.basicInfo.email}
-                onChange={(e) => onChange(e, 'basicInfo')}
-                required
-                error={!!errors.basicInfo.email}
-                helperText={errors.basicInfo.email}
-                prefix={<MdEmail color={DE_BLUE} />}
-              />
-            </Box>
-          </Grid>
-          <Grid size={{ xs: 12, md: 6 }}>
-            <Box sx={fieldCardSx}>
-              <CustomInput
-                label="Phone"
-                name="phone"
-                type="tel"
-                value={formData?.basicInfo?.phone}
-                onChange={(e) => onChange(e, 'basicInfo')}
-                disabled
-                required
-                error={!!errors.basicInfo.phone}
-                helperText={errors.basicInfo.phone}
-                prefix={<MdPhone color={DE_BLUE} />}
-              />
-            </Box>
-          </Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Box sx={fieldCardSx}>
+            <CustomInput
+              label="Phone"
+              name="phone"
+              type="tel"
+              value={formData?.basicInfo?.phone}
+              onChange={(e) => onChange(createSyntheticEvent('phone', e.target.value), 'basicInfo')}
+              disabled={Boolean(userData?.companyInfo?.contactNumber && userData?.companyInfo?.POCPhoneVerified)}
+              required
+              error={!!errors.basicInfo.phone}
+              helperText={errors.basicInfo.phone}
+              prefix={<MdPhone color={DE_BLUE} />}
+            />
+          </Box>
         </Grid>
-      ) : null}
+      </Grid>
 
       <Box sx={fieldCardSx}>
         <CustomInput

@@ -63,8 +63,10 @@ export default function UserOnboarding() {
     if (!userData || !Object.keys(userData).length) return
 
     const prefill = getOnboardingPrefill()
+    const activeEmail = sessionStorage.getItem('activeEmail') || ''
 
     setFormData({
+      ...initialFormData,
       basicInfo: {
         firstName:
           userData?.companyInfo?.contactPerson?.split(' ')?.[0] ||
@@ -74,7 +76,7 @@ export default function UserOnboarding() {
           userData?.companyInfo?.contactPerson?.split(' ')?.slice(1).join(' ') ||
           prefill?.lastName ||
           '',
-        email: userData?.companyInfo?.contactEmail ?? '',
+        email: userData?.companyInfo?.contactEmail || userData?.email || activeEmail,
         phone: userData?.companyInfo?.contactNumber ?? '',
         companyName: userData?.companyInfo?.businessName ?? '',
         pincode: userData?.companyInfo?.pincode ?? '',
