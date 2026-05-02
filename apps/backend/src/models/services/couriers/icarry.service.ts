@@ -106,6 +106,29 @@ export type IcarryBookInternationalShipmentRequest = {
   consignee: IcarryInternationalShipmentConsignee
 }
 
+export type IcarryBookDomesticShipmentRequest = {
+  endpoint: 'surface' | 'air'
+  pickup_address_id: number
+  courier_id?: string | number | null
+  client_order_id?: string
+  parcel: {
+    type: 'COD' | 'Prepaid'
+    value: number
+    contents: string
+    dimensions: IcarryInternationalShipmentParcelDimensions
+    weight: IcarryInternationalShipmentParcelWeight
+  }
+  consignee: {
+    name: string
+    mobile: string
+    address: string
+    city: string
+    pincode: string | number
+    state: string
+    country?: string
+  }
+}
+
 export type IcarryShipmentByIdRequest = {
   shipment_id: number | string
 }
@@ -253,6 +276,8 @@ export class IcarryService {
       | '/api_get_estimate'
       | '/api_get_estimate_b2b'
       | '/api_get_estimate_international'
+      | '/api_add_shipment_surface'
+      | '/api_add_shipment_air'
       | '/api_add_shipment_international'
       | '/api_cancel_shipment'
       | '/api_add_reverse_shipment'
@@ -283,8 +308,36 @@ export class IcarryService {
         url: `${this.baseApi}${endpoint}`,
         response: this.sanitizeForLogs(response?.data),
       })
-      return response.data
+      let responseData: any = response?.data
+      if (typeof responseData === 'string') {
+        const jsonMatch = responseData.match(/\{[\s\S]*\}\s*$/)
+        if (jsonMatch) {
+          try {
+            responseData = JSON.parse(jsonMatch[0])
+          } catch {
+            // Keep the original string if iCarry returns malformed mixed HTML/JSON.
+          }
+        }
+      }
+      const providerError = String(responseData?.error || '').trim()
+      const successValue = String(responseData?.success ?? '').trim().toLowerCase()
+      if (
+        providerError ||
+        successValue === '0' ||
+        successValue === 'false' ||
+        (typeof responseData === 'string' && /"error"\s*:|error\s*:/i.test(responseData))
+      ) {
+        throw new HttpError(
+          400,
+          providerError ||
+            this.extractErrorMessage({ response: { data: responseData } }, `iCarry rejected ${endpoint}`),
+        )
+      }
+      return responseData
     } catch (err: any) {
+      if (err?.statusCode) {
+        throw err
+      }
       this.log('API request failed', {
         url: `${this.baseApi}${endpoint}`,
         payload: this.sanitizeForLogs(payload),
@@ -539,6 +592,110 @@ export class IcarryService {
     }
 
     return this.requestWithToken<IcarryEstimateResponse>('/api_add_shipment_international', requestPayload)
+  }
+
+  async bookDomesticShipment(
+    payload: IcarryBookDomesticShipmentRequest,
+  ): Promise<IcarryEstimateResponse> {
+    if (!payload || typeof payload !== 'object') {
+      throw new HttpError(400, 'Payload is required for iCarry domestic shipment booking')
+    }
+
+    const endpoint = payload.endpoint === 'air' ? '/api_add_shipment_air' : '/api_add_shipment_surface'
+    const pickupAddressId = Number(payload.pickup_address_id)
+    if (!Number.isFinite(pickupAddressId) || pickupAddressId <= 0) {
+      throw new HttpError(400, 'pickup_address_id must be a positive number')
+    }
+
+    const parcel = payload.parcel
+    if (!parcel || typeof parcel !== 'object') {
+      throw new HttpError(400, 'parcel object is required')
+    }
+    const parcelType = String(parcel.type || '').trim()
+    if (!['COD', 'Prepaid'].includes(parcelType)) {
+      throw new HttpError(400, "parcel.type must be 'COD' or 'Prepaid'")
+    }
+    const parcelValue = Number(parcel.value)
+    if (!Number.isFinite(parcelValue) || parcelValue <= 0) {
+      throw new HttpError(400, 'parcel.value must be a positive number')
+    }
+    const parcelContents = String(parcel.contents || '').trim()
+    if (!parcelContents) {
+      throw new HttpError(400, 'parcel.contents is required')
+    }
+
+    const dimensions = parcel.dimensions
+    if (!dimensions || typeof dimensions !== 'object') {
+      throw new HttpError(400, 'parcel.dimensions object is required')
+    }
+    for (const key of ['length', 'breadth', 'height'] as const) {
+      const val = Number((dimensions as any)[key])
+      if (!Number.isFinite(val) || val <= 0) {
+        throw new HttpError(400, `parcel.dimensions.${key} must be a positive number`)
+      }
+    }
+
+    const weight = parcel.weight
+    if (!weight || typeof weight !== 'object') {
+      throw new HttpError(400, 'parcel.weight object is required')
+    }
+    const weightValue = Number(weight.weight)
+    if (!Number.isFinite(weightValue) || weightValue <= 0) {
+      throw new HttpError(400, 'parcel.weight.weight must be a positive number')
+    }
+
+    const consignee = payload.consignee
+    if (!consignee || typeof consignee !== 'object') {
+      throw new HttpError(400, 'consignee object is required')
+    }
+    for (const key of ['name', 'mobile', 'address', 'city', 'state'] as const) {
+      if (!String((consignee as any)[key] || '').trim()) {
+        throw new HttpError(400, `consignee.${key} is required`)
+      }
+    }
+    if (!String(consignee.pincode || '').trim()) {
+      throw new HttpError(400, 'consignee.pincode is required')
+    }
+    const stateCode = String(consignee.state || '').trim().toUpperCase()
+    if (!/^[A-Z]{2}$/.test(stateCode)) {
+      throw new HttpError(400, 'consignee.state must be a two-character Indian state code')
+    }
+
+    const requestPayload: Record<string, any> = {
+      pickup_address_id: pickupAddressId,
+      parcel: {
+        type: parcelType,
+        value: parcelValue,
+        contents: parcelContents,
+        dimensions: {
+          length: Number(dimensions.length),
+          breadth: Number(dimensions.breadth),
+          height: Number(dimensions.height),
+          unit: 'cm',
+        },
+        weight: {
+          weight: Math.max(1, Math.round(weightValue)),
+          unit: 'gm',
+        },
+      },
+      consignee: {
+        name: String(consignee.name).trim(),
+        mobile: String(consignee.mobile).replace(/\D/g, ''),
+        address: String(consignee.address).trim(),
+        city: String(consignee.city).trim(),
+        pincode: String(consignee.pincode).trim(),
+        state: stateCode,
+        country: String(consignee.country || 'IN').trim().toUpperCase(),
+      },
+    }
+
+    const courierId = String(payload.courier_id || '').trim()
+    if (courierId) requestPayload.courier_id = courierId
+    if (String(payload.client_order_id || '').trim()) {
+      requestPayload.client_order_id = String(payload.client_order_id).trim()
+    }
+
+    return this.requestWithToken<IcarryEstimateResponse>(endpoint, requestPayload)
   }
 
   private normalizeShipmentId(value: number | string, fieldName = 'shipment_id'): number {

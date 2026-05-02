@@ -174,6 +174,70 @@ const normalizeIntegrationTypeAlias = (value?: string | null) => {
   return normalized
 }
 
+const normalizeCountryIso2 = (value?: string | null) => {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (!normalized || ['INDIA', 'IN', 'IND'].includes(normalized)) return 'IN'
+  return normalized.length === 2 ? normalized : normalized.slice(0, 2)
+}
+
+const resolveIndianStateCode = (value?: string | null) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/&/g, 'AND')
+    .replace(/[^A-Z ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+  if (/^[A-Z]{2}$/.test(normalized)) return normalized
+
+  const stateCodes: Record<string, string> = {
+    'ANDHRA PRADESH': 'AP',
+    'ARUNACHAL PRADESH': 'AR',
+    ASSAM: 'AS',
+    BIHAR: 'BR',
+    CHHATTISGARH: 'CG',
+    CHATTISGARH: 'CG',
+    GOA: 'GA',
+    GUJARAT: 'GJ',
+    HARYANA: 'HR',
+    'HIMACHAL PRADESH': 'HP',
+    'JAMMU AND KASHMIR': 'JK',
+    JHARKHAND: 'JH',
+    KARNATAKA: 'KA',
+    KERALA: 'KL',
+    'MADHYA PRADESH': 'MP',
+    MAHARASHTRA: 'MH',
+    MANIPUR: 'MN',
+    MEGHALAYA: 'ML',
+    MIZORAM: 'MZ',
+    NAGALAND: 'NL',
+    ODISHA: 'OD',
+    ORISSA: 'OD',
+    PUNJAB: 'PB',
+    RAJASTHAN: 'RJ',
+    SIKKIM: 'SK',
+    'TAMIL NADU': 'TN',
+    TELANGANA: 'TS',
+    TRIPURA: 'TR',
+    'UTTAR PRADESH': 'UP',
+    UTTARAKHAND: 'UK',
+    UTTARANCHAL: 'UK',
+    'WEST BENGAL': 'WB',
+    DELHI: 'DL',
+    'NEW DELHI': 'DL',
+    'DELHI NCR': 'DL',
+    CHANDIGARH: 'CH',
+    PUDUCHERRY: 'PY',
+    PONDICHERRY: 'PY',
+    LADAKH: 'LA',
+    LAKSHADWEEP: 'LD',
+    'ANDAMAN AND NICOBAR ISLANDS': 'AN',
+    'DADRA AND NAGAR HAVELI AND DAMAN AND DIU': 'DN',
+    'DAMAN AND DIU': 'DD',
+  }
+
+  return stateCodes[normalized] || normalized.slice(0, 2)
+}
+
 const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCourierCost: number | null) => ({
   shipmentData: {
     provider: 'shipmozo',
@@ -2169,7 +2233,7 @@ export const fetchAvailableCouriersWithRates = async (
             shipment_mode: 'S',
             shipment_type: 'P',
             shipment_value: orderAmountValue > 0 ? orderAmountValue : 1,
-            weight: weightKg,
+            weight: Math.max(1, Math.round(weightKg * 1000)),
             length: Number(params.length ?? 0) || 1,
             breadth: Number(params.breadth ?? 0) || 1,
             height: Number(params.height ?? 0) || 1,
@@ -5003,8 +5067,8 @@ export const createB2CShipmentService = async (
         )
       }
 
-      const selectedCourierId = String(params.courier_id ?? '').trim()
-      if (!selectedCourierId) {
+      const requestedCourierId = String(params.courier_id ?? '').trim()
+      if (!requestedCourierId) {
         throw new HttpError(
           400,
           'iCarry booking requires courier_id. Please pass courier_id from serviceability response.',
@@ -5017,39 +5081,75 @@ export const createB2CShipmentService = async (
         : null
       const itemDescription = String(firstItem?.name || 'Parcel').trim() || 'Parcel'
       const orderValue = Number(params.order_amount ?? 0) > 0 ? Number(params.order_amount) : 1
-
-      const createPayload = {
-        pickup_address_id: pickupAddressId,
-        courier_id: selectedCourierId,
-        client_order_id: params.order_number,
-        parcel: {
-          type: 'Prepaid' as const,
-          value: orderValue,
-          currency: 'INR' as const,
-          contents: itemDescription,
-          dimensions: {
-            length: Number(params.package_length ?? params.length ?? 1) || 1,
-            breadth: Number(params.package_breadth ?? params.breadth ?? 1) || 1,
-            height: Number(params.package_height ?? params.height ?? 1) || 1,
-            unit: 'cm' as const,
-          },
-          weight: {
-            weight: Math.max(1, Math.round(shipmentWeightKg * 1000)),
-            unit: 'gm' as const,
-          },
-        },
-        consignee: {
-          name: params.consignee?.name || 'Customer',
-          mobile: String(params.consignee?.phone || '').replace(/\D/g, ''),
-          address: params.consignee?.address || '',
-          city: params.consignee?.city || '',
-          pincode: params.consignee?.pincode || '',
-          state: params.consignee?.state || '',
-          country_code: String(params.consignee?.country || 'IN').trim().toUpperCase() || 'IN',
-        },
+      const destinationCountryCode = normalizeCountryIso2(params.consignee?.country)
+      const isDomesticIndiaShipment = destinationCountryCode === 'IN'
+      const parcelType = params.payment_type === 'cod' ? 'COD' : 'Prepaid'
+      const packageDimensions = {
+        length: Number(params.package_length ?? params.length ?? 1) || 1,
+        breadth: Number(params.package_breadth ?? params.breadth ?? 1) || 1,
+        height: Number(params.package_height ?? params.height ?? 1) || 1,
+        unit: 'cm' as const,
       }
+      const packageWeight = {
+        weight: Math.max(1, Math.round(shipmentWeightKg * 1000)),
+        unit: 'gm' as const,
+      }
+      const consigneePhone = String(params.consignee?.phone || '').replace(/\D/g, '')
+      const isInternalIcarryCourierSeed =
+        requestedCourierId === '9101' || requestedCourierId === '9102'
+      const domesticEndpoint = requestedCourierId === '9102' ? 'air' : 'surface'
 
-      const createOrderResp: any = await icarry.bookInternationalShipment(createPayload as any)
+      let createOrderResp: any
+      if (isDomesticIndiaShipment) {
+        createOrderResp = await icarry.bookDomesticShipment({
+          endpoint: domesticEndpoint,
+          pickup_address_id: pickupAddressId,
+          courier_id: isInternalIcarryCourierSeed ? undefined : requestedCourierId,
+          client_order_id: params.order_number,
+          parcel: {
+            type: parcelType,
+            value: orderValue,
+            contents: itemDescription,
+            dimensions: packageDimensions,
+            weight: packageWeight,
+          },
+          consignee: {
+            name: params.consignee?.name || 'Customer',
+            mobile: consigneePhone,
+            address: params.consignee?.address || '',
+            city: params.consignee?.city || '',
+            pincode: params.consignee?.pincode || '',
+            state: resolveIndianStateCode(params.consignee?.state),
+            country: 'IN',
+          },
+        })
+      } else {
+        if (params.payment_type === 'cod') {
+          throw new HttpError(400, 'iCarry international shipments support prepaid parcels only.')
+        }
+        createOrderResp = await icarry.bookInternationalShipment({
+          pickup_address_id: pickupAddressId,
+          courier_id: requestedCourierId,
+          client_order_id: params.order_number,
+          parcel: {
+            type: 'Prepaid' as const,
+            value: orderValue,
+            currency: 'INR' as const,
+            contents: itemDescription,
+            dimensions: packageDimensions,
+            weight: packageWeight,
+          },
+          consignee: {
+            name: params.consignee?.name || 'Customer',
+            mobile: consigneePhone,
+            address: params.consignee?.address || '',
+            city: params.consignee?.city || '',
+            pincode: params.consignee?.pincode || '',
+            state: params.consignee?.state || '',
+            country_code: destinationCountryCode,
+          },
+        } as any)
+      }
       const icarryPayload =
         createOrderResp?.data ??
         createOrderResp?.shipment ??
@@ -5096,6 +5196,8 @@ export const createB2CShipmentService = async (
           labelResp?.label ??
           labelResp?.data?.label_url ??
           labelResp?.label_url ??
+          labelResp?.data?.barcode_img ??
+          labelResp?.barcode_img ??
           null
         if (typeof rawLabel === 'string' && rawLabel.trim()) labelUrl = rawLabel.trim()
       } catch (labelErr: any) {
@@ -5112,6 +5214,7 @@ export const createB2CShipmentService = async (
           icarryPayload?.rate ??
             icarryPayload?.courier_charges ??
             icarryPayload?.shipping_charges ??
+            icarryPayload?.cost_estimate ??
             params?.courier_cost ??
             0,
         ) || null
@@ -5124,6 +5227,7 @@ export const createB2CShipmentService = async (
             icarryPayload?.awb_number ??
               icarryPayload?.awb ??
               icarryPayload?.tracking_id ??
+              icarryPayload?.awb_code ??
               icarryShipmentId,
           ) || undefined,
         courier_name: icarryPayload?.courier_name ?? 'iCarry',
@@ -6661,7 +6765,8 @@ export const generateManifestService = async (params: {
           integrationType === 'ekart' ||
           integrationType === 'shipmozo' ||
           integrationType === 'shiprocket' ||
-          integrationType === 'truxcargo'
+          integrationType === 'truxcargo' ||
+          integrationType === 'icarry'
         ) {
           if (params.type !== 'b2c') {
             throw new Error('This manifest flow is only supported for B2C orders')
@@ -6686,7 +6791,9 @@ export const generateManifestService = async (params: {
                   ? 'Shiprocket'
                   : integrationType === 'truxcargo'
                     ? 'Truxcargo'
-                  : 'Xpressbees'
+                    : integrationType === 'icarry'
+                      ? 'iCarry'
+                      : 'Xpressbees'
 
           const normalizeDetails = (value: any) => {
             if (!value) return {}
@@ -7013,7 +7120,7 @@ export const generateManifestService = async (params: {
           }
 
           const providerManifestIds =
-            integrationType === 'ekart' || integrationType === 'shiprocket'
+            integrationType === 'ekart' || integrationType === 'shiprocket' || integrationType === 'icarry'
               ? fetchedOrders
                   .map((order) =>
                     String(order.shipment_id || order.awb_number || order.order_number || '').trim(),
@@ -7258,6 +7365,59 @@ export const generateManifestService = async (params: {
                 console.warn(
                   `⚠️ [Truxcargo] Packaging slip generation failed for order ${order.order_number}:`,
                   truxManifestErr?.message || truxManifestErr,
+                )
+              }
+            }
+          } else if (integrationType === 'icarry') {
+            const icarry = new IcarryService()
+            for (const order of fetchedOrders) {
+              const shipmentId = String(order.shipment_id || '').trim()
+              if (!shipmentId) {
+                console.warn(`⚠️ [iCarry] Missing shipment_id for order ${order.order_number}; skipping provider docs.`)
+                continue
+              }
+
+              try {
+                const trackResp = await icarry.trackShipment({ shipment_id: shipmentId })
+                const labelResp = await icarry.printShipmentLabel({ shipment_id: shipmentId })
+                const labelData = labelResp?.data ?? labelResp
+                const rawLabel =
+                  labelData?.label ??
+                  labelData?.label_url ??
+                  labelData?.label_link ??
+                  labelData?.barcode_img ??
+                  null
+
+                const persistedLabel = await persistProviderDocument(rawLabel, order, {
+                  folderKey: 'labels',
+                  filenamePrefix: 'label',
+                  fallbackContentType: /^https?:\/\/.*\.(png|jpe?g)(?:\?|$)/i.test(String(rawLabel || ''))
+                    ? 'image/png'
+                    : 'application/pdf',
+                })
+
+                const trackData = trackResp?.data ?? trackResp
+                if (trackData?.courier_name && !order.courier_partner) {
+                  order.courier_partner = String(trackData.courier_name)
+                }
+                const sortCode = labelData?.sort_code ?? null
+                if (sortCode) {
+                  await tx
+                    .update(b2c_orders)
+                    .set({ sort_code: String(sortCode), updated_at: new Date() })
+                    .where(eq(b2c_orders.id, order.id))
+                  order.sort_code = String(sortCode)
+                }
+
+                providerDocumentByOrderId.set(String(order.id), {
+                  label: persistedLabel,
+                  invoice: null,
+                  manifest: null,
+                })
+              } catch (icarryManifestErr: any) {
+                console.warn(
+                  `⚠️ [iCarry] Tracking/label sync failed for order ${order.order_number}:`,
+                  icarryManifestErr?.message || icarryManifestErr,
                 )
               }
             }
