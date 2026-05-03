@@ -46,7 +46,7 @@ export const getPresignedDownloadUrl = async (
   res: Response
 ): Promise<any> => {
   try {
-    const { keys } = req.body;
+    const { keys, disposition, downloadName, contentType } = req.body;
 
     // Validate payload
     if (!keys || (typeof keys !== "string" && !Array.isArray(keys))) {
@@ -56,7 +56,14 @@ export const getPresignedDownloadUrl = async (
     }
 
     // Generate signed URL(s)
-    const result = await presignDownload(keys);
+    const result = await presignDownload(keys, {
+      disposition:
+        disposition === "inline" || disposition === "attachment"
+          ? disposition
+          : undefined,
+      downloadName: typeof downloadName === "string" ? downloadName : undefined,
+      contentType: typeof contentType === "string" ? contentType : undefined,
+    });
 
     // Handle missing files (NoSuchKey)
     if (Array.isArray(keys)) {

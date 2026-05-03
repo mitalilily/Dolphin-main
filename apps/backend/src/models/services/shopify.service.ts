@@ -488,7 +488,7 @@ export const syncShopifyStatusForLocalOrder = async (order: any, tx: any = db) =
         if (trackingNumber) {
           fulfillmentPayload.fulfillment.tracking_info = {
             number: trackingNumber,
-            company: String(order?.courier_partner || 'DelExpress').slice(0, 255),
+            company: String(order?.courier_partner || 'Dolphin').slice(0, 255),
           }
         }
 
@@ -547,7 +547,7 @@ export const syncShopifyStatusForLocalOrder = async (order: any, tx: any = db) =
     }
   } catch (err: any) {
     console.warn(
-      `⚠️ Shopify status sync failed for local order ${order?.order_number || order?.id}:`,
+      `âš ï¸ Shopify status sync failed for local order ${order?.order_number || order?.id}:`,
       err?.response?.data || err?.message || err,
     )
   }

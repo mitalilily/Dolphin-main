@@ -1,4 +1,4 @@
-﻿import axios from 'axios'
+import axios from 'axios'
 import {
   and,
   asc,
@@ -39,6 +39,7 @@ import {
   normalizePickupDetails,
 } from './invoiceHelpers'
 import { generateInvoicePDF, Product } from './invoice.service'
+import { loadPlatformLogoDataUrl } from './platformLogo.service'
 import { presignDownload, presignUpload } from './upload.service'
 import { createWalletTransaction } from './wallet.service'
 import { walletOfUser } from './walletTopupService'
@@ -99,6 +100,40 @@ const pdfFonts = {
 
 const MAX_MANIFEST_RETRY_ATTEMPTS = 3
 const ORIGINAL_WALLET_DEBIT_REASONS = ['B2C Prepaid Order Payment', 'B2C COD Service Charges']
+
+const loadManifestBranding = async () => {
+  const logoDataUrl = await loadPlatformLogoDataUrl()
+  const images: Record<string, string> = {}
+
+  if (logoDataUrl?.startsWith('data:image/')) {
+    images.platformLogo = logoDataUrl
+  }
+
+  return {
+    images: Object.keys(images).length ? images : undefined,
+    header: images.platformLogo
+      ? {
+          columns: [
+            { image: 'platformLogo', width: 84, alignment: 'left' },
+            {
+              text: 'Manifest',
+              fontSize: 16,
+              bold: true,
+              alignment: 'right',
+              margin: [0, 10, 0, 0],
+            },
+          ],
+          margin: [0, 0, 0, 14],
+        }
+      : {
+          text: 'Manifest',
+          fontSize: 16,
+          bold: true,
+          alignment: 'center',
+          margin: [0, 0, 0, 10],
+        },
+  }
+}
 
 const truncateColumnValue = (value: string, maxLength = 255) => {
   if (value.length <= maxLength) return value
@@ -846,7 +881,7 @@ function buildPickupFromWarehouse(
     city: warehouse.city,
     state: warehouse.state,
     pincode: warehouse.pincode,
-    name: warehouse.contactName || 'DelExpress',
+    name: warehouse.contactName || 'Dolphin',
     phone: warehouse.contactPhone || '',
     gst_number: previousPickup?.gst_number ?? warehouse.gstNumber ?? '',
     pickup_date: previousPickup?.pickup_date ?? fallbackDate,
@@ -4052,7 +4087,7 @@ export const createB2CShipmentService = async (
 
     params.company = {
       ...(params.company || {}),
-      name: resolvedCompanyName || 'DelExpress',
+      name: resolvedCompanyName || 'Dolphin',
       gst: resolvedCompanyGst || '',
     }
 
@@ -6980,8 +7015,19 @@ export const generateManifestService = async (params: {
                   warehouse_id: retryWarehouseId,
                 })
               }
-              const shipmozoOrderId =
-                String(pushResp?.data?.order_id ?? '').trim() || String(order.order_number).trim()
+              const shipmozoOrderId = String(
+                pushResp?.data?.order_id ??
+                  pushResp?.data?.reference_id ??
+                  pushResp?.order_id ??
+                  pushResp?.reference_id ??
+                  '',
+              ).trim()
+              if (!shipmozoOrderId) {
+                throw new HttpError(
+                  502,
+                  `Shipmozo did not return a valid provider order id for order ${order.order_number}.`,
+                )
+              }
 
               const requestedCourierId = Number(order.courier_id || 0)
               let assignResp: any = null
@@ -7525,18 +7571,14 @@ export const generateManifestService = async (params: {
           }, [])
 
           const printer = new PdfPrinter(pdfFonts)
+          const manifestBranding = await loadManifestBranding()
           const docDefinition: any = {
             defaultStyle: { font: 'Helvetica' },
             pageSize: 'A4',
             pageMargins: [30, 40, 30, 40],
+            ...(manifestBranding.images ? { images: manifestBranding.images } : {}),
             content: [
-              {
-                text: 'Manifest',
-                fontSize: 16,
-                bold: true,
-                alignment: 'center',
-                margin: [0, 0, 0, 10],
-              },
+              manifestBranding.header,
               {
                 columns: [
                   {
@@ -8409,18 +8451,14 @@ export const generateManifestService = async (params: {
           }, [])
 
           const printer = new PdfPrinter(pdfFonts)
+          const manifestBranding = await loadManifestBranding()
           const docDefinition: any = {
             defaultStyle: { font: 'Helvetica' },
             pageSize: 'A4',
             pageMargins: [30, 40, 30, 40],
+            ...(manifestBranding.images ? { images: manifestBranding.images } : {}),
             content: [
-              {
-                text: 'Manifest',
-                fontSize: 16,
-                bold: true,
-                alignment: 'center',
-                margin: [0, 0, 0, 10],
-              },
+              manifestBranding.header,
               {
                 columns: [
                   {

@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: delexpress-backend
+    name: dolphin-backend
     runtime: node
     buildCommand: npm install && npm run build
     startCommand: npm start
@@ -108,5 +108,5 @@ services:
         sync: false
 
 databases:
-  - name: delexpress-postgres
-    databaseName: delexpress
+  - name: dolphin-postgres
+    databaseName: dolphin

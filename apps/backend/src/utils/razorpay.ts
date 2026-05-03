@@ -6,12 +6,17 @@ import Razorpay from 'razorpay'
 
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
+dotenv.config()
 
 type RazorpayMode = 'test' | 'live'
 
+const requestedMode = String(process.env.RAZORPAY_MODE || '').trim().toLowerCase()
 const MODE: RazorpayMode =
-  (process.env.RAZORPAY_MODE as RazorpayMode) ??
-  (process.env.NODE_ENV === 'production' ? 'live' : 'test')
+  requestedMode === 'live' || requestedMode === 'test'
+    ? requestedMode
+    : process.env.NODE_ENV === 'production'
+      ? 'live'
+      : 'test'
 
 const CREDENTIALS: Record<RazorpayMode, { key_id: string; key_secret: string }> = {
   test: {
@@ -25,6 +30,7 @@ const CREDENTIALS: Record<RazorpayMode, { key_id: string; key_secret: string }> 
 }
 
 export const isRazorpayConfigured = Boolean(CREDENTIALS[MODE].key_id && CREDENTIALS[MODE].key_secret)
+export const razorpayMode = MODE
 
 if (!isRazorpayConfigured) {
   console.warn(
@@ -68,4 +74,24 @@ export function isValidSig(body: string, sig: string) {
     .update(body)
     .digest('hex')
   return expected === sig
+}
+
+export function verifyRazorpayPaymentSignature(params: {
+  orderId: string
+  paymentId: string
+  signature: string
+}) {
+  const keySecret = CREDENTIALS[MODE].key_secret
+  if (!keySecret) return false
+
+  const expected = crypto
+    .createHmac('sha256', keySecret)
+    .update(`${params.orderId}|${params.paymentId}`)
+    .digest('hex')
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(params.signature))
+  } catch {
+    return false
+  }
 }

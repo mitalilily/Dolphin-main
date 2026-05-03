@@ -113,7 +113,7 @@ async function sendEmailNotification(to: string, subject: string, message: strin
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px;">
         <h2 style="color: #333;">${subject}</h2>
         <p style="font-size: 16px; color: #555;">${message}</p>
-        <p style="font-size: 14px; color: #888; margin-top: 32px;">- The DelExpress Team</p>
+        <p style="font-size: 14px; color: #888; margin-top: 32px;">- The Dolphin Team</p>
       </div>
     `,
   }

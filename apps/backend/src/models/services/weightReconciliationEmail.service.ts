@@ -5,7 +5,7 @@ import path from 'path'
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
 
-const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@DelExpress.in'
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@dolphinenterprises.in'
 const GOOGLE_SMTP_USER = process.env.GOOGLE_SMTP_USER || EMAIL_FROM
 const GOOGLE_SMTP_PASSWORD = process.env.GOOGLE_SMTP_PASSWORD!
 const SMTP_HOST = process.env.SMTP_HOST
@@ -40,7 +40,7 @@ async function sendEmail(to: string, subject: string, htmlContent: string) {
       })
 
   const mailOptions = {
-    from: `"DelExpress" <${EMAIL_FROM}>`,
+    from: `"Dolphin" <${EMAIL_FROM}>`,
     to,
     subject,
     html: htmlContent,
@@ -109,10 +109,10 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
   const isLargeDiscrepancy = Math.abs(weightDifference) > 0.5 || additionalCharge > 100
 
   const subject = autoAccepted
-    ? `✅ Weight Discrepancy Auto-Accepted - Order ${orderNumber}`
+    ? `âœ… Weight Discrepancy Auto-Accepted - Order ${orderNumber}`
     : isLargeDiscrepancy
-    ? `🚨 URGENT: Large Weight Discrepancy Detected - Order ${orderNumber}`
-    : `⚖️ Weight Discrepancy Detected - Order ${orderNumber}`
+    ? `ðŸš¨ URGENT: Large Weight Discrepancy Detected - Order ${orderNumber}`
+    : `âš–ï¸ Weight Discrepancy Detected - Order ${orderNumber}`
 
   const html = `
       <!DOCTYPE html>
@@ -144,7 +144,7 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
         <div class="container">
           <div class="header">
             <h2 style="margin: 0;">${
-              autoAccepted ? '✅ Weight Discrepancy Auto-Accepted' : '⚖️ Weight Discrepancy Alert'
+              autoAccepted ? 'âœ… Weight Discrepancy Auto-Accepted' : 'âš–ï¸ Weight Discrepancy Alert'
             }</h2>
           </div>
           
@@ -154,7 +154,7 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
             ${
               autoAccepted
                 ? `<div class="alert">
-                    <strong>✅ AUTO-ACCEPTED:</strong> This weight discrepancy has been automatically accepted based on your auto-acceptance settings.
+                    <strong>âœ… AUTO-ACCEPTED:</strong> This weight discrepancy has been automatically accepted based on your auto-acceptance settings.
                   </div>
                   <div class="auto-accept-info">
                     <h4 style="margin-top: 0; color: #333369;">What Happened Automatically:</h4>
@@ -167,7 +167,7 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
                       <li><strong>Order Updated:</strong> The order's shipping charge has been updated to reflect the actual weight</li>
                       ${
                         additionalCharge > 0
-                          ? `<li><strong>Wallet Charge Applied:</strong> ₹${additionalCharge.toFixed(
+                          ? `<li><strong>Wallet Charge Applied:</strong> â‚¹${additionalCharge.toFixed(
                               2,
                             )} has been automatically deducted from your wallet balance</li>`
                           : ''
@@ -179,7 +179,7 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
                     </p>
                   </div>`
                 : isLargeDiscrepancy
-                ? '<div class="alert"><strong>⚠️ URGENT:</strong> A significant weight discrepancy has been detected that requires your immediate attention.</div>'
+                ? '<div class="alert"><strong>âš ï¸ URGENT:</strong> A significant weight discrepancy has been detected that requires your immediate attention.</div>'
                 : '<p>A weight discrepancy has been detected for one of your orders.</p>'
             }
             
@@ -228,7 +228,7 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
               
               <div class="detail-row">
                 <span class="label">Additional Charge:</span>
-                <span class="highlight">₹${additionalCharge.toFixed(2)}</span>
+                <span class="highlight">â‚¹${additionalCharge.toFixed(2)}</span>
               </div>
             </div>
             
@@ -267,8 +267,8 @@ export async function sendWeightDiscrepancyEmail(data: WeightDiscrepancyNotifica
           </div>
           
           <div class="footer">
-            <p>This is an automated notification from DelExpress Weight Reconciliation System</p>
-            <p>© ${new Date().getFullYear()} DelExpress. All rights reserved.</p>
+            <p>This is an automated notification from Dolphin Weight Reconciliation System</p>
+            <p>Â© ${new Date().getFullYear()} Dolphin. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -299,7 +299,7 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
     discrepancies,
   } = data
 
-  const subject = `📊 Daily Weight Reconciliation Summary - ${date}`
+  const subject = `ðŸ“Š Daily Weight Reconciliation Summary - ${date}`
   const html = `
       <!DOCTYPE html>
       <html>
@@ -323,7 +323,7 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
       <body>
         <div class="container">
           <div class="header">
-            <h2 style="margin: 0;">📊 Daily Weight Reconciliation Summary</h2>
+            <h2 style="margin: 0;">ðŸ“Š Daily Weight Reconciliation Summary</h2>
             <p style="margin: 5px 0 0 0; opacity: 0.9;">${date}</p>
           </div>
           
@@ -355,7 +355,7 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
             </div>
             
             <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0;">
-              <strong>Total Additional Charges:</strong> ₹${totalAdditionalCharges.toFixed(2)}
+              <strong>Total Additional Charges:</strong> â‚¹${totalAdditionalCharges.toFixed(2)}
             </div>
             
             ${
@@ -381,7 +381,7 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
                       <td>${d.weightDifference > 0 ? '+' : ''}${d.weightDifference.toFixed(
                         3,
                       )} kg</td>
-                      <td>₹${d.additionalCharge.toFixed(2)}</td>
+                      <td>â‚¹${d.additionalCharge.toFixed(2)}</td>
                       <td><span style="color: ${
                         d.status === 'pending'
                           ? '#F39C12'
@@ -401,7 +401,7 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
                   : ''
               }
             `
-                : '<p>No discrepancies detected today! 🎉</p>'
+                : '<p>No discrepancies detected today! ðŸŽ‰</p>'
             }
             
             <center>
@@ -414,11 +414,11 @@ export async function sendDailySummaryEmail(data: DailySummaryData) {
           </div>
           
           <div class="footer">
-            <p>This is an automated daily summary from DelExpress</p>
+            <p>This is an automated daily summary from Dolphin</p>
             <p>You can manage email preferences in your <a href="${
               process.env.FRONTEND_URL || 'http://localhost:5173'
             }/reconciliation/weight/settings">settings</a></p>
-            <p>© ${new Date().getFullYear()} DelExpress. All rights reserved.</p>
+            <p>Â© ${new Date().getFullYear()} Dolphin. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -449,7 +449,7 @@ export async function sendDisputeUpdateEmail(
     under_review: '#3498DB',
   }
 
-  const subject = `🔔 Dispute Update - Order ${orderNumber}`
+  const subject = `ðŸ”” Dispute Update - Order ${orderNumber}`
   const html = `
       <!DOCTYPE html>
       <html>
@@ -470,7 +470,7 @@ export async function sendDisputeUpdateEmail(
       <body>
         <div class="container">
           <div class="header">
-            <h2 style="margin: 0;">🔔 Dispute Status Update</h2>
+            <h2 style="margin: 0;">ðŸ”” Dispute Status Update</h2>
           </div>
           
           <div class="content">
@@ -501,7 +501,7 @@ export async function sendDisputeUpdateEmail(
           </div>
           
           <div class="footer">
-            <p>© ${new Date().getFullYear()} DelExpress. All rights reserved.</p>
+            <p>Â© ${new Date().getFullYear()} Dolphin. All rights reserved.</p>
           </div>
         </div>
       </body>
@@ -569,7 +569,7 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
     topDiscrepancies,
   } = data
 
-  const subject = `📊 Weekly Weight Reconciliation Report - ${weekStart} to ${weekEnd}`
+  const subject = `ðŸ“Š Weekly Weight Reconciliation Report - ${weekStart} to ${weekEnd}`
   const html = `
       <!DOCTYPE html>
       <html>
@@ -594,7 +594,7 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
       <body>
         <div class="container">
           <div class="header">
-            <h2 style="margin: 0;">📊 Weekly Weight Reconciliation Report</h2>
+            <h2 style="margin: 0;">ðŸ“Š Weekly Weight Reconciliation Report</h2>
             <p style="margin: 5px 0 0 0; opacity: 0.9;">${weekStart} to ${weekEnd}</p>
           </div>
           
@@ -637,7 +637,7 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
             
             <div class="highlight-box">
               <h3 style="margin-top: 0;">Financial Summary</h3>
-              <p><strong>Total Additional Charges:</strong> ₹${totalAdditionalCharges.toFixed(
+              <p><strong>Total Additional Charges:</strong> â‚¹${totalAdditionalCharges.toFixed(
                 2,
               )}</p>
               <p><strong>Average Weight Difference:</strong> ${
@@ -669,7 +669,7 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
                     <tr>
                       <td>${c.courierPartner || 'N/A'}</td>
                       <td>${c.count}</td>
-                      <td>₹${c.totalCharge.toFixed(2)}</td>
+                      <td>â‚¹${c.totalCharge.toFixed(2)}</td>
                       <td>${c.avgWeightDiff > 0 ? '+' : ''}${c.avgWeightDiff.toFixed(3)} kg</td>
                     </tr>
                   `,
@@ -706,7 +706,7 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
                       <td>${d.weightDifference > 0 ? '+' : ''}${d.weightDifference.toFixed(
                         3,
                       )} kg</td>
-                      <td>₹${d.additionalCharge.toFixed(2)}</td>
+                      <td>â‚¹${d.additionalCharge.toFixed(2)}</td>
                       <td><span style="color: ${
                         d.status === 'pending'
                           ? '#F39C12'
@@ -734,11 +734,11 @@ export async function sendWeeklyReportEmail(data: WeeklyReportData) {
           </div>
           
           <div class="footer">
-            <p>This is an automated weekly report from DelExpress</p>
+            <p>This is an automated weekly report from Dolphin</p>
             <p>You can manage email preferences in your <a href="${
               process.env.FRONTEND_URL || 'http://localhost:5173'
             }/reconciliation/weight/settings">settings</a></p>
-            <p>© ${new Date().getFullYear()} DelExpress. All rights reserved.</p>
+            <p>Â© ${new Date().getFullYear()} Dolphin. All rights reserved.</p>
           </div>
         </div>
       </body>

@@ -44,7 +44,7 @@ export class DelhiveryService {
     })
   }
 
-  // 🔹 1. Check Serviceability
+  // ðŸ”¹ 1. Check Serviceability
   async checkServiceability(pincode: string) {
     try {
       await this.ensureCredentials()
@@ -52,7 +52,7 @@ export class DelhiveryService {
       const res = await axios.get(url, { headers: this.headers })
 
       // Log the full response structure
-      console.log('📦 Delhivery Serviceability API Response:', {
+      console.log('ðŸ“¦ Delhivery Serviceability API Response:', {
         url,
         status: res.status,
         data: JSON.stringify(res.data, null, 2),
@@ -64,7 +64,7 @@ export class DelhiveryService {
       return res.data
     } catch (err: any) {
       const status = Number(err?.response?.status || 0)
-      console.error('❌ Delhivery serviceability error:', {
+      console.error('âŒ Delhivery serviceability error:', {
         pincode,
         status: err.response?.status,
         data: JSON.stringify(err.response?.data, null, 2),
@@ -81,7 +81,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 2. Expected TAT (Transit Time)
+  // ðŸ”¹ 2. Expected TAT (Transit Time)
   async getExpectedTAT(
     origin: string,
     destination: string,
@@ -100,7 +100,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 3. Fetch Waybills
+  // ðŸ”¹ 3. Fetch Waybills
   async fetchWaybills(count: number = 10) {
     try {
       await this.ensureCredentials()
@@ -121,7 +121,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 4. Create Shipment (Manifestation)
+  // ðŸ”¹ 4. Create Shipment (Manifestation)
   async createShipment(params: ShipmentParams, waybill?: string) {
     try {
       const normalizedCourierId = normalizeCourierId(params.courier_id)
@@ -179,7 +179,7 @@ export class DelhiveryService {
       }
       if (!invoiceNumber) {
         console.warn(
-          `ℹ️ Delhivery invoice_number missing for order ${orderNumber}; using order_number as fallback.`,
+          `â„¹ï¸ Delhivery invoice_number missing for order ${orderNumber}; using order_number as fallback.`,
         )
       }
       // if (!invoiceNumber) {
@@ -216,7 +216,7 @@ export class DelhiveryService {
           ? pickupAddressParts.join(', ')
           : sanitizeString(pickup.warehouse_name)
 
-      const sellerName = sanitizeString(params.company?.name || pickup.name || 'DelExpress')
+      const sellerName = sanitizeString(params.company?.name || pickup.name || 'Dolphin')
       const sellerGst = sanitizeString(params.company?.gst || pickup.gst_number || '')
       const productNames = orderItems
         .map((item) => sanitizeString(item?.name))
@@ -349,7 +349,7 @@ export class DelhiveryService {
         },
       }
 
-      console.log('📤 Delhivery createShipment payload summary', {
+      console.log('ðŸ“¤ Delhivery createShipment payload summary', {
         order: orderNumber,
         pickup_location: payload.shipments[0].pickup_location,
         payment_mode: paymentMode,
@@ -407,7 +407,7 @@ export class DelhiveryService {
         responseData?.serviceable === false ||
         !successPackage
       ) {
-        console.error('❌ Delhivery manifest rejected', {
+        console.error('âŒ Delhivery manifest rejected', {
           order: orderNumber,
           response: responseData,
           packageFailures: packageFailuresWithRemarks,
@@ -442,7 +442,7 @@ export class DelhiveryService {
         successPackage?.mode ??
         null
 
-      console.log('📤 Delhivery API response service', {
+      console.log('ðŸ“¤ Delhivery API response service', {
         order: orderNumber,
         requested_shipping_mode: shippingMode,
         response_shipping_mode: responseShippingMode,
@@ -461,7 +461,7 @@ export class DelhiveryService {
 
       const awb = successPackage?.waybill
       if (awb) {
-        console.log(`🔄 Generating Delhivery label for AWB: ${awb}`)
+        console.log(`ðŸ”„ Generating Delhivery label for AWB: ${awb}`)
         await new Promise((resolve) => setTimeout(resolve, 1000))
 
         let retries = 3
@@ -479,12 +479,12 @@ export class DelhiveryService {
                   (pkg.sort_code || pkg.sortCode || pkg.routing_code || pkg.routingCode) ?? null
               }
               labelMetaFetched = true
-              console.log(`✅ Delhivery label metadata fetched successfully for AWB: ${awb}`)
+              console.log(`âœ… Delhivery label metadata fetched successfully for AWB: ${awb}`)
               break
             }
           } catch (err: any) {
             console.warn(
-              `⚠️ Failed to fetch Delhivery label metadata (attempt ${4 - retries}/3):`,
+              `âš ï¸ Failed to fetch Delhivery label metadata (attempt ${4 - retries}/3):`,
               err?.message || err,
             )
             if (retries > 1) {
@@ -496,7 +496,7 @@ export class DelhiveryService {
 
         if (!labelMetaFetched) {
           console.error(
-            `❌ Failed to fetch Delhivery label metadata after all retries for AWB: ${awb}`,
+            `âŒ Failed to fetch Delhivery label metadata after all retries for AWB: ${awb}`,
           )
         }
       }
@@ -515,11 +515,11 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 6. Cancel Shipment
+  // ðŸ”¹ 6. Cancel Shipment
   async cancelShipment(waybill: string) {
     try {
       await this.ensureCredentials()
-      console.log('🚚 Delhivery Cancel Shipment Request:', {
+      console.log('ðŸšš Delhivery Cancel Shipment Request:', {
         waybill,
         apiBase: this.apiBase,
       })
@@ -532,7 +532,7 @@ export class DelhiveryService {
         },
       )
 
-      console.log('📥 Delhivery Cancel Shipment Response:', {
+      console.log('ðŸ“¥ Delhivery Cancel Shipment Response:', {
         status: res.status,
         data: JSON.stringify(res.data, null, 2),
         success: res.data?.success,
@@ -543,7 +543,7 @@ export class DelhiveryService {
 
       return res.data
     } catch (err: any) {
-      console.error('❌ Delhivery cancellation error:', {
+      console.error('âŒ Delhivery cancellation error:', {
         waybill,
         status: err.response?.status,
         data: JSON.stringify(err.response?.data, null, 2),
@@ -554,7 +554,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 7. Track Shipment
+  // ðŸ”¹ 7. Track Shipment
   async trackShipment(awb: string) {
     await this.ensureCredentials()
     const res = await axios.get(`${this.apiBase}/api/v1/packages/json/?waybill=${awb}`, {
@@ -563,7 +563,7 @@ export class DelhiveryService {
     return res.data
   }
 
-  // 🔹 8. NDR Action (RE-ATTEMPT / PICKUP_RESCHEDULE)
+  // ðŸ”¹ 8. NDR Action (RE-ATTEMPT / PICKUP_RESCHEDULE)
   async submitNdrAction(
     actions: Array<{
       waybill: string
@@ -602,7 +602,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 9. Get NDR UPL Status
+  // ðŸ”¹ 9. Get NDR UPL Status
   async getNdrStatus(uplId: string, verbose: boolean = true) {
     try {
       await this.ensureCredentials()
@@ -617,7 +617,7 @@ export class DelhiveryService {
     }
   }
 
-  // 🔹 8. Pickup Request (manual scheduling)
+  // ðŸ”¹ 8. Pickup Request (manual scheduling)
   async requestPickup(pickupData: any) {
     await this.ensureCredentials()
     const res = await axios.post(`${this.apiBase}/fm/request/new/`, pickupData, {
@@ -654,7 +654,7 @@ export class DelhiveryService {
       const res = await axios.post(url, warehouse, { headers })
       return res.data
     } catch (err: any) {
-      console.error('❌ Delhivery warehouse creation error:', err.response?.data || err.message)
+      console.error('âŒ Delhivery warehouse creation error:', err.response?.data || err.message)
       // Re-throw original error so upstream callers can inspect Delhivery's response
       throw err
     }
@@ -662,11 +662,11 @@ export class DelhiveryService {
 
   async triggerDelhiveryPickupRequest(pickupLocationName: string, packageCount: number) {
     try {
-      // 🔹 Current date in YYYY-MM-DD
+      // ðŸ”¹ Current date in YYYY-MM-DD
       const now = new Date()
       const pickup_date = now.toISOString().split('T')[0]
 
-      // 🔹 Pickup time → 1 hour from now (HH:mm:ss)
+      // ðŸ”¹ Pickup time â†’ 1 hour from now (HH:mm:ss)
       const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000)
       const pickup_time = oneHourLater.toTimeString().split(' ')[0] // "HH:mm:ss"
 
@@ -680,18 +680,18 @@ export class DelhiveryService {
       const res = await this.requestPickup(payload)
 
       if (!res?.success) {
-        console.error('❌ Delhivery pickup creation failed:', res)
+        console.error('âŒ Delhivery pickup creation failed:', res)
         throw new Error(res?.message || 'Delhivery pickup request failed')
       }
 
-      console.log(`✅ Pickup request created for ${pickupLocationName} (${packageCount} packages)`)
+      console.log(`âœ… Pickup request created for ${pickupLocationName} (${packageCount} packages)`)
       return res
     } catch (err: any) {
-      console.error('❌ Pickup request creation error:', err.message)
+      console.error('âŒ Pickup request creation error:', err.message)
       throw err
     }
   }
-  // 🔹 10. Create Reverse Shipment
+  // ðŸ”¹ 10. Create Reverse Shipment
   // Delhivery reverse shipments are created via the same create.json manifestation API,
   // with `package_type: "Pickup"` and reverse-specific shipment values.
   async createReverseShipment(params: {
@@ -735,7 +735,7 @@ export class DelhiveryService {
             shipment_width: Number(params.package_breadth ?? 10),
             shipment_height: Number(params.package_height ?? 10),
             pickup_location: params.pickup?.warehouse_name ?? 'Default Warehouse',
-            seller_name: params.pickup?.name ?? 'DelExpress',
+            seller_name: params.pickup?.name ?? 'Dolphin',
             seller_add: params.pickup?.address ?? '',
             order_date: new Date().toISOString().split('T')[0],
             return_name: reverseDrop?.name ?? params.pickup?.name ?? 'Return',
@@ -810,7 +810,7 @@ export class DelhiveryService {
       const res = await axios.post(url, payload, { headers })
       return res.data
     } catch (err: any) {
-      console.error('❌ Delhivery warehouse update error:', err.response?.data || err.message)
+      console.error('âŒ Delhivery warehouse update error:', err.response?.data || err.message)
       throw new Error('Failed to update Delhivery warehouse')
     }
   }
@@ -846,7 +846,7 @@ export class DelhiveryService {
       return res.data
     } catch (err: any) {
       const providerError = err.response?.data
-      console.error('❌ Delhivery pickup request error:', providerError || err.message)
+      console.error('âŒ Delhivery pickup request error:', providerError || err.message)
 
       const providerMessage =
         typeof providerError?.pickup_date === 'string'
@@ -867,7 +867,7 @@ export class DelhiveryService {
       throw error
     }
   }
-  // 🔹 9. Fetch Shipping Label from Delhivery packing_slip API
+  // ðŸ”¹ 9. Fetch Shipping Label from Delhivery packing_slip API
   // format=json -> metadata (barcodes, sort code, etc.)
   // format=pdf  -> raw PDF bytes (used to ensure provider-side label generation activity)
   async generateLabel(awb: string, options: { format?: 'json' | 'pdf' } = { format: 'json' }) {
@@ -887,5 +887,5 @@ export class DelhiveryService {
 
   // COD Settlement APIs not publicly available
   // Use CSV download from Delhivery dashboard instead:
-  // Dashboard → Finances → Remittance → Download Report
+  // Dashboard â†’ Finances â†’ Remittance â†’ Download Report
 }

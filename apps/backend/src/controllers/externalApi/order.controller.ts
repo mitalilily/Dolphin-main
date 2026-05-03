@@ -506,7 +506,7 @@ export const getOrderLabelController = async (req: any, res: Response) => {
     let labelUrl: string
     try {
       const signed = await presignDownload(labelValue, {
-        disposition: 'attachment',
+        disposition: 'inline',
         downloadName: `label-${order.order_number || order.id}.pdf`,
         contentType: 'application/pdf',
       })
@@ -593,7 +593,7 @@ export const getOrderInvoiceController = async (req: any, res: Response) => {
     let invoiceUrl: string
     try {
       const signed = await presignDownload(invoiceValue, {
-        disposition: 'attachment',
+        disposition: 'inline',
         downloadName: `invoice-${order.order_number || order.id}.pdf`,
         contentType: 'application/pdf',
       })

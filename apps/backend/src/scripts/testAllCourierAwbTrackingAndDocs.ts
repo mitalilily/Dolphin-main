@@ -1,13 +1,5 @@
 import * as dotenv from 'dotenv'
 import path from 'path'
-import { regenerateOrderDocumentsServiceAdmin } from '../models/services/adminOrders.service'
-import { DelhiveryService } from '../models/services/couriers/delhivery.service'
-import { EkartService } from '../models/services/couriers/ekart.service'
-import { IcarryService } from '../models/services/couriers/icarry.service'
-import { ShipmozoService } from '../models/services/couriers/shipmozo.service'
-import { ShiprocketCourierService } from '../models/services/couriers/shiprocket.service'
-import { TruxcargoService } from '../models/services/couriers/truxcargo.service'
-import { XpressbeesService } from '../models/services/couriers/xpressbees.service'
 
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
@@ -62,6 +54,15 @@ function skipCheck(name: string, reason: string): CheckResult {
 
 async function main() {
   const summary: CheckResult[] = []
+
+  const { regenerateOrderDocumentsServiceAdmin } = require('../models/services/adminOrders.service')
+  const { DelhiveryService } = require('../models/services/couriers/delhivery.service')
+  const { EkartService } = require('../models/services/couriers/ekart.service')
+  const { IcarryService } = require('../models/services/couriers/icarry.service')
+  const { ShipmozoService } = require('../models/services/couriers/shipmozo.service')
+  const { ShiprocketCourierService } = require('../models/services/couriers/shiprocket.service')
+  const { TruxcargoService } = require('../models/services/couriers/truxcargo.service')
+  const { XpressbeesService } = require('../models/services/couriers/xpressbees.service')
 
   const delhivery = new DelhiveryService()
   const shiprocket = new ShiprocketCourierService()
@@ -198,4 +199,3 @@ main().catch((error) => {
   console.error('[ALL COURIER AWB/TRACKING/DOCS] FATAL', error?.message || error)
   process.exit(1)
 })
-

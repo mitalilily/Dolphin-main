@@ -40,9 +40,16 @@ export class TruxcargoService {
       for (const [key, nested] of Object.entries(value)) {
         const lowered = key.toLowerCase()
         if (
-          ['api_key', 'apikey', 'key', 'password', 'authorization', 'token', 'x-api-key'].includes(
-            lowered,
-          )
+          [
+            'api_key',
+            'apikey',
+            'key',
+            'password',
+            'authorization',
+            'token',
+            'x-api-key',
+            'label',
+          ].includes(lowered)
         ) {
           result[key] = nested ? '[redacted]' : nested
           continue

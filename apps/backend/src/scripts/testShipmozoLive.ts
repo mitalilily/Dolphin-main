@@ -1,6 +1,5 @@
 import * as dotenv from 'dotenv'
 import path from 'path'
-import { ShipmozoService } from '../models/services/couriers/shipmozo.service'
 
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
@@ -27,6 +26,7 @@ const logResult = (label: string, payload: any) => {
 }
 
 async function main() {
+  const { ShipmozoService } = require('../models/services/couriers/shipmozo.service')
   const shipmozo = new ShipmozoService()
   const testOrderId = safeString(process.env.SHIPMOZO_TEST_ORDER_ID)
   const testAwb = safeString(process.env.SHIPMOZO_TEST_AWB)

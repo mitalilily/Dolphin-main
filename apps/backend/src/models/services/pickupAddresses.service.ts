@@ -1,4 +1,4 @@
-﻿// services/pickupAddresses.service.ts
+// services/pickupAddresses.service.ts
 import { and, asc, desc, eq, ilike, ne, or, sql } from 'drizzle-orm'
 import { CreatePickupDto, HydratedPickupAddress, UpdatePickupDto } from '../../types/generic.types'
 import { db } from '../client'
@@ -84,7 +84,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       const delhivery = new DelhiveryService()
       const delhiveryResp = await delhivery.createWarehouse({
         name: pickupAddr.addressNickname ?? pickupAddr.contactName ?? 'Default Warehouse',
-        registered_name: 'DelExpress',
+        registered_name: 'Dolphin',
         phone: pickupAddr.contactPhone,
         email: pickupAddr.contactEmail ?? '',
         address: pickupAddr.addressLine1,
@@ -154,7 +154,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
       }
       const payload = {
         alias,
-        contactName: pickupAddr.contactName || 'DelExpress',
+        contactName: pickupAddr.contactName || 'Dolphin',
         phone: Number(phoneDigits) || 0,
         email: pickupAddr.contactEmail || '',
         addressLine1: pickupAddr.addressLine1,
@@ -165,7 +165,7 @@ export async function createPickupAddressService(data: CreatePickupDto, userId: 
         country: (pickupAddr.country || 'India').toUpperCase(),
         geo,
         returnAddress: {
-          contactName: pickupAddr.contactName || 'DelExpress',
+          contactName: pickupAddr.contactName || 'Dolphin',
           phone: Number(phoneDigits) || 0,
           addressLine1: pickupAddr.addressLine1,
           addressLine2: pickupAddr.addressLine2 || '',
@@ -440,4 +440,3 @@ export async function getPickupAddressesService(
 
   return { data: data as unknown as HydratedPickupAddress[], totalCount }
 }
-

@@ -132,7 +132,7 @@ export const integrateWithWooCommerce = async (
       url: storeUrl,
     }
   } catch (error: any) {
-    console.error('❌ WooCommerce API Error:', error?.response?.data || error.message)
+    console.error('âŒ WooCommerce API Error:', error?.response?.data || error.message)
     throw new Error('Failed to connect to WooCommerce store')
   }
 }
@@ -183,7 +183,7 @@ export async function upsertShopifySettingsMetafield({
 
   try {
     const { data: existing } = await axios.get(
-      `${baseUrl}/metafields.json?namespace=DelExpress&key=settings`,
+      `${baseUrl}/metafields.json?namespace=Dolphin&key=settings`,
       { headers },
     )
 
@@ -200,13 +200,13 @@ export async function upsertShopifySettingsMetafield({
         },
         { headers },
       )
-      console.log('✅ Updated Shopify settings metafield')
+      console.log('âœ… Updated Shopify settings metafield')
     } else {
       await axios.post(
         `${baseUrl}/metafields.json`,
         {
           metafield: {
-            namespace: 'DelExpress',
+            namespace: 'Dolphin',
             key: 'settings',
             value: JSON.stringify(settings),
             type: 'json',
@@ -215,13 +215,13 @@ export async function upsertShopifySettingsMetafield({
         },
         { headers },
       )
-      console.log('✅ Created new Shopify settings metafield')
+      console.log('âœ… Created new Shopify settings metafield')
     }
 
     // Also update in DB
     await tx.update(stores).set({ settings, updatedAt: new Date() }).where(eq(stores.id, id))
   } catch (err: any) {
-    console.error('❌ Failed to sync Shopify metafield:', err.response?.data || err.message)
+    console.error('âŒ Failed to sync Shopify metafield:', err.response?.data || err.message)
     throw new Error('Shopify metafield sync failed')
   }
 }
@@ -245,7 +245,7 @@ export const deleteStoreById = async (req: Request, res: Response): Promise<any>
 
     res.status(200).json({ message: 'Store deleted successfully' })
   } catch (error) {
-    console.error('❌ Failed to delete store:', error)
+    console.error('âŒ Failed to delete store:', error)
     res.status(500).json({ error: 'Internal server error' })
   }
 }

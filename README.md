@@ -6,7 +6,7 @@ This repository brings the Skyrush codebase together in one monorepo without cha
 
 - `apps/admin` - imported from `https://github.com/mitalilily/skyrush-admin`
 - `apps/client` - imported from `https://github.com/mitalilily/skyrush-client`
-- `apps/landing` - imported from `https://github.com/mitalilily/skyrush-landing` and flattened from its original `delexpress-main/` folder
+- `apps/landing` - imported from `https://github.com/mitalilily/skyrush-landing` and flattened from its original `dolphin-main/` folder
 - `apps/backend` - imported from `https://github.com/mitalilily/skyrush-backend`
 
 ## Run Locally

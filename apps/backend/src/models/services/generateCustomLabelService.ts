@@ -8,6 +8,7 @@ import { db } from '../client'
 import { labelPreferences } from '../schema/labelPreferences'
 import { userProfiles } from '../schema/userProfile'
 import { getAdminInvoicePreferences } from './invoicePreferences.service'
+import { loadPlatformLogoDataUrl } from './platformLogo.service'
 import { presignDownload, presignUpload } from './upload.service'
 
 function isValidDataUrl(str: string | null): boolean {
@@ -18,32 +19,32 @@ function isValidDataUrl(str: string | null): boolean {
 async function bufferToDataUrl(buffer: Buffer): Promise<string | null> {
   try {
     if (!buffer || buffer.length === 0) {
-      console.warn('⚠️ Empty buffer provided to bufferToDataUrl')
+      console.warn('âš ï¸ Empty buffer provided to bufferToDataUrl')
       return null
     }
     const type = await fileType.fromBuffer(buffer)
     if (!type) {
-      console.warn('⚠️ Could not detect image type, defaulting to PNG')
+      console.warn('âš ï¸ Could not detect image type, defaulting to PNG')
       return `data:image/png;base64,${buffer.toString('base64')}`
     }
     // Only allow image types
     if (!type.mime.startsWith('image/')) {
-      console.warn(`⚠️ Invalid image type: ${type.mime}, defaulting to PNG`)
+      console.warn(`âš ï¸ Invalid image type: ${type.mime}, defaulting to PNG`)
       return `data:image/png;base64,${buffer.toString('base64')}`
     }
     const dataUrl = `data:${type.mime};base64,${buffer.toString('base64')}`
     // Validate the data URL format
     if (!dataUrl.startsWith('data:image/')) {
-      console.warn('⚠️ Invalid data URL format generated')
+      console.warn('âš ï¸ Invalid data URL format generated')
       return null
     }
     return dataUrl
   } catch (err) {
-    console.warn('⚠️ Error detecting image type, defaulting to PNG:', err)
+    console.warn('âš ï¸ Error detecting image type, defaulting to PNG:', err)
     try {
       return `data:image/png;base64,${buffer.toString('base64')}`
     } catch (bufferErr) {
-      console.error('⚠️ Failed to convert buffer to base64:', bufferErr)
+      console.error('âš ï¸ Failed to convert buffer to base64:', bufferErr)
       return null
     }
   }
@@ -62,7 +63,7 @@ async function generateBarcodeBase64(text: string): Promise<string | null> {
     })
     return `data:image/png;base64,${png.toString('base64')}`
   } catch (err) {
-    console.warn('⚠️ Barcode generation failed:', err)
+    console.warn('âš ï¸ Barcode generation failed:', err)
     return null
   }
 }
@@ -110,7 +111,7 @@ const DEFAULT_LABEL_SETTINGS = {
     deadWeight: false,
     otherCharges: true,
   },
-  powered_by: 'DelExpress',
+  powered_by: 'Dolphin',
 }
 
 function mergeSettings(prefs: any) {
@@ -133,7 +134,12 @@ function mergeSettings(prefs: any) {
 }
 
 export async function generateLabelForOrder(order: any, userId: string, tx: any = db) {
-  console.log('ORDER', order)
+  console.log('Generating label for order', {
+    id: order?.id,
+    order_number: order?.order_number,
+    courier: order?.integration_type || order?.courier_partner,
+    awb_number: order?.awb_number || null,
+  })
 
   // Load preferences
   const [prefsRow] = await tx
@@ -164,29 +170,18 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
         }
       }
     } catch (err) {
-      console.warn('⚠️ Failed to fetch company logo:', err)
+      console.warn('âš ï¸ Failed to fetch company logo:', err)
     }
   }
 
   const adminPrefs = await getAdminInvoicePreferences()
-  // Always show DelExpress platform logo (Powered by ...)
+  // Always show the platform logo, falling back to the committed app asset if R2 is missing it.
   let platformLogoBase64: string | null = null
   try {
-    const platformLogoKey = adminPrefs?.logoFile ?? 'logo-white.png'
-    const logoUrl = await presignDownload(platformLogoKey)
-    const finalUrl = Array.isArray(logoUrl) ? logoUrl[0] : logoUrl
-    if (finalUrl) {
-      const logoResp = await axios.get(finalUrl, {
-        responseType: 'arraybuffer',
-      })
-      const buffer = Buffer.from(logoResp.data)
-      const dataUrl = await bufferToDataUrl(buffer)
-      if (dataUrl && isValidDataUrl(dataUrl)) {
-        platformLogoBase64 = dataUrl
-      }
-    }
+    const dataUrl = await loadPlatformLogoDataUrl(adminPrefs?.logoFile)
+    if (dataUrl && isValidDataUrl(dataUrl)) platformLogoBase64 = dataUrl
   } catch (err) {
-    console.warn('⚠️ Failed to fetch platform logo:', err)
+    console.warn('Failed to fetch platform logo:', err)
   }
 
   // Normalize fields
@@ -265,10 +260,10 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
       // Check if it's already a data URL
       if (isValidDataUrl(barcodeSource)) {
         awbBarcode = barcodeSource
-        console.log('✅ Using barcode from courier API (data URL format)')
+        console.log('âœ… Using barcode from courier API (data URL format)')
       } else if (typeof barcodeSource === 'string' && barcodeSource.startsWith('http')) {
         // It's a URL - download and convert to data URL
-        console.log(`📥 Downloading barcode from courier API: ${barcodeSource}`)
+        console.log(`ðŸ“¥ Downloading barcode from courier API: ${barcodeSource}`)
         try {
           const barcodeResponse = await axios.get(barcodeSource, {
             responseType: 'arraybuffer',
@@ -278,28 +273,28 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
           const dataUrl = await bufferToDataUrl(barcodeBuffer)
           if (dataUrl && isValidDataUrl(dataUrl)) {
             awbBarcode = dataUrl
-            console.log('✅ Barcode downloaded and converted to data URL')
+            console.log('âœ… Barcode downloaded and converted to data URL')
           } else {
-            console.warn('⚠️ Failed to convert downloaded barcode to data URL')
+            console.warn('âš ï¸ Failed to convert downloaded barcode to data URL')
           }
         } catch (downloadErr: any) {
           console.warn(
-            `⚠️ Failed to download barcode from URL: ${barcodeSource}`,
+            `âš ï¸ Failed to download barcode from URL: ${barcodeSource}`,
             downloadErr?.message || downloadErr,
           )
         }
       } else {
-        console.warn(`⚠️ Barcode from courier API is in unexpected format: ${typeof barcodeSource}`)
+        console.warn(`âš ï¸ Barcode from courier API is in unexpected format: ${typeof barcodeSource}`)
       }
     } catch (err: any) {
-      console.warn(`⚠️ Error processing barcode from courier API:`, err?.message || err)
+      console.warn(`âš ï¸ Error processing barcode from courier API:`, err?.message || err)
     }
   }
 
   // Fallback to generating AWB barcode locally if no courier barcode available
   if (!awbBarcode && awbEnabled && order.awb_number) {
     awbBarcode = await generateBarcodeBase64(order.awb_number)
-    console.log('✅ Generated AWB barcode locally')
+    console.log('âœ… Generated AWB barcode locally')
   }
   const orderBarcode =
     showOrderBarcode && order.order_number ? await generateBarcodeBase64(order.order_number) : null
@@ -764,7 +759,7 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
 
   // Push pageContent to pages array - CRITICAL: Without this, label will be empty!
   if (pageContent.length === 0) {
-    console.warn('⚠️ pageContent is empty - label may be blank')
+    console.warn('âš ï¸ pageContent is empty - label may be blank')
   }
   pages.push({ stack: pageContent })
 
@@ -792,7 +787,7 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
     }
 
     console.log(
-      `📄 PDF generated successfully (${pdfBuffer.length} bytes) for order ${order?.order_number}`,
+      `ðŸ“„ PDF generated successfully (${pdfBuffer.length} bytes) for order ${order?.order_number}`,
     )
 
     const toInlinePdfDataUrl = () => `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
@@ -813,7 +808,7 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
       const message = String(uploadInitErr?.message || '')
       if (/Storage is not configured/i.test(message)) {
         console.warn(
-          `⚠️ Storage unavailable for order ${order?.order_number}. Returning inline PDF label.`,
+          `âš ï¸ Storage unavailable for order ${order?.order_number}. Returning inline PDF label.`,
         )
         return toInlinePdfDataUrl()
       }
@@ -847,11 +842,11 @@ export async function generateLabelForOrder(order: any, userId: string, tx: any 
     }
 
     const trimmedKey = finalKey.trim()
-    console.log(`✅ Label uploaded successfully: ${trimmedKey} (status: ${uploadResponse.status})`)
+    console.log(`âœ… Label uploaded successfully: ${trimmedKey} (status: ${uploadResponse.status})`)
     return trimmedKey
   } catch (err: any) {
     console.error(
-      `❌ Failed to generate/upload label for order ${order?.order_number}:`,
+      `âŒ Failed to generate/upload label for order ${order?.order_number}:`,
       err?.message || err,
       err?.stack,
     )

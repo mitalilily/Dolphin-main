@@ -15,20 +15,20 @@ const db = drizzle(pool)
 
 async function runMigration() {
   try {
-    console.log('🔄 Starting courier composite key migration...\n')
+    console.log('ðŸ”„ Starting courier composite key migration...\n')
 
     // Step 1: Drop FK constraint (legacy table may not exist in all DBs)
-    console.log('Step 1: Dropping FK constraint from DelExpress_zones (if present)...')
+    console.log('Step 1: Dropping FK constraint from Dolphin_zones (if present)...')
     await db.execute(sql`
       DO $$
       BEGIN
-        IF to_regclass('"DelExpress_zones"') IS NOT NULL THEN
-          ALTER TABLE "DelExpress_zones"
-          DROP CONSTRAINT IF EXISTS "DelExpress_zones_courier_id_couriers_id_fk";
+        IF to_regclass('"Dolphin_zones"') IS NOT NULL THEN
+          ALTER TABLE "Dolphin_zones"
+          DROP CONSTRAINT IF EXISTS "Dolphin_zones_courier_id_couriers_id_fk";
         END IF;
       END $$;
     `)
-    console.log('  ✓ Done\n')
+    console.log('  âœ“ Done\n')
 
     // Step 2: Update NULL serviceProvider values
     console.log('Step 2: Updating NULL serviceProvider values to nimbuspost...')
@@ -37,7 +37,7 @@ async function runMigration() {
       SET "serviceProvider" = 'nimbuspost' 
       WHERE "serviceProvider" IS NULL
     `)
-    console.log(`  ✓ Updated ${result.rowCount} rows\n`)
+    console.log(`  âœ“ Updated ${result.rowCount} rows\n`)
 
     // Step 3: Make serviceProvider NOT NULL
     console.log('Step 3: Making serviceProvider NOT NULL...')
@@ -45,7 +45,7 @@ async function runMigration() {
       ALTER TABLE "couriers" 
       ALTER COLUMN "serviceProvider" SET NOT NULL
     `)
-    console.log('  ✓ Done\n')
+    console.log('  âœ“ Done\n')
 
     // Step 4: Drop old primary key
     console.log('Step 4: Dropping old primary key...')
@@ -53,7 +53,7 @@ async function runMigration() {
       ALTER TABLE "couriers" 
       DROP CONSTRAINT IF EXISTS "couriers_pkey"
     `)
-    console.log('  ✓ Done\n')
+    console.log('  âœ“ Done\n')
 
     // Step 5: Create composite primary key
     console.log('Step 5: Creating composite primary key (id, serviceProvider)...')
@@ -61,16 +61,16 @@ async function runMigration() {
       ALTER TABLE "couriers" 
       ADD PRIMARY KEY ("id", "serviceProvider")
     `)
-    console.log('  ✓ Done\n')
+    console.log('  âœ“ Done\n')
 
-    console.log('✅ Migration completed successfully!')
-    console.log('✅ Couriers table now uses composite primary key (id, serviceProvider)')
-    console.log('⚠️  Note: FK constraint from zones table was not recreated.')
+    console.log('âœ… Migration completed successfully!')
+    console.log('âœ… Couriers table now uses composite primary key (id, serviceProvider)')
+    console.log('âš ï¸  Note: FK constraint from zones table was not recreated.')
 
     await pool.end()
     process.exit(0)
   } catch (error: any) {
-    console.error('❌ Migration failed:', error.message)
+    console.error('âŒ Migration failed:', error.message)
     console.error(error)
     await pool.end()
     process.exit(1)

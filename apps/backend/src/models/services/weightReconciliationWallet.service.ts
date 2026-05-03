@@ -10,7 +10,7 @@ import { createWalletTransaction } from './wallet.service'
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, '../../.env.${env}') })
 
-const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@DelExpress.in'
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@dolphinenterprises.in'
 const GOOGLE_SMTP_USER = process.env.GOOGLE_SMTP_USER || EMAIL_FROM
 const GOOGLE_SMTP_PASSWORD = process.env.GOOGLE_SMTP_PASSWORD!
 const SMTP_HOST = process.env.SMTP_HOST
@@ -45,7 +45,7 @@ async function sendEmail(opts: { to: string; subject: string; html: string }) {
       })
 
   const mailOptions = {
-    from: `"DelExpress" <${EMAIL_FROM}>`,
+    from: `"Dolphin" <${EMAIL_FROM}>`,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
@@ -132,12 +132,12 @@ export async function applyWeightDiscrepancyCharge(
       const newBalance = currentBalance - additionalCharge
       await sendEmail({
         to: user.email,
-        subject: '💰 Wallet Debited - Weight Discrepancy Charge',
+        subject: 'ðŸ’° Wallet Debited - Weight Discrepancy Charge',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #333;">Wallet Transaction</h2>
             <p>Hi,</p>
-            <p>₹${additionalCharge.toFixed(
+            <p>â‚¹${additionalCharge.toFixed(
               2,
             )} has been debited from your wallet for weight discrepancy charges.</p>
             
@@ -148,8 +148,8 @@ export async function applyWeightDiscrepancyCharge(
               <p><strong>Declared Weight:</strong> ${discrepancy.declared_weight} kg</p>
               <p><strong>Charged Weight:</strong> ${discrepancy.charged_weight} kg</p>
               <p><strong>Difference:</strong> ${discrepancy.weight_difference} kg</p>
-              <p><strong>Amount Debited:</strong> ₹${additionalCharge.toFixed(2)}</p>
-              <p><strong>Remaining Balance:</strong> ₹${newBalance.toFixed(2)}</p>
+              <p><strong>Amount Debited:</strong> â‚¹${additionalCharge.toFixed(2)}</p>
+              <p><strong>Remaining Balance:</strong> â‚¹${newBalance.toFixed(2)}</p>
             </div>
             
             <p>If you believe this charge is incorrect, you can raise a dispute from your dashboard.</p>
@@ -231,12 +231,12 @@ export async function refundWeightDiscrepancyCharge(
       const newBalance = Number(wallet.balance) + refundAmount
       await sendEmail({
         to: user.email,
-        subject: '✅ Refund Processed - Weight Dispute Approved',
+        subject: 'âœ… Refund Processed - Weight Dispute Approved',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <h2 style="color: #28a745;">Refund Processed</h2>
             <p>Hi,</p>
-            <p>Good news! Your weight dispute has been approved and ₹${refundAmount.toFixed(
+            <p>Good news! Your weight dispute has been approved and â‚¹${refundAmount.toFixed(
               2,
             )} has been refunded to your wallet.</p>
             
@@ -244,8 +244,8 @@ export async function refundWeightDiscrepancyCharge(
               <h3 style="margin-top: 0;">Refund Details</h3>
               <p><strong>Order Number:</strong> ${discrepancy.order_number}</p>
               <p><strong>AWB:</strong> ${discrepancy.awb_number || 'N/A'}</p>
-              <p><strong>Refund Amount:</strong> ₹${refundAmount.toFixed(2)}</p>
-              <p><strong>New Balance:</strong> ₹${newBalance.toFixed(2)}</p>
+              <p><strong>Refund Amount:</strong> â‚¹${refundAmount.toFixed(2)}</p>
+              <p><strong>New Balance:</strong> â‚¹${newBalance.toFixed(2)}</p>
             </div>
             
             ${

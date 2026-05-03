@@ -63,7 +63,7 @@ export async function createWalletOrder(
     amount: razorpayOrder.amount,
     currency: razorpayOrder.currency,
     key: keyId,
-    name: 'DelExpress',
+    name: 'Dolphin',
     description: 'Wallet Recharge',
     prefill: {
       name: details.name,
@@ -76,7 +76,7 @@ export async function createWalletOrder(
   }
 }
 
-/* 2️⃣  success */
+/* 2ï¸âƒ£  success */
 export async function confirmSuccess(orderId: string, paymentId: string, paise: number) {
   const amount = paise / 100
 
@@ -97,7 +97,7 @@ export async function confirmSuccess(orderId: string, paymentId: string, paise: 
     .returning()
 
   if (!row) {
-    console.error('❌ Topup not found for order:', orderId)
+    console.error('âŒ Topup not found for order:', orderId)
     return
   }
 
@@ -113,7 +113,7 @@ export async function confirmSuccess(orderId: string, paymentId: string, paise: 
   })
 }
 
-/* 3️⃣  failure */
+/* 3ï¸âƒ£  failure */
 export async function confirmFailure(orderId: string, paymentId: string | null, reason: string) {
   await db
     .update(walletTopups)
@@ -132,7 +132,7 @@ export async function confirmFailure(orderId: string, paymentId: string | null, 
     .returning()
 }
 
-/* 4️⃣  hmac */
+/* 4ï¸âƒ£  hmac */
 
 export async function markTopupProcessing(orderId: string, paymentId: string) {
   await db

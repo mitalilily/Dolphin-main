@@ -75,17 +75,17 @@ export const sanitizeOrderForCustomer = async (order: any): Promise<any> => {
     const orderRef = String(order?.order_number || order?.id || 'order').trim() || 'order'
     const [labelUrl, manifestUrl, invoiceUrl] = await Promise.all([
       ensureDownloadUrl(order.label, {
-        disposition: 'attachment',
+        disposition: 'inline',
         downloadName: `label-${orderRef}.pdf`,
         contentType: 'application/pdf',
       }),
       ensureDownloadUrl(order.manifest, {
-        disposition: 'attachment',
+        disposition: 'inline',
         downloadName: `manifest-${orderRef}.pdf`,
         contentType: 'application/pdf',
       }),
       ensureDownloadUrl(order.invoice_link, {
-        disposition: 'attachment',
+        disposition: 'inline',
         downloadName: `invoice-${orderRef}.pdf`,
         contentType: 'application/pdf',
       }),

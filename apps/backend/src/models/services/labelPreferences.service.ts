@@ -36,7 +36,7 @@ export const DEFAULT_PREFERENCES = {
     otherCharges: true,
   },
   brand_logo: null,
-  powered_by: 'DelExpress',
+  powered_by: 'Dolphin',
   created_at: new Date(),
   updated_at: new Date(),
 }

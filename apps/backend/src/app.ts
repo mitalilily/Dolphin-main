@@ -12,6 +12,7 @@ import {
 } from './controllers/webhooks/delhivery.webhook'
 import { ekartWebhookHandler } from './controllers/webhooks/ekart.webhook'
 import { icarryWebhookHandler } from './controllers/webhooks/icarry.webhook'
+import { razorpayWebhook } from './controllers/webhooks/razorpay.webhooks'
 import { shipmozoWebhookHandler } from './controllers/webhooks/shipmozo.webhook'
 import { shiprocketWebhookHandler } from './controllers/webhooks/shiprocket.webhook'
 import { truxcargoWebhookHandler } from './controllers/webhooks/truxcargo.webhook'
@@ -172,6 +173,12 @@ app.post(
   '/api/webhook/shopify/orders',
   express.raw({ type: 'application/json' }),
   shopifyOrderWebhookController,
+)
+
+app.post(
+  '/api/payments/wallet/webhook',
+  express.raw({ type: 'application/json' }),
+  razorpayWebhook,
 )
 
 // KYC demo mode can send inline base64 documents in one request.

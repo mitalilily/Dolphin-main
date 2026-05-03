@@ -278,7 +278,7 @@ export const fetchIndianHolidaysFromAPI = async (year: number) => {
     const response = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/IN`, {
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'DelExpress/1.0',
+        'User-Agent': 'Dolphin/1.0',
       },
       signal: controller.signal,
     })
@@ -291,7 +291,7 @@ export const fetchIndianHolidaysFromAPI = async (year: number) => {
         const data = await response.json()
 
         if (Array.isArray(data) && data.length > 0) {
-          console.log(`✅ Fetched ${data.length} holidays from Nager.Date API for ${year}`)
+          console.log(`âœ… Fetched ${data.length} holidays from Nager.Date API for ${year}`)
 
           // Map API response to our format
           apiHolidays = data.map((holiday: any) => {
@@ -316,13 +316,13 @@ export const fetchIndianHolidaysFromAPI = async (year: number) => {
         }
       }
     } else {
-      console.warn(`⚠️ Nager.Date API returned status ${response.status} for ${year}`)
+      console.warn(`âš ï¸ Nager.Date API returned status ${response.status} for ${year}`)
     }
   } catch (error: any) {
     if (error.name === 'AbortError') {
-      console.warn(`⚠️ Nager.Date API timeout for ${year}`)
+      console.warn(`âš ï¸ Nager.Date API timeout for ${year}`)
     } else {
-      console.warn(`⚠️ Nager.Date API failed for ${year}:`, error.message)
+      console.warn(`âš ï¸ Nager.Date API failed for ${year}:`, error.message)
     }
   }
 
@@ -342,7 +342,7 @@ export const fetchIndianHolidaysFromAPI = async (year: number) => {
     })
 
     console.log(
-      `📅 Merged ${apiHolidays.length} holidays (${
+      `ðŸ“… Merged ${apiHolidays.length} holidays (${
         apiHolidays.length - calculatedHolidays.length
       } from API + regional holidays)`,
     )
@@ -351,7 +351,7 @@ export const fetchIndianHolidaysFromAPI = async (year: number) => {
 
   // Fallback to calculated dates only (includes all regional holidays like Lohri, Pongal, etc.)
   console.log(
-    `📅 Using calculated dates for ${year} (includes regional holidays like Lohri, Pongal, Onam, etc.)`,
+    `ðŸ“… Using calculated dates for ${year} (includes regional holidays like Lohri, Pongal, Onam, etc.)`,
   )
   return calculatedHolidays
 }

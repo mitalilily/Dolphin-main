@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: delexpress-backend
+    name: dolphin-backend
     runtime: node
     rootDir: apps/backend
     buildCommand: npm install && npm run build
@@ -11,7 +11,7 @@ services:
         value: production
       - key: DATABASE_URL
         fromDatabase:
-          name: delexpress-postgres
+          name: dolphin-postgres
           property: connectionString
       - key: CORS_ORIGINS
         sync: false
@@ -87,5 +87,5 @@ services:
         sync: false
 
 databases:
-  - name: delexpress-postgres
-    databaseName: delexpress
+  - name: dolphin-postgres
+    databaseName: dolphin

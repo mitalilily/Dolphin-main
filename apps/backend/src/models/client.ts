@@ -1,4 +1,4 @@
-﻿import * as dotenv from 'dotenv'
+import * as dotenv from 'dotenv'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import * as schema from '../schema/schema'
@@ -6,6 +6,7 @@ import * as schema from '../schema/schema'
 // Load environment variables (platform-injected in production).
 const env = process.env.NODE_ENV || 'development'
 console.log('ENVIRONMENT', env)
+dotenv.config({ path: `.env.${env}` })
 dotenv.config()
 
 if (!process.env.DATABASE_URL) {
@@ -83,4 +84,3 @@ export const testDatabaseConnection = async (): Promise<boolean> => {
     return false
   }
 }
-

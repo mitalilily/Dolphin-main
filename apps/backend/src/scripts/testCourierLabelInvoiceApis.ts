@@ -1,8 +1,8 @@
-import { IcarryService } from '../models/services/couriers/icarry.service'
-import { DelhiveryService } from '../models/services/couriers/delhivery.service'
-import { ShiprocketCourierService } from '../models/services/couriers/shiprocket.service'
-import { ShipmozoService } from '../models/services/couriers/shipmozo.service'
-import { TruxcargoService } from '../models/services/couriers/truxcargo.service'
+import * as dotenv from 'dotenv'
+import path from 'path'
+
+const env = process.env.NODE_ENV || 'development'
+dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
 
 const toText = (value: unknown) => String(value ?? '').trim()
 
@@ -27,6 +27,12 @@ async function runCase(name: string, fn: () => Promise<any>) {
 
 async function main() {
   const summary: Array<{ api: string; ok: boolean; message: string }> = []
+  const { IcarryService } = require('../models/services/couriers/icarry.service')
+  const { DelhiveryService } = require('../models/services/couriers/delhivery.service')
+  const { ShiprocketCourierService } = require('../models/services/couriers/shiprocket.service')
+  const { ShipmozoService } = require('../models/services/couriers/shipmozo.service')
+  const { TruxcargoService } = require('../models/services/couriers/truxcargo.service')
+
   const delhivery = new DelhiveryService()
   const shiprocket = new ShiprocketCourierService()
   const icarry = new IcarryService()

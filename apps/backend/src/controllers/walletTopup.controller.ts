@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { createWalletOrder, markTopupProcessing } from '../models/services/walletTopupService'
 import { getPaymentOptions } from '../models/services/paymentOptions.service'
+import { verifyRazorpayPaymentSignature } from '../utils/razorpay'
 
 export const createTopup = async (req: Request, res: Response): Promise<any> => {
   const amt = Number(req.body.amount)
@@ -26,6 +27,9 @@ export const createTopup = async (req: Request, res: Response): Promise<any> => 
     }
 
     const userId = (req as any).user?.sub
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' })
+    }
 
     // Razorpay order creation
     const data = await createWalletOrder(userId, amt, { name, email, phone })
@@ -39,8 +43,15 @@ export const createTopup = async (req: Request, res: Response): Promise<any> => 
 }
 
 export const confirmFromClient = async (req: Request, res: Response) => {
-  const { orderId, paymentId } = req.body
-  // Optional: lookup payment via Razorpay REST here
+  const { orderId, paymentId, signature } = req.body
+  if (!orderId || !paymentId || !signature) {
+    return res.status(400).json({ error: 'Missing Razorpay payment confirmation details' })
+  }
+
+  if (!verifyRazorpayPaymentSignature({ orderId, paymentId, signature })) {
+    return res.status(400).json({ error: 'Invalid Razorpay payment signature' })
+  }
+
   await markTopupProcessing(orderId, paymentId)
   res.json({ ok: true })
 }

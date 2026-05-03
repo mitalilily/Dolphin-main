@@ -7,6 +7,10 @@ import RequireOnboard from '../components/auth/wrapper/RequireOnboard'
 import Layout from '../components/UI/Layout'
 import FullScreenLoader from '../components/UI/loader/FullScreenLoader'
 import NavigationLoader from '../components/UI/loader/NavigationLoader'
+import LandingMainLayout from '../landing/components/dolphin/MainLayout.jsx'
+import LandingPage from '../landing/pages/LandingPage.jsx'
+import RateCalculatorLandingPage from '../landing/pages/RateCalculatorPage.jsx'
+import VolumetricCalculatorPage from '../landing/pages/VolumetricCalculatorPage.jsx'
 import Login from '../pages/auth/Login'
 import Signup from '../pages/auth/Signup'
 import ClientPreview from '../pages/preview/ClientPreview'
@@ -106,12 +110,16 @@ export default function AppRoutes() {
       <Suspense fallback={<FullScreenLoader />}>
         <Routes>
           {/* public */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route element={<LandingMainLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/rate-calculator" element={<RateCalculatorLandingPage />} />
+            <Route path="/volumetric-weight-calculator" element={<VolumetricCalculatorPage />} />
+          </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/app" element={<AppEntry />} />
           <Route path="/preview" element={<ClientPreview />} />
-          <Route path="/tracking" element={<OrderTracking />} /> {/* 👈 NEW ROUTE */}
+          <Route path="/tracking" element={<OrderTracking />} />
           {/* onboarding */}
           <Route
             path="/onboarding-questions"
@@ -189,7 +197,7 @@ export default function AppRoutes() {
             <Route path="/ops/rto" element={<RtoList />} />
           </Route>
           {/* fallback */}
-          <Route path="*" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     </BrowserRouter>
