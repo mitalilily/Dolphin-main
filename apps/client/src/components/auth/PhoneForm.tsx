@@ -9,9 +9,12 @@ import {
   Typography,
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
+import { useGoogleLogin } from '@react-oauth/google'
 import { useCallback, useEffect, useState } from 'react'
 import { FiMail, FiShield } from 'react-icons/fi'
-import { useRequestOtp } from '../../hooks/useOTP'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/auth/AuthContext'
+import { useGoogleLoginMutation, useRequestOtp } from '../../hooks/useOTP'
 import { TERMS_AND_CONDITIONS } from '../../utils/constants'
 import { TEXT } from '../../theme/theme'
 import CustomIconLoadingButton from '../UI/button/CustomLoadingButton'
@@ -19,6 +22,7 @@ import CustomCheckbox from '../UI/inputs/CustomCheckbox'
 import CustomInput from '../UI/inputs/CustomInput'
 import CustomModal from '../UI/modal/CustomModal'
 import { toast } from '../UI/Toast'
+import SocialLoginOptions from './SocialLoginOptions'
 import OtpForm from './OtpForm'
 import PasswordLoginForm from './PasswordLoginForm'
 import { getAuthErrorMessage } from './getAuthErrorMessage'
@@ -39,6 +43,71 @@ const secondaryButtonStyles = {
   backgroundColor: alpha(DE_BLUE, 0.04),
   color: DE_BLUE,
   borderRadius: 1,
+}
+
+const hasGoogleOAuthClient = Boolean(import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID)
+
+function GoogleSocialLogin({ termsChecked }: { termsChecked: boolean }) {
+  const navigate = useNavigate()
+  const { setTokens, setUserId } = useAuth()
+  const { mutate: googleLogin, isPending: googleLoading } = useGoogleLoginMutation()
+
+  const loginWithGoogle = useGoogleLogin({
+    flow: 'auth-code',
+    onSuccess: ({ code }) => {
+      if (!code) {
+        toast.open({
+          message: 'Google did not return a login code. Please try again.',
+          severity: 'error',
+          position: { vertical: 'top', horizontal: 'center' },
+        })
+        return
+      }
+
+      googleLogin(code, {
+        onSuccess: ({ token, refreshToken, user }) => {
+          if (user?.email) sessionStorage.setItem('activeEmail', user.email)
+          setUserId(user?.id)
+          setTokens(token, refreshToken)
+          navigate('/app', { replace: true })
+        },
+        onError: (error: any) => {
+          toast.open({
+            message: getAuthErrorMessage(error, 'Google login failed'),
+            severity: 'error',
+            position: { vertical: 'top', horizontal: 'center' },
+          })
+        },
+      })
+    },
+    onError: () => {
+      toast.open({
+        message: 'Google login was cancelled or failed. Please try again.',
+        severity: 'error',
+        position: { vertical: 'top', horizontal: 'center' },
+      })
+    },
+  })
+
+  return (
+    <SocialLoginOptions
+      googleLoading={googleLoading}
+      onSelect={(method) => {
+        if (method !== 'google') return
+
+        if (!termsChecked) {
+          toast.open({
+            message: 'Please accept the Terms and Conditions to continue.',
+            severity: 'warning',
+            position: { vertical: 'top', horizontal: 'center' },
+          })
+          return
+        }
+
+        loginWithGoogle()
+      }}
+    />
+  )
 }
 
 export default function PhoneForm() {
@@ -235,6 +304,8 @@ export default function PhoneForm() {
       ) : (
         <PasswordLoginForm step={step} setOpenTerms={setOpenTerms} setStep={setStep} />
       )}
+
+      {hasGoogleOAuthClient ? <GoogleSocialLogin termsChecked={termsChecked} /> : null}
 
       <CustomIconLoadingButton
         styles={secondaryButtonStyles}

@@ -31,6 +31,8 @@ interface AuthCtx {
 
 export const AuthContext = createContext<AuthCtx | undefined>(undefined)
 
+const USER_ID_STORAGE_KEY = 'cc_user_id'
+
 /* ---------- provider ---------- */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient()
@@ -40,7 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(hasTokens)
   const [walletBalance, setWalletBalance] = useState<number | null>(null)
-  const [userId, setUserId] = useState('')
+  const [userId, setUserIdState] = useState(() => localStorage.getItem(USER_ID_STORAGE_KEY) || '')
 
   const {
     data: user,
@@ -49,10 +51,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     refetch: refetchUser,
   } = useUserProfile(isAuthenticated)
 
+  const setUserId: Dispatch<SetStateAction<string>> = (value) => {
+    setUserIdState((currentUserId) => {
+      const nextUserId =
+        typeof value === 'function' ? (value as (previous: string) => string)(currentUserId) : value
+
+      if (nextUserId) {
+        localStorage.setItem(USER_ID_STORAGE_KEY, nextUserId)
+      } else {
+        localStorage.removeItem(USER_ID_STORAGE_KEY)
+      }
+
+      return nextUserId
+    })
+  }
+
   useEffect(() => {
     // If we successfully fetched a user, ensure auth is marked as true.
     if (user?.id) {
       setIsAuthenticated(true)
+      setUserId(user.id)
     }
     // Do NOT automatically mark user as unauthenticated on generic errors here.
     // Auth state should primarily follow presence of valid tokens; 401 handling
@@ -67,6 +85,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const clearTokens = () => {
     clearAuthTokens()
+    localStorage.removeItem(USER_ID_STORAGE_KEY)
+    setUserIdState('')
     setIsAuthenticated(false)
     queryClient.removeQueries({ queryKey: ['userInfo'] })
     queryClient.removeQueries({ queryKey: ['userProfile'] })

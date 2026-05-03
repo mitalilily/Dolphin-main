@@ -1,7 +1,6 @@
 import { Box, CircularProgress, Divider, IconButton, Tooltip, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import type React from 'react'
-import { FaWhatsapp } from 'react-icons/fa'
 import { FcGoogle } from 'react-icons/fc'
 
 const DE_BLUE = '#0052CC'
@@ -35,21 +34,6 @@ export default function SocialLoginOptions({ onSelect, googleLoading }: ISocialL
           borderColor: DE_BLUE,
           boxShadow: '0 8px 24px rgba(0, 82, 204, 0.12)',
           backgroundColor: alpha(DE_BLUE, 0.02),
-        },
-      },
-    },
-    {
-      aria: 'Continue with WhatsApp',
-      icon: <FaWhatsapp size={18} title="WhatsApp Login" />,
-      method: 'whatsapp',
-      sx: {
-        color: '#25D366',
-        borderColor: alpha('#25D366', 0.2),
-        backgroundColor: alpha('#25D366', 0.04),
-        '&:hover': {
-          borderColor: '#25D366',
-          backgroundColor: alpha('#25D366', 0.08),
-          boxShadow: '0 8px 24px rgba(37, 211, 102, 0.12)',
         },
       },
     },

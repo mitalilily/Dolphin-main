@@ -21,6 +21,7 @@ import path from 'path'
 // Load correct .env based on NODE_ENV
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
+dotenv.config()
 const parseBooleanEnv = (value: string | undefined, defaultValue: boolean) => {
   if (value === undefined) return defaultValue
   return value === 'true'
@@ -33,7 +34,16 @@ const maskEmailForLog = (email: string) => {
     localPart.length <= 2 ? `${localPart[0] ?? '*'}*` : `${localPart.slice(0, 2)}***`
   return `${visibleLocal}@${domain}`
 }
-const exposeAuthCodes = parseBooleanEnv(process.env.EXPOSE_AUTH_CODES, env !== 'production')
+const exposeAuthCodes = parseBooleanEnv(process.env.EXPOSE_AUTH_CODES, false)
+
+export const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
+const runWithTransaction = async <T>(executor: any, work: (tx: any) => Promise<T>) => {
+  if (typeof executor?.transaction === 'function') {
+    return executor.transaction(work)
+  }
+  return work(executor)
+}
 
 // Define User and NewUser types for convenience
 export type User = typeof users.$inferSelect
@@ -115,21 +125,42 @@ export const findUserById = async (id: string) => {
 }
 
 export const findUserByEmail = async (email: string, tx: Tx = db) => {
+  const normalized = normalizeEmail(email)
   return await tx.query.users.findFirst({
-    where: (users, { eq }) => eq(users.email, email),
+    where: (users, { eq }) => eq(users.email, normalized),
+  })
+}
+
+export const findUserByGoogleId = async (googleId: string, tx: Tx = db) => {
+  const normalized = String(googleId || '').trim()
+  if (!normalized) return null
+  return await tx.query.users.findFirst({
+    where: (users, { eq }) => eq(users.googleId, normalized),
   })
 }
 
 export const createUser = async (data: NewUser, tx: Tx = db) => {
-  const [user] = await tx.insert(users).values(data).returning()
+  const [user] = await tx
+    .insert(users)
+    .values({
+      ...data,
+      email: data.email ? normalizeEmail(data.email) : data.email,
+    })
+    .returning()
   return user
 }
 
 export const updateUserByEmail = async (email: string, updateData: Partial<User>, tx: Tx = db) => {
+  const normalized = normalizeEmail(email)
+  const sanitizedUpdateData = {
+    ...updateData,
+    ...(updateData.email ? { email: normalizeEmail(updateData.email) } : {}),
+  }
+
   const [updatedUser] = await tx
     .update(users)
-    .set(updateData)
-    .where(eq(users.email, email))
+    .set(sanitizedUpdateData)
+    .where(eq(users.email, normalized))
     .returning()
   return updatedUser
 }
@@ -140,13 +171,14 @@ export const updateUserVerificationToken = async (
   expiresAt: Date | null,
   tx: Tx = db,
 ) => {
+  const normalized = normalizeEmail(email)
   const [updatedUser] = await tx
     .update(users)
     .set({
       emailVerificationToken: token,
       emailVerificationTokenExpiresAt: expiresAt,
     })
-    .where(eq(users.email, email))
+    .where(eq(users.email, normalized))
     .returning()
   return updatedUser
 }
@@ -164,7 +196,7 @@ export const updateUserOtp = async (phone: string, otp: string, otpExpiresAt: Da
 
 // updateUserOtpByEmail.ts - for email-based OTP
 export const updateUserOtpByEmail = async (email: string, otp: string, otpExpiresAt: Date) => {
-  const normalized = email.trim().toLowerCase()
+  const normalized = normalizeEmail(email)
   return await db.update(users).set({ otp, otpExpiresAt }).where(eq(users.email, normalized))
 }
 
@@ -172,9 +204,9 @@ export const updateUserOtpByEmail = async (email: string, otp: string, otpExpire
  * Mark a user's e‑mail as verified in both `users` and `user_profiles`.
  */
 export const markEmailVerified = async (email: string, tx: any = db) => {
-  const normalized = email.trim().toLowerCase()
+  const normalized = normalizeEmail(email)
 
-  return tx.transaction(async (tx: any) => {
+  return runWithTransaction(tx, async (tx: any) => {
     /* 1️⃣  Update `users.emailVerified` and grab the userId */
     const [updatedUser] = await tx
       .update(users)
@@ -248,7 +280,7 @@ export const clearUserOtp = async (phone: string) => {
 
 // clearUserOtpByEmail.ts - for email-based OTP
 export const clearUserOtpByEmail = async (email: string) => {
-  const normalized = email.trim().toLowerCase()
+  const normalized = normalizeEmail(email)
   return await db
     .update(users)
     .set({ otp: null, otpExpiresAt: null })
@@ -256,13 +288,14 @@ export const clearUserOtpByEmail = async (email: string) => {
 }
 
 export const clearUserEmailToken = async (email: string) => {
+  const normalized = normalizeEmail(email)
   await db
     .update(users)
     .set({
       emailVerificationToken: null,
       emailVerificationTokenExpiresAt: null,
     })
-    .where(eq(users.email, email))
+    .where(eq(users.email, normalized))
 }
 
 export const updateUserChannelIntegration = async (
@@ -386,7 +419,7 @@ export const handleEmailVerificationRequest = async (
   googleId: string | null,
 ): Promise<{ status: number; data: any }> => {
   return await db.transaction(async (tx) => {
-    const normalizedEmail = email.trim().toLowerCase()
+    const normalizedEmail = normalizeEmail(email)
     const token = generate8DigitsVerificationToken()
     const expiresAt = new Date(Date.now() + OTP_EXPIRY)
     let shouldSendEmail = false
@@ -405,7 +438,11 @@ export const handleEmailVerificationRequest = async (
             }
           }
           if (!user.googleId) {
-            await updateUserByEmail(normalizedEmail, { googleId }, tx)
+            const updatedUser = await updateUserByEmail(normalizedEmail, { googleId }, tx)
+            return {
+              status: 200,
+              data: { message: 'Authenticated with Google', user: updatedUser || user },
+            }
           }
           return {
             status: 200,
@@ -502,31 +539,38 @@ export const handleEmailVerificationRequest = async (
     // BRAND NEW USER
 
     if (googleId) {
-      await createUserWithWallet({
-        email: normalizedEmail,
-        phone: '',
-        passwordHash: password ? await bcrypt.hash(password, 10) : null,
-        googleId,
-        emailVerified: true,
-        onboardingStep: 0,
-      })
-      return { status: 201, data: { message: 'Account created via Google' } }
+      const user = await createUserWithWallet(
+        {
+          email: normalizedEmail,
+          phone: '',
+          passwordHash: password ? await bcrypt.hash(password, 10) : null,
+          googleId,
+          emailVerified: true,
+          onboardingStep: 0,
+          onboardingComplete: false,
+        },
+        tx,
+      )
+      return { status: 201, data: { message: 'Account created via Google', user } }
     }
 
     if (!password) {
       return { status: 400, data: { error: 'Password is required.' } }
     }
 
-    await createUserWithWallet({
-      email: normalizedEmail,
-      phone: '',
-      passwordHash: await bcrypt.hash(password, 10),
-      googleId: null,
-      emailVerificationToken: token,
-      emailVerificationTokenExpiresAt: expiresAt,
-      emailVerified: false,
-      onboardingStep: 0,
-    })
+    await createUserWithWallet(
+      {
+        email: normalizedEmail,
+        phone: '',
+        passwordHash: await bcrypt.hash(password, 10),
+        googleId: null,
+        emailVerificationToken: token,
+        emailVerificationTokenExpiresAt: expiresAt,
+        emailVerified: false,
+        onboardingStep: 0,
+      },
+      tx,
+    )
 
     shouldSendEmail = true
 
@@ -576,14 +620,16 @@ export const saveRefreshToken = async (
 }
 
 export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) {
-  return txn?.transaction(async (tx: any) => {
+  return runWithTransaction(txn, async (tx: any) => {
     const normalizedRole = data.role && data.role.trim() ? data.role : 'customer'
+    const normalizedEmail = data.email ? normalizeEmail(data.email) : data.email
 
     // 1) insert user
     const [user] = await tx
       .insert(users)
       .values({
         ...(data as IUser),
+        email: normalizedEmail,
         role: normalizedRole,
       })
       .returning()
@@ -686,8 +732,9 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
 
     const companyInfo = {
       ...DEFAULT_PROFILE.companyInfo, // keeps required fields
-      contactEmail: data.email ?? '',
+      contactEmail: normalizedEmail ?? '',
       contactNumber: data.phone ?? '',
+      POCEmailVerified: Boolean(data.emailVerified),
       profilePicture: data?.profilePicture,
     }
 

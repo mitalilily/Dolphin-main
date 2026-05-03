@@ -7,10 +7,12 @@ import {
   clearUserEmailToken,
   clearUserOtpByEmail,
   createUserWithWallet,
+  findUserByGoogleId,
   findUserByEmail,
   findUserById,
   handleEmailVerificationRequest,
   markEmailVerified,
+  normalizeEmail,
   saveRefreshToken,
   updateUserByEmail,
   updateUserOtpByEmail,
@@ -448,8 +450,8 @@ export const verifyEmailToken = async (req: Request, res: Response): Promise<any
   }
 }
 
-// Init Google client with your client ID
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+// Init Google client with your web OAuth client ID.
+const googleClient = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID)
 
 export const googleOAuthLogin = async (req: Request, res: Response): Promise<any> => {
   const { code } = req.body
@@ -466,12 +468,12 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
       grant_type: 'authorization_code',
     })
 
-    const { access_token, id_token } = tokenResponse.data
+    const { id_token } = tokenResponse.data
 
     // ✅ Step 2: Verify id_token (crucial for security)
     const ticket = await googleClient.verifyIdToken({
       idToken: id_token,
-      audience: process.env.GOOGLE_CLIENT_ID, // Make sure this matches
+      audience: process.env.GOOGLE_OAUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
     })
 
     const payload = ticket.getPayload()
@@ -479,42 +481,58 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
       return res.status(400).json({ error: 'Google ID token is invalid or missing email' })
     }
 
-    const { email, name, sub: googleId, picture } = payload
+    if (payload.email_verified === false) {
+      return res.status(401).json({ error: 'Google email is not verified' })
+    }
 
-    // ✅ Step 3: Create or update user
-    let user = await findUserByEmail(email)
+    const { name, sub: googleId, picture } = payload
+    const email = normalizeEmail(payload.email)
 
-    if (user) {
-      await updateUserByEmail(email, {
-        googleId,
-        profilePicture: picture,
-        emailVerified: true,
-        // firstName: user.firstName ?? name,
-      })
-    } else {
-      await db.transaction(async (tx) => {
-        /* 1️⃣  Create user + wallet */
-        await createUserWithWallet(
-          {
-            email,
-            googleId,
-            firstName: name,
-            phone: '',
-            emailVerified: true,
-            onboardingStep: 0,
-            onboardingComplete: false,
-            profilePicture: picture,
-          },
-          tx, // <-- transaction‑scoped Drizzle instance
-        )
-
-        /* 2️⃣  Mark e‑mail as verified */
-        await markEmailVerified(email, tx)
-        // Any thrown error aborts here and rolls back everything automatically.
+    const userWithGoogleId = await findUserByGoogleId(googleId)
+    if (userWithGoogleId && normalizeEmail(String(userWithGoogleId.email || '')) !== email) {
+      return res.status(409).json({
+        error: 'This Google account is already linked to another Dolphin user.',
       })
     }
 
-    user = await findUserByEmail(email)
+    // Step 3: Create or update the account that owns this email.
+    // Email is the stable identity, so an existing user never becomes a duplicate Google user.
+    let user: any = await findUserByEmail(email)
+
+    if (user) {
+      if (user.role === 'employee') {
+        const existingUserId = user.id
+        const employeeRecord = await db.query.employees.findFirst({
+          where: (employees, { eq }) => eq(employees.userId, existingUserId),
+        })
+
+        if (!employeeRecord?.isActive) {
+          return res.status(403).json({ error: 'Employee account is inactive.' })
+        }
+      }
+
+      user =
+        (await updateUserByEmail(email, {
+          // If this email was password/OTP-only before, link Google without changing the DB user.
+          googleId,
+          profilePicture: picture,
+          emailVerified: true,
+        })) || user
+    } else {
+      user = await createUserWithWallet({
+        email,
+        googleId,
+        firstName: name,
+        phone: '',
+        emailVerified: true,
+        onboardingStep: 0,
+        onboardingComplete: false,
+        profilePicture: picture,
+      })
+    }
+
+    await markEmailVerified(email)
+    user = user?.id ? await findUserById(user.id) : await findUserByEmail(email)
 
     if (user) {
       /* ── Sign & Set JWTs ────────────────────────────────────────────── */
@@ -537,6 +555,9 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
           phoneVerified: user?.phoneVerified,
           profilePicture: user?.profilePicture,
           role: user?.role,
+          onboardingStep: user?.onboardingStep,
+          onboardingComplete: user?.onboardingComplete,
+          approved: user?.approved,
         },
       })
     } else {
