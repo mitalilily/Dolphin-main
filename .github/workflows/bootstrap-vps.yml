@@ -1,0 +1,40 @@
+name: Bootstrap VPS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bootstrap VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            export APP_DIR=/var/www/dolphin
+            export REPO_URL=https://github.com/mitalilily/Dolphin-main.git
+            export PUBLIC_ORIGIN=${{ secrets.PUBLIC_ORIGIN }}
+            export PGADMIN_EMAIL=${{ secrets.PGADMIN_EMAIL }}
+            export PGADMIN_PASSWORD=${{ secrets.PGADMIN_PASSWORD }}
+
+            mkdir -p /root
+            cat > /root/dolphin-backend.env <<'EOF'
+            ${{ secrets.BACKEND_ENV }}
+            EOF
+            chmod 600 /root/dolphin-backend.env
+
+            if [ ! -d "$APP_DIR/.git" ]; then
+              rm -rf "$APP_DIR"
+              git clone "$REPO_URL" "$APP_DIR"
+            fi
+
+            cd "$APP_DIR"
+            git fetch origin main
+            git reset --hard origin/main
+            bash scripts/vps/bootstrap.sh

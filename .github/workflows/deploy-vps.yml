@@ -1,0 +1,25 @@
+name: Deploy VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy on VPS
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          script_stop: true
+          script: |
+            export APP_DIR=/var/www/dolphin
+            export PUBLIC_ORIGIN=${{ secrets.PUBLIC_ORIGIN }}
+            cd "$APP_DIR"
+            bash scripts/vps/deploy.sh
