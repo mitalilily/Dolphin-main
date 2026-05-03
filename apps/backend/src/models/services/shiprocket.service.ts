@@ -334,6 +334,7 @@ const extractTruxcargoShipmentIdentifiers = (source: any) => {
       'awb',
       'tracking_id',
       'tracking_number',
+      'tracking_no',
       'lr_number',
       'wbn',
       'cn_number',
@@ -343,7 +344,9 @@ const extractTruxcargoShipmentIdentifiers = (source: any) => {
       'shipment_id',
       'shipmentId',
       'order_id',
+      'orderId',
       'order_number',
+      'orderNumber',
       'reference_id',
       'tracking_id',
     ]) ?? awb
@@ -385,8 +388,21 @@ const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
 
   return objects.find((row) => {
     const ids = [
-      getFirstTruxcargoValue(row, ['order_id', 'order_number', 'client_order_id', 'reference_id']),
-      getFirstTruxcargoValue(row, ['seller_order_id', 'customer_order_id', 'invoice_no']),
+      getFirstTruxcargoValue(row, [
+        'order_id',
+        'orderId',
+        'order_number',
+        'orderNumber',
+        'client_order_id',
+        'reference_id',
+      ]),
+      getFirstTruxcargoValue(row, [
+        'seller_order_id',
+        'customer_order_id',
+        'merchant_order_id',
+        'seller_invoice_no',
+        'invoice_no',
+      ]),
     ]
       .map((value) => String(value || '').trim().toLowerCase())
       .filter(Boolean)
@@ -395,15 +411,7 @@ const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
   })
 }
 
-const findFirstTruxcargoShipmentWithIdentifiers = (response: any) => {
-  const objects = flattenTruxcargoObjects(response)
-  return objects.find((row) => {
-    const identifiers = extractTruxcargoShipmentIdentifiers(row)
-    return Boolean(identifiers.awb)
-  })
-}
-
-const buildTruxcargoRemoteOrderId = (orderNumber: unknown) => {
+const buildTruxcargoRemoteOrderId = (orderNumber: unknown, forceUnique = false) => {
   const base =
     String(orderNumber || 'ORD')
       .trim()
@@ -411,10 +419,52 @@ const buildTruxcargoRemoteOrderId = (orderNumber: unknown) => {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '')
       .slice(0, 28) || 'ORD'
+  if (!forceUnique) return base.slice(0, 48)
   const uniquePart = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, '')
   return `${base}-TX${uniquePart}`.slice(0, 48)
+}
+
+const resolveTruxcargoCreatedShipment = (response: any, expectedOrderIds: string[]) => {
+  const payload = response?.data ?? response
+  const normalizedExpected = expectedOrderIds
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean)
+
+  for (const expectedId of normalizedExpected) {
+    const matched = findTruxcargoOrderInResponse(payload, expectedId)
+    if (matched) return matched
+  }
+
+  const directIdentifiers = extractTruxcargoShipmentIdentifiers(payload)
+  if (directIdentifiers.awb) {
+    const directIds = [
+      getFirstTruxcargoValue(directIdentifiers.raw, [
+        'order_id',
+        'orderId',
+        'order_number',
+        'orderNumber',
+        'client_order_id',
+        'reference_id',
+      ]),
+      getFirstTruxcargoValue(directIdentifiers.raw, [
+        'seller_order_id',
+        'customer_order_id',
+        'merchant_order_id',
+        'seller_invoice_no',
+        'invoice_no',
+      ]),
+    ]
+      .map((value) => String(value || '').trim().toLowerCase())
+      .filter(Boolean)
+
+    if (!directIds.length || directIds.some((id) => normalizedExpected.includes(id))) {
+      return directIdentifiers.raw
+    }
+  }
+
+  return null
 }
 
 const TRUXCARGO_INVOICE_KEYS = [
@@ -4920,9 +4970,14 @@ export const createB2CShipmentService = async (
             const lookupResp = await lookup()
             const matchedOrder =
               findTruxcargoOrderInResponse(lookupResp, truxRemoteOrderId) ||
-              findTruxcargoOrderInResponse(lookupResp, truxMerchantOrderNumber) ||
-              findFirstTruxcargoShipmentWithIdentifiers(lookupResp) ||
-              lookupResp
+              findTruxcargoOrderInResponse(lookupResp, truxMerchantOrderNumber)
+            if (!matchedOrder) {
+              console.warn('[Truxcargo] Duplicate recovery lookup returned no exact order match', {
+                order_number: params.order_number,
+                lookup_ids: lookupIds,
+              })
+              continue
+            }
             const identifiers = extractTruxcargoShipmentIdentifiers(matchedOrder)
             if (identifiers.awb) {
               console.warn('[Truxcargo] Recovered duplicate remote order', {
@@ -4962,7 +5017,7 @@ export const createB2CShipmentService = async (
         if (recovered) {
           createOrderResp = recovered
         } else if (isTruxcargoDuplicateOrderError(createErr?.message || createErr)) {
-          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber, true)
           console.warn('[Truxcargo] Duplicate recovery failed; retrying with fresh remote order id', {
             order_number: truxMerchantOrderNumber,
             previous_remote_order_id: truxRemoteOrderId,
@@ -4997,7 +5052,7 @@ export const createB2CShipmentService = async (
         if (recovered) {
           createOrderResp = recovered
         } else if (isTruxcargoDuplicateOrderError(rejectionMessage)) {
-          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+          const retryRemoteOrderId = buildTruxcargoRemoteOrderId(truxMerchantOrderNumber, true)
           console.warn('[Truxcargo] Duplicate rejection recovery failed; retrying with fresh remote order id', {
             order_number: truxMerchantOrderNumber,
             previous_remote_order_id: truxRemoteOrderId,
@@ -5033,7 +5088,16 @@ export const createB2CShipmentService = async (
           ),
         )
       }
-      const finalTruxPayload = recoveredPayload
+      const finalTruxPayload = resolveTruxcargoCreatedShipment(createOrderResp, [
+        truxRemoteOrderId,
+        truxMerchantOrderNumber,
+      ])
+      if (!finalTruxPayload) {
+        throw new HttpError(
+          502,
+          'Truxcargo order creation did not return an AWB tied to this order. Refusing to store an unrelated waybill.',
+        )
+      }
       const truxWaybill =
         finalTruxPayload?.waybill ??
         finalTruxPayload?.awb_number ??
@@ -9511,15 +9575,19 @@ const mapTruxcargoTracking = (raw: any, order: OrderSummary): ProviderNormalized
   const statusText = sanitizeString(statusObj?.Status || shipment?.status || order.order_status)
   const location = sanitizeString(statusObj?.StatusLocation || shipment?.current_location || shipment?.location)
   const eventAt = statusObj?.StatusDateTime || shipment?.last_update || shipment?.updated_at || null
-  const scans = Array.isArray(shipment?.Scans) ? shipment.Scans : []
+  const scans = Array.isArray(shipment?.Scans)
+    ? shipment.Scans
+    : Array.isArray(shipment?.scaninfo)
+      ? shipment.scaninfo
+      : []
   if (Array.isArray(scans) && scans.length) {
     scans.forEach((scan: any) => {
       const detail = scan?.ScanDetail || scan || {}
       pushHistoryEvent(history, {
-        statusCode: detail?.StatusCode || detail?.ScanType || detail?.Scan,
-        message: detail?.Instructions || detail?.Status || detail?.Scan,
-        location: detail?.ScannedLocation || location,
-        time: detail?.StatusDateTime || detail?.ScanDateTime || eventAt,
+        statusCode: detail?.StatusCode || detail?.ScanType || detail?.Scan || detail?.status,
+        message: detail?.Instructions || detail?.Status || detail?.Scan || detail?.remark || detail?.status,
+        location: detail?.ScannedLocation || detail?.location || location,
+        time: detail?.StatusDateTime || detail?.ScanDateTime || detail?.date || eventAt,
       })
     })
   } else {

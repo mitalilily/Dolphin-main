@@ -1446,8 +1446,8 @@ const mapXpressbeesStatus = (status: string): string => {
   if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
   if (s.includes('rto') && s.includes('deliver')) return 'rto_delivered'
   if (s.includes('rto')) return 'rto_in_transit'
-  if (s.includes('deliver')) return 'delivered'
   if (s.includes('out for delivery') || s.includes('ofd')) return 'out_for_delivery'
+  if (s === 'delivered' || s.includes(' delivered') || s.includes('delivered ')) return 'delivered'
   if (s.includes('pickup scheduled') || s.includes('pickup requested')) return 'pickup_initiated'
   if (s.includes('pickup') || s.includes('manifest') || s.includes('booked') || s.includes('created')) {
     return 'booked'
@@ -1864,8 +1864,8 @@ const mapGenericWebhookStatus = (status: string): string => {
   if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
   if (s.includes('rto') && s.includes('deliver')) return 'rto_delivered'
   if (s.includes('rto')) return 'rto_in_transit'
-  if (s.includes('deliver')) return 'delivered'
   if (s.includes('out for delivery') || s.includes('ofd')) return 'out_for_delivery'
+  if (s === 'delivered' || s.includes(' delivered') || s.includes('delivered ')) return 'delivered'
   if (s.includes('pickup scheduled') || s.includes('pickup requested')) return 'pickup_initiated'
   if (s.includes('pickup') || s.includes('manifest') || s.includes('booked') || s.includes('created')) {
     return 'booked'
@@ -1890,6 +1890,7 @@ export async function processGenericCourierWebhook(provider: string, payload: an
     event?.awb_number ||
     event?.awb ||
     event?.waybill ||
+    event?.tracking_no ||
     event?.tracking_id ||
     event?.trackingId ||
     event?.wbn ||
@@ -1899,6 +1900,7 @@ export async function processGenericCourierWebhook(provider: string, payload: an
   const orderRef =
     event?.order_number ||
     event?.order_id ||
+    event?.orderId ||
     event?.reference_number ||
     event?.tracking_ref ||
     event?.ref_no ||

@@ -22,8 +22,8 @@ const mapStatus = (status: string): string => {
   if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
   if (s.includes('rto') && s.includes('deliver')) return 'rto_delivered'
   if (s.includes('rto')) return 'rto_in_transit'
-  if (s.includes('deliver')) return 'delivered'
   if (s.includes('out for delivery') || s.includes('ofd')) return 'out_for_delivery'
+  if (s === 'delivered' || s.includes(' delivered') || s.includes('delivered ')) return 'delivered'
   if (s.includes('pickup')) return 'pickup_initiated'
   if (s.includes('manifest') || s.includes('booked') || s.includes('created')) return 'booked'
   return 'in_transit'
@@ -35,20 +35,31 @@ const parseTruxcargoTracking = (trackingResponse: any) => {
   const shipment =
     trackingResponse?.data?.ShipmentData?.[0]?.Shipment ||
     trackingResponse?.ShipmentData?.[0]?.Shipment ||
+    trackingResponse?.data?.shipment ||
+    trackingResponse?.shipment ||
+    (trackingResponse?.data?.tracking_no || trackingResponse?.data?.scaninfo
+      ? trackingResponse.data
+      : null) ||
     null
   if (!shipment) return null
 
   const statusObj = shipment?.Status || {}
-  const scans = Array.isArray(shipment?.Scans) ? shipment.Scans : []
-  const lastScan = scans.length ? scans[scans.length - 1]?.ScanDetail || {} : {}
+  const scans = Array.isArray(shipment?.Scans)
+    ? shipment.Scans
+    : Array.isArray(shipment?.scaninfo)
+      ? shipment.scaninfo
+      : []
+  const lastScan = scans.length ? scans[0]?.ScanDetail || scans[0] || {} : {}
   const statusText =
+    shipment?.status ||
     lastScan?.Scan ||
     lastScan?.ScanType ||
+    lastScan?.status ||
     statusObj?.Status ||
     statusObj?.StatusType ||
     'in_transit'
-  const remarks = lastScan?.Instructions || statusObj?.Instructions || ''
-  const location = lastScan?.ScannedLocation || statusObj?.StatusLocation || ''
+  const remarks = lastScan?.Instructions || lastScan?.remark || statusObj?.Instructions || ''
+  const location = lastScan?.ScannedLocation || lastScan?.location || statusObj?.StatusLocation || ''
 
   return {
     statusText: String(statusText || ''),

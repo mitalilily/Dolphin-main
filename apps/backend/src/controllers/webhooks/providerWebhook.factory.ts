@@ -50,6 +50,7 @@ const extractWebhookMeta = (payload: any) => {
     event?.awb_number ||
     event?.awb ||
     event?.waybill ||
+    event?.tracking_no ||
     event?.tracking_id ||
     event?.trackingId ||
     event?.wbn ||
