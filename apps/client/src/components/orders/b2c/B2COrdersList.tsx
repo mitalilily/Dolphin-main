@@ -965,7 +965,7 @@ const B2COrdersList = () => {
           defaultRowsPerPage={rowsPerPage}
           totalCount={data?.totalCount || 0}
           onPageChange={(newPage) => {
-            setPage(newPage + 1)
+            setPage(newPage)
             clearSelection()
             setBulkFeedback(null)
           }}

@@ -4,7 +4,12 @@ import { useEffect, useState } from 'react'
 import { TbFilter, TbPlus, TbRefresh } from 'react-icons/tb'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { generateManifestService } from '../../api/order.service'
-import { useAllOrders, useB2BOrdersByUser, useB2COrdersByUser } from '../../hooks/Orders/useOrders'
+import {
+  useAllOrders,
+  useB2BOrdersByUser,
+  useB2COrdersByUser,
+  useCancelShipment,
+} from '../../hooks/Orders/useOrders'
 import { usePresignedDownloadMutation } from '../../hooks/Uploads/usePresignedDownloadUrls'
 import { FilterBar, type FilterField } from '../FilterBar'
 import { toast } from '../UI/Toast'
@@ -70,6 +75,37 @@ const isManifestEligible = (order: Order) => {
   return order.type === 'b2c' ? isB2CManifestEligible(order) : false
 }
 
+const getOrderStatus = (order: Order) => String(order.order_status || '').trim().toLowerCase()
+
+const isManifestedOrMoving = (order: Order) =>
+  [
+    'pickup_initiated',
+    'manifest_generated',
+    'in_transit',
+    'out_for_delivery',
+    'delivered',
+  ].includes(getOrderStatus(order))
+
+const isCancellableOrder = (order: Order) => {
+  if (order.type !== 'b2c') return false
+
+  const status = getOrderStatus(order)
+  const cancellableStatuses = new Set(['pending', 'booked', 'shipment_created', 'pickup_initiated'])
+  const provider = String(order.integration_type || order.courier_partner || '')
+    .trim()
+    .toLowerCase()
+  const providerSupports = [
+    'delhivery',
+    'ekart',
+    'xpressbees',
+    'shipmozo',
+    'shiprocket',
+    'truxcargo',
+  ].includes(provider)
+
+  return providerSupports && cancellableStatuses.has(status) && Boolean(order.awb_number)
+}
+
 const AllOrders = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -82,6 +118,8 @@ const AllOrders = () => {
     null,
   )
   const [bulkManifesting, setBulkManifesting] = useState(false)
+  const [manifestingOrderId, setManifestingOrderId] = useState<Order['id'] | null>(null)
+  const [cancellingOrderId, setCancellingOrderId] = useState<Order['id'] | null>(null)
   const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback | null>(null)
   const [filters, setFilters] = useState<OrdersFilters>({
     status: undefined,
@@ -91,6 +129,7 @@ const AllOrders = () => {
   })
   const queryClient = useQueryClient()
   const { mutateAsync: presignDownloads } = usePresignedDownloadMutation()
+  const { mutateAsync: cancelShipment } = useCancelShipment()
   const isB2CView = location.pathname.startsWith('/orders/b2c')
   const isB2BView = location.pathname.startsWith('/orders/b2b')
   const currentOrderView: 'all' | 'b2c' | 'b2b' = isB2CView ? 'b2c' : isB2BView ? 'b2b' : 'all'
@@ -305,6 +344,104 @@ const AllOrders = () => {
     }
   }
 
+  const handleSingleManifest = async (order: Order) => {
+    const manifestRef = getB2CManifestIdentifier(order)
+    const orderLabel = order.order_number || order.id
+
+    if (!manifestRef || !isManifestEligible(order)) {
+      const message = `Manifest cannot be started for ${orderLabel} yet.`
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message,
+      })
+      toast.open({ message, severity: 'error' })
+      return
+    }
+
+    setManifestingOrderId(order.id)
+    setBulkFeedback({
+      severity: 'info',
+      title: 'Manifest in progress',
+      message: `Processing ${orderLabel}.`,
+    })
+
+    try {
+      const response = await generateManifestService({ awbs: [manifestRef], type: 'b2c' })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
+        queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      ])
+
+      const successMessage = `Manifest completed for ${orderLabel}.`
+      const warningSummary = summarizeMessages(response.warnings || [])
+      if (warningSummary) {
+        const warningMessage = `${successMessage} ${warningSummary}`
+        setBulkFeedback({
+          severity: 'warning',
+          title: 'Manifest completed with warnings',
+          message: warningMessage,
+        })
+        toast.open({ message: warningMessage, severity: 'info' })
+        return
+      }
+
+      setBulkFeedback({
+        severity: 'success',
+        title: 'Manifest completed',
+        message: successMessage,
+      })
+      toast.open({ message: successMessage, severity: 'success' })
+    } catch (error) {
+      console.error('Manifest failed for order:', orderLabel, error)
+      const errorMessage = getActionableErrorMessage(error, `Manifest failed for ${orderLabel}.`)
+      const message = `${orderLabel}: ${errorMessage}`
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest failed',
+        message,
+      })
+      toast.open({ message, severity: 'error' })
+    } finally {
+      setManifestingOrderId(null)
+    }
+  }
+
+  const handleCancelOrder = async (order: Order) => {
+    const orderLabel = order.order_number || order.id
+    setCancellingOrderId(order.id)
+    setBulkFeedback({
+      severity: 'info',
+      title: 'Cancellation in progress',
+      message: `Sending cancellation request for ${orderLabel}.`,
+    })
+
+    try {
+      await cancelShipment(String(order.id))
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
+        queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      ])
+      setBulkFeedback({
+        severity: 'success',
+        title: 'Cancellation requested',
+        message: `Cancellation request sent for ${orderLabel}.`,
+      })
+    } catch (error) {
+      console.error('Cancellation failed for order:', orderLabel, error)
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Cancellation failed',
+        message: getActionableErrorMessage(
+          error,
+          `Cancellation could not be completed for ${orderLabel}.`,
+        ),
+      })
+    } finally {
+      setCancellingOrderId(null)
+    }
+  }
+
   const handleBulkDownload = async (type: DocumentType) => {
     if (!selectedOrders.length) {
       const message = 'Select at least one order to download documents.'
@@ -427,27 +564,95 @@ const AllOrders = () => {
   }
 
   const columns: Column<Order>[] = [
-    { id: 'order_number', label: 'Order #' },
-    { id: 'type', label: 'Type' },
-    { id: 'buyer_name', label: 'Buyer Name' },
-    { id: 'city', label: 'City' },
-    { id: 'state', label: 'State' },
-    { id: 'order_amount', label: 'Amount' },
     {
-      id: 'id',
-      label: 'Docs',
-      minWidth: 220,
-      sticky: 'right',
-      stickyOffset: 0,
-      render: (_v, row) => renderDocumentTags(row),
+      id: 'order_number',
+      label: 'Order #',
+      minWidth: 150,
     },
+    { id: 'type', label: 'Type', minWidth: 100 },
+    { id: 'buyer_name', label: 'Buyer Name', minWidth: 180 },
+    { id: 'city', label: 'City', minWidth: 140 },
+    { id: 'state', label: 'State', minWidth: 140 },
+    { id: 'order_amount', label: 'Amount', minWidth: 120 },
     {
       label: 'Status',
       id: 'order_status',
       minWidth: 150,
       sticky: 'right',
-      stickyOffset: 220,
+      stickyOffset: 450,
       render: (v) => <StatusChip label={v} status={statusColorMap[v] || 'info'} />,
+    },
+    {
+      id: 'id',
+      label: 'Docs',
+      minWidth: 220,
+      sticky: 'right',
+      stickyOffset: 230,
+      truncate: false,
+      render: (_v, row) => renderDocumentTags(row),
+    },
+    {
+      id: 'id',
+      label: 'Actions',
+      minWidth: 230,
+      sticky: 'right',
+      stickyOffset: 0,
+      truncate: false,
+      render: (_v, row) => {
+        const isB2COrder = row.type === 'b2c'
+        const canManifest = isManifestEligible(row)
+        const canCancel = isCancellableOrder(row)
+        const isManifesting = manifestingOrderId === row.id
+        const isCancelling = cancellingOrderId === row.id
+        const isManifested = isManifestedOrMoving(row)
+
+        if (!isB2COrder) {
+          return (
+            <Typography variant="body2" color="text.secondary">
+              Details only
+            </Typography>
+          )
+        }
+
+        return (
+          <Stack direction="row" spacing={0.75} flexWrap="nowrap">
+            {isManifested ? (
+              <Button
+                size="small"
+                variant="outlined"
+                color="success"
+                disabled
+                sx={{ minWidth: 98, px: 1.25 }}
+              >
+                Manifested
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="contained"
+                disabled={!canManifest || bulkManifesting || isManifesting || isCancelling}
+                onClick={() => handleSingleManifest(row)}
+                sx={{ minWidth: 86, px: 1.25 }}
+              >
+                {isManifesting ? 'Working...' : 'Manifest'}
+              </Button>
+            )}
+
+            {canCancel ? (
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                disabled={isCancelling || isManifesting}
+                onClick={() => handleCancelOrder(row)}
+                sx={{ minWidth: 72, px: 1.25 }}
+              >
+                {isCancelling ? 'Canceling...' : 'Cancel'}
+              </Button>
+            ) : null}
+          </Stack>
+        )
+      },
     },
   ]
 
@@ -686,7 +891,7 @@ const AllOrders = () => {
             selectable
             currentPage={page}
             onPageChange={(newPage) => {
-              setPage(newPage + 1)
+              setPage(newPage)
               clearSelection()
               setBulkFeedback(null)
             }}
@@ -703,6 +908,7 @@ const AllOrders = () => {
             selectionResetToken={selectionResetToken}
             expandable
             renderExpandedRow={(row) => <OrderExpandedRow row={row} />}
+            minTableWidth={1580}
           />
         )}
       </Box>

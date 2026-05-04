@@ -16,7 +16,12 @@ export const cancelShipment = async (req: any, res: Response) => {
       return res.status(400).json({ success: false, message: 'Order ID is required' })
     }
 
-    const result = await cancelOrderShipment(orderId)
+    const userId = req.user?.sub
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' })
+    }
+
+    const result = await cancelOrderShipment(orderId, userId)
     
     console.log('✅ Cancellation Success Response:', {
       orderId,

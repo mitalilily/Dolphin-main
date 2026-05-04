@@ -46,26 +46,38 @@ export const getAdminApiBaseUrlCandidates = () => {
     currentHost.endsWith('netlify.app') || currentHost.endsWith('vercel.app')
   const isLocalhost =
     currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '0.0.0.0'
+  const isSelfHostedFrontend = Boolean(currentHost) && !isHostedFrontend && !isLocalhost
 
   const configured = normalizeBaseUrl(
     process.env.REACT_APP_API_BASE_URL || process.env.REACT_APP_BACKEND_URL,
     { ensureApi: true },
   )
   const socketDerived = normalizeBaseUrl(process.env.REACT_APP_SOCKET_URL, { ensureApi: true })
+  const sameOriginApi = normalizeBaseUrl(DEFAULT_API_BASE_URL, { ensureApi: true })
   const stored = readStoredApiBaseUrl()
-  const trustedCandidates = [configured, socketDerived, ...FALLBACK_API_BASE_URLS]
+  const environmentCandidates = [configured, socketDerived, sameOriginApi]
+    .filter(Boolean)
+    .filter((value, index, list) => list.indexOf(value) === index)
+  const trustedCandidates = [...environmentCandidates, ...FALLBACK_API_BASE_URLS]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 
-  // On hosted frontends, ignore stale manual overrides that don't match current env/fallbacks.
-  // This prevents browser-local storage from pinning Admin to a wrong backend after redeploys.
+  // On hosted/self-hosted frontends, ignore stale manual overrides that don't match
+  // the current deployment. This prevents browser-local storage from pinning Admin to a wrong backend.
   const safeStored =
-    stored && (!isHostedFrontend || trustedCandidates.includes(stored)) ? stored : null
+    stored &&
+    (!isHostedFrontend && !isSelfHostedFrontend
+      ? true
+      : isSelfHostedFrontend
+        ? environmentCandidates.includes(stored)
+        : trustedCandidates.includes(stored))
+      ? stored
+      : null
   if (stored && !safeStored && canUseStorage()) {
     window.localStorage.removeItem(ACTIVE_ADMIN_API_BASE_URL_KEY)
   }
 
-  const candidates = [configured, socketDerived, safeStored, ...FALLBACK_API_BASE_URLS]
+  const candidates = [configured, socketDerived, sameOriginApi, safeStored, ...FALLBACK_API_BASE_URLS]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 
@@ -73,7 +85,7 @@ export const getAdminApiBaseUrlCandidates = () => {
     try {
       const parsed = new URL(candidate)
       const pointsBackToFrontend = parsed.hostname === currentHost
-      if (pointsBackToFrontend && (isHostedFrontend || !isLocalhost)) {
+      if (pointsBackToFrontend && isHostedFrontend && !isLocalhost) {
         return false
       }
       return true

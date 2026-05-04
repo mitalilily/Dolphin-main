@@ -60,6 +60,7 @@ export interface DataTableProps<T extends { id: string | number }> {
   totalCount?: number
   onRowClick?: (row: T) => void
   selectionResetToken?: number | string
+  minTableWidth?: number | string
 }
 
 export default function DataTable<T extends { id: string | number }>(props: DataTableProps<T>) {
@@ -84,6 +85,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
     totalCount,
     onRowClick,
     selectionResetToken,
+    minTableWidth = 1100,
   } = props
 
   const theme = useTheme()
@@ -97,6 +99,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
   const tableBg = '#FFFCF8'
   const rowHover = alpha(primary, 0.045)
   const mobileCardBg = 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,244,238,0.96) 100%)'
+  const tableMinWidth = typeof minTableWidth === 'number' ? `${minTableWidth}px` : minTableWidth
 
   const [localPage, setLocalPage] = React.useState(0)
   const [localRowsPerPage, setLocalRowsPerPage] = React.useState(defaultRowsPerPage)
@@ -361,11 +364,11 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                           </Stack>
                         </Stack>
                       )}
-                      {columns.map((col) => {
+                      {columns.map((col, columnIndex) => {
                         if (col.hiddenOnMobile) return null
                         const value = col.render ? col.render(row[col.id], row) : row[col.id]
                         return (
-                          <Box key={col.id as string}>
+                          <Box key={`${String(col.id)}-${columnIndex}`}>
                             <Typography
                               fontSize="11px"
                               fontWeight={800}
@@ -394,6 +397,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                     {renderExpandedRow && (
                       <IconButton
                         size="small"
+                        aria-label={isExpanded ? 'Hide order details' : 'Show order details'}
                         onClick={() => toggleExpand(row.id)}
                         sx={{
                           mt: 1,
@@ -418,20 +422,38 @@ export default function DataTable<T extends { id: string | number }>(props: Data
             })}
           </Stack>
         ) : (
-          <Box sx={{ overflowX: 'auto', borderRadius: 5 }}>
+          <Box
+            sx={{
+              overflow: 'hidden',
+              borderRadius: 5,
+            }}
+          >
             <TableContainer
               component={Paper}
               sx={{
                 background: tableBg,
                 border: `1px solid ${borderColor}`,
+                width: '100%',
                 minWidth: '100%',
                 maxHeight,
+                overflowX: 'auto',
                 boxShadow: 'none',
                 borderRadius: 4,
                 backdropFilter: 'none',
+                '&::-webkit-scrollbar': {
+                  height: 10,
+                  width: 10,
+                },
+                '&::-webkit-scrollbar-track': {
+                  backgroundColor: alpha(textPrimary, 0.06),
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  backgroundColor: alpha(primary, 0.34),
+                  borderRadius: 999,
+                },
               }}
             >
-              <Table stickyHeader size="small">
+              <Table stickyHeader size="small" sx={{ minWidth: tableMinWidth }}>
                 <TableHead>
                   <TableRow>
                     {selectable && (
@@ -454,10 +476,33 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                       </TableCell>
                     )}
 
-                    {columns.map((col) =>
+                    {expandable && renderExpandedRow && (
+                      <TableCell
+                        sx={{
+                          position: 'sticky',
+                          top: 0,
+                          background: headerBg,
+                          color: alpha(textPrimary, 0.86),
+                          borderBottom: `1px solid ${borderColor}`,
+                          width: 76,
+                          minWidth: 76,
+                          fontWeight: 800,
+                          fontSize: '11px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.09em',
+                          zIndex: theme.zIndex.appBar + 1,
+                          py: 1.4,
+                          px: 2,
+                        }}
+                      >
+                        Details
+                      </TableCell>
+                    )}
+
+                    {columns.map((col, columnIndex) =>
                       col.hiddenOnMobile && isMobile ? null : (
                         <TableCell
-                          key={col.id as string}
+                          key={`${String(col.id)}-${columnIndex}`}
                           align={col.align ?? 'left'}
                           sx={{
                             position: col.sticky ? 'sticky' : 'static',
@@ -500,18 +545,6 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                       ),
                     )}
 
-                    {expandable && renderExpandedRow && (
-                      <TableCell
-                        sx={{
-                          position: 'sticky',
-                          top: 0,
-                          background: headerBg,
-                          borderBottom: `1px solid ${borderColor}`,
-                          width: 40,
-                          zIndex: theme.zIndex.appBar + 1,
-                        }}
-                      />
-                    )}
                   </TableRow>
                 </TableHead>
 
@@ -550,7 +583,30 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                             </TableCell>
                           )}
 
-                          {columns.map((col) => {
+                          {expandable && renderExpandedRow && (
+                            <TableCell sx={{ py: 1.5, px: 2, width: 76 }}>
+                              <Tooltip title={isExpanded ? 'Hide details' : 'Show details'} arrow>
+                                <IconButton
+                                  size="small"
+                                  aria-label={isExpanded ? 'Hide order details' : 'Show order details'}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    toggleExpand(row.id)
+                                  }}
+                                  sx={{
+                                    color: primary,
+                                    bgcolor: alpha(primary, 0.08),
+                                    border: `1px solid ${alpha(primary, 0.14)}`,
+                                    '&:hover': { backgroundColor: alpha(primary, 0.12) },
+                                  }}
+                                >
+                                  {isExpanded ? <MdExpandLess /> : <MdExpandMore />}
+                                </IconButton>
+                              </Tooltip>
+                            </TableCell>
+                          )}
+
+                          {columns.map((col, columnIndex) => {
                             if (col.hiddenOnMobile && isMobile) return null
                             const value = row[col.id]
                             const cellContent = col.render ? col.render(value, row) : (value as React.ReactNode)
@@ -565,7 +621,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
 
                             return (
                               <TableCell
-                                key={col.id as string}
+                                key={`${String(col.id)}-${columnIndex}`}
                                 align={col.align ?? 'left'}
                                 sx={{
                                   position: col.sticky ? 'sticky' : 'static',
@@ -608,23 +664,6 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                               </TableCell>
                             )
                           })}
-
-                          {expandable && renderExpandedRow && (
-                            <TableCell sx={{ py: 1.5, px: 2 }}>
-                              <IconButton
-                                size="small"
-                                onClick={() => toggleExpand(row.id)}
-                                sx={{
-                                  color: primary,
-                                  bgcolor: alpha(primary, 0.08),
-                                  border: `1px solid ${alpha(primary, 0.14)}`,
-                                  '&:hover': { backgroundColor: alpha(primary, 0.12) },
-                                }}
-                              >
-                                {isExpanded ? <MdExpandLess /> : <MdExpandMore />}
-                              </IconButton>
-                            </TableCell>
-                          )}
                         </TableRow>
 
                         {expandable && renderExpandedRow && (

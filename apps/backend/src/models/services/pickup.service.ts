@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '../client'
 import { b2c_orders } from '../schema/b2cOrders'
 import { DelhiveryService } from './couriers/delhivery.service'
@@ -9,10 +9,13 @@ import { TruxcargoService } from './couriers/truxcargo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { applyCancellationRefundOnce } from './webhookProcessor'
 
-export async function cancelOrderShipment(orderId: string) {
+export async function cancelOrderShipment(orderId: string, userId: string) {
   console.log('🔍 Starting cancellation for orderId:', orderId)
 
-  const [order] = await db.select().from(b2c_orders).where(eq(b2c_orders.id, orderId))
+  const [order] = await db
+    .select()
+    .from(b2c_orders)
+    .where(and(eq(b2c_orders.id, orderId), eq(b2c_orders.user_id, userId)))
 
   if (!order) {
     console.error('❌ Order not found:', orderId)
