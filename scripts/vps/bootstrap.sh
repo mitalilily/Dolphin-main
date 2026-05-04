@@ -158,6 +158,11 @@ server {
         try_files $uri $uri/ /admin/index.html;
     }
 
+    location ^~ /auth/ {
+        alias /var/www/dolphin/apps/admin/build/;
+        try_files $uri $uri/ /admin/index.html;
+    }
+
     root /var/www/dolphin/apps/client/dist;
     index index.html;
 

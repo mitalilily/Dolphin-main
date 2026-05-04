@@ -16,6 +16,10 @@ fi
 cat > apps/client/.env.production <<EOF
 VITE_API_URL=${API_ORIGIN}/api
 VITE_APP_SOCKET_URL=${API_ORIGIN}
+VITE_CLIENT_APP_URL=${PUBLIC_ORIGIN}/app
+VITE_AUTH_APP_URL=${PUBLIC_ORIGIN}/login
+VITE_ADMIN_APP_URL=${PUBLIC_ORIGIN}/admin
+VITE_ADMIN_AUTH_URL=${PUBLIC_ORIGIN}/auth/signin
 EOF
 
 cat > apps/admin/.env.production <<EOF

@@ -1,19 +1,20 @@
 const stripTrailingSlash = (url) => url.replace(/\/+$/, "");
+const currentOrigin = () => window.location.origin;
 
 export const CLIENT_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_CLIENT_APP_URL || `${window.location.origin}/app`,
+  import.meta.env.VITE_CLIENT_APP_URL || `${currentOrigin()}/app`,
 );
 
 export const AUTH_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_AUTH_APP_URL || `${window.location.origin}/login`,
+  import.meta.env.VITE_AUTH_APP_URL || `${currentOrigin()}/login`,
 );
 
 export const ADMIN_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_ADMIN_APP_URL || "https://celebrated-puffpuff-750b8e.netlify.app/",
+  import.meta.env.VITE_ADMIN_APP_URL || `${currentOrigin()}/admin`,
 );
 
 export const ADMIN_AUTH_URL = stripTrailingSlash(
-  import.meta.env.VITE_ADMIN_AUTH_URL || `${ADMIN_APP_URL}/auth/signin`,
+  import.meta.env.VITE_ADMIN_AUTH_URL || `${currentOrigin()}/auth/signin`,
 );
 
 export const launchDestinations = [
