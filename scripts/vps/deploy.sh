@@ -34,7 +34,11 @@ echo "Building client and landing frontend..."
 npm --prefix apps/client run build:netlify
 
 echo "Installing admin dependencies..."
-npm --prefix apps/admin ci --legacy-peer-deps
+if [ -f apps/admin/package-lock.json ]; then
+  npm --prefix apps/admin ci --legacy-peer-deps
+else
+  npm --prefix apps/admin install --legacy-peer-deps
+fi
 echo "Building admin frontend under /admin..."
 (
   cd apps/admin
