@@ -82,7 +82,10 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       console.error('Recharge error:', err)
-      toast.open({ message: 'Recharge failed!', severity: 'error' })
+      toast.open({
+        message: err?.response?.data?.error || err?.message || 'Recharge failed!',
+        severity: 'error',
+      })
     }
   }
 
@@ -322,8 +325,8 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
             {minWalletRecharge > 0
               ? `Minimum recharge amount is ₹${minWalletRecharge.toLocaleString(
                   'en-IN',
-                )}. This amount will be added to your wallet instantly.`
-              : 'This amount will be added to your wallet instantly.'}
+                )}. Wallet balance updates only after Razorpay confirms the live payment.`
+              : 'Wallet balance updates only after Razorpay confirms the live payment.'}
           </Typography>
         </Box>
 

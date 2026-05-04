@@ -82,17 +82,23 @@ export const useRechargeWallet = () =>
         theme: { color: orderData.themeColor || '#0052CC' },
         handler: async function (response: RazorpayPaymentResponse) {
           try {
-            // Payment successful - confirm with backend
-            await confirmRecharge({
+            const result = await confirmRecharge({
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
               signature: response.razorpay_signature,
             })
-            // Reload page to show updated balance
-            window.location.reload()
+
+            if (result?.credited) {
+              window.location.reload()
+              return
+            }
+
+            alert(
+              'Payment received by Razorpay and is awaiting capture confirmation. Your wallet will update automatically after confirmation.',
+            )
           } catch (error) {
             console.error('Payment confirmation error:', error)
-            alert('Payment successful but confirmation failed. Please contact support.')
+            alert('Payment could not be confirmed for wallet credit. Please contact support if money was deducted.')
           }
         },
         modal: {

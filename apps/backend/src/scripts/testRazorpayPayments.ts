@@ -33,9 +33,13 @@ async function main() {
     isRazorpayConfigured,
     razorpay,
     razorpayMode,
+    RazorpayWalletTopupUnavailableError,
     isValidSig,
     verifyRazorpayPaymentSignature,
   } = require('../utils/razorpay')
+  const {
+    validateRazorpayWalletCredit,
+  } = require('../utils/razorpayWalletSafety')
   const crypto = require('crypto') as typeof import('crypto')
 
   const summary: CheckResult[] = []
@@ -109,6 +113,58 @@ async function main() {
     }),
   )
 
+  summary.push(
+    await runCheck('wallet.live-mode-safety', async () => {
+      const testModeCheck = validateRazorpayWalletCredit({
+        currentMode: 'test',
+        topupMeta: { razorpayMode: 'test' },
+        topupAmount: 100,
+        capturedAmountPaise: 10000,
+        topupCurrency: 'INR',
+        capturedCurrency: 'INR',
+      })
+      if (testModeCheck.allowed || testModeCheck.reason !== 'razorpay_live_mode_required') {
+        throw new Error('Test mode wallet credit was not blocked')
+      }
+
+      const testTopupCheck = validateRazorpayWalletCredit({
+        currentMode: 'live',
+        topupMeta: { razorpayMode: 'test' },
+        topupAmount: 100,
+        capturedAmountPaise: 10000,
+        topupCurrency: 'INR',
+        capturedCurrency: 'INR',
+      })
+      if (testTopupCheck.allowed || testTopupCheck.reason !== 'topup_created_in_test_mode') {
+        throw new Error('Test-mode top-up was not blocked in live runtime')
+      }
+
+      const liveCheck = validateRazorpayWalletCredit({
+        currentMode: 'live',
+        topupMeta: { razorpayMode: 'live' },
+        topupAmount: 100,
+        capturedAmountPaise: 10000,
+        topupCurrency: 'INR',
+        capturedCurrency: 'INR',
+      })
+      if (!liveCheck.allowed) throw new Error('Valid live wallet credit was rejected')
+
+      const amountMismatch = validateRazorpayWalletCredit({
+        currentMode: 'live',
+        topupMeta: { razorpayMode: 'live' },
+        topupAmount: 100,
+        capturedAmountPaise: 9900,
+        topupCurrency: 'INR',
+        capturedCurrency: 'INR',
+      })
+      if (amountMismatch.allowed || amountMismatch.reason !== 'amount_mismatch') {
+        throw new Error('Amount mismatch was not blocked')
+      }
+
+      return { testModeBlocked: true, liveMatched: true, amountMismatchBlocked: true }
+    }),
+  )
+
   const testUserId = safeText(process.env.TEST_RAZORPAY_USER_ID || process.env.TEST_PAYMENT_USER_ID)
   if (testUserId) {
     summary.push(
@@ -116,6 +172,22 @@ async function main() {
         const { createWalletOrder } = require('../models/services/walletTopupService')
         const { pool } = require('../models/client')
         try {
+          if (razorpayMode !== 'live') {
+            try {
+              await createWalletOrder(testUserId, 1, {
+                name: 'Razorpay Test',
+                email: 'razorpay-test@example.com',
+                phone: '9999999999',
+              })
+            } catch (error) {
+              if (error instanceof RazorpayWalletTopupUnavailableError) {
+                return { blockedInMode: razorpayMode }
+              }
+              throw error
+            }
+            throw new Error('Wallet top-up order was created outside Razorpay live mode')
+          }
+
           const order = await createWalletOrder(testUserId, 1, {
             name: 'Razorpay Test',
             email: 'razorpay-test@example.com',

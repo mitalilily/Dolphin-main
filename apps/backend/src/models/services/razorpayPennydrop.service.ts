@@ -1,4 +1,4 @@
-import { razorpayApi } from '../../utils/razorpay'
+import { assertRazorpayLiveMode, razorpayApi } from '../../utils/razorpay'
 
 import * as dotenv from 'dotenv'
 import path from 'path'
@@ -61,6 +61,8 @@ export async function pennyDropVerifyLive({
   ifsc: string
   accountNumber: string
 }) {
+  assertRazorpayLiveMode('Bank account verification')
+
   // 1. Create Contact and Fund Account
   const contactId = await createContact(name)
   const fundAccountId = await createFundAccount(contactId, {

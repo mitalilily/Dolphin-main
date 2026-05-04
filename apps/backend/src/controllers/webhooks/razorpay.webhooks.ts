@@ -1,7 +1,7 @@
 import { Request, Response } from 'express'
 import { markBankRejected, markBankVerified } from '../../models/services/bankAccount.service'
 import { confirmFailure, confirmSuccess } from '../../models/services/walletTopupService'
-import { isValidSig } from '../../utils/razorpay'
+import { isRazorpayLiveMode, isValidSig } from '../../utils/razorpay'
 
 const getRawBody = (body: unknown) => {
   if (Buffer.isBuffer(body)) return body.toString('utf8')
@@ -44,8 +44,21 @@ export const razorpayWebhook = async (req: Request, res: Response): Promise<any>
     switch (event) {
       case 'payment.captured': {
         const pay = payload.payload.payment.entity
-        await confirmSuccess(pay.order_id, pay.id, Number(pay.amount))
-        console.log(`Payment captured successfully for Razorpay order: ${pay.order_id}`)
+        const result = await confirmSuccess({
+          orderId: pay.order_id,
+          paymentId: pay.id,
+          amountPaise: Number(pay.amount),
+          currency: pay.currency,
+          source: 'webhook',
+          method: pay.method,
+          email: pay.email,
+          contact: pay.contact,
+        })
+        console.log(
+          `Payment captured for Razorpay order ${pay.order_id}; credited=${result.credited}${
+            result.reason ? ` reason=${result.reason}` : ''
+          }`,
+        )
         break
       }
 
@@ -57,6 +70,11 @@ export const razorpayWebhook = async (req: Request, res: Response): Promise<any>
       }
 
       case 'fund.account.validation.completed': {
+        if (!isRazorpayLiveMode) {
+          console.warn('Razorpay bank validation webhook ignored because Razorpay is not in live mode')
+          break
+        }
+
         const validation = payload.payload.fund_account_validation.entity
         if (validation.status === 'success') {
           await markBankVerified(validation.fund_account_id)

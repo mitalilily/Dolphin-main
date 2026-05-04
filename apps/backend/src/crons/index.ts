@@ -1,5 +1,5 @@
 import cron from 'node-cron'
-import { isRazorpayConfigured } from '../utils/razorpay'
+import { isRazorpayConfigured, razorpayWalletTopupsEnabled } from '../utils/razorpay'
 import { generateAutoBillingInvoices } from './invoiceGenerator'
 import { processPendingWebhooks } from './processPendingWebhooks'
 import { reconcileWalletTopups } from './reconcileWalletTopups'
@@ -11,7 +11,7 @@ import {
 import { pollEkartTracking } from './ekartTracking'
 import { pollTruxcargoTracking } from './truxcargoTracking'
 
-if (isRazorpayConfigured) {
+if (razorpayWalletTopupsEnabled) {
   cron.schedule('*/20 * * * *', async () => {
     console.log('[Cron] Wallet reconciliation kicking off')
     try {
@@ -20,8 +20,10 @@ if (isRazorpayConfigured) {
       console.error('[Cron] Wallet reconciliation failed:', err)
     }
   })
-} else {
+} else if (!isRazorpayConfigured) {
   console.warn('[Cron] Wallet reconciliation skipped because Razorpay credentials are missing.')
+} else {
+  console.warn('[Cron] Wallet reconciliation skipped because Razorpay wallet top-ups require live mode.')
 }
 
 cron.schedule('*/1 * * * *', () => {

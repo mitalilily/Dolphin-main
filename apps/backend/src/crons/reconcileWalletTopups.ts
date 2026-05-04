@@ -2,24 +2,28 @@
  * Reconcile missed Razorpay wallet top-ups.
  */
 
-import { eq, sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import crypto from 'node:crypto'
 import { db } from '../models/client'
 import { confirmSuccess, walletOfUser } from '../models/services/walletTopupService'
-import { wallets, walletTopups, walletTransactions } from '../schema/schema'
-import { razorpayApi } from '../utils/razorpay'
+import { createWalletTransaction } from '../models/services/wallet.service'
+import { walletTopups } from '../schema/schema'
+import { razorpayApi, razorpayKeyId, razorpayMode, razorpayWalletTopupsEnabled } from '../utils/razorpay'
 
 interface RazorpayOrder {
   id: string
   amount: number
   currency: string
   status: string
+  receipt?: string
   notes?: Record<string, string>
 }
 
 interface RazorpayPayment {
   id: string
   status: string
+  amount: number
+  currency: string
   method: string
   email?: string
   contact?: string
@@ -38,6 +42,11 @@ interface PaymentsResponse {
 }
 
 export async function reconcileWalletTopups(): Promise<void> {
+  if (!razorpayWalletTopupsEnabled) {
+    console.warn('[Cron] Wallet reconciliation skipped because Razorpay wallet top-ups require live mode.')
+    return
+  }
+
   const threeHoursAgo = Math.floor(Date.now() / 1000) - 3 * 60 * 60
 
   const { data: ordersRes } = await razorpayApi.get<OrdersResponse>('/orders', {
@@ -52,6 +61,7 @@ export async function reconcileWalletTopups(): Promise<void> {
 
   for (const order of orders) {
     const userId = order.notes?.userId as string | undefined
+    const walletId = order.notes?.walletId as string | undefined
     const topupType = order.notes?.type || order.notes?.description
     if (!userId || !['wallet_recharge', 'Wallet Top-up'].includes(String(topupType || ''))) {
       continue
@@ -70,13 +80,42 @@ export async function reconcileWalletTopups(): Promise<void> {
     const payment = paymentsRes.items.find((p) => p.status === 'captured')
     if (!payment) continue
 
+    if (Math.round(Number(payment.amount)) !== Math.round(Number(order.amount))) {
+      console.warn(`[Cron] Skipping Razorpay order ${order.id}: captured amount mismatch`)
+      continue
+    }
+
+    if (String(payment.currency || '').toUpperCase() !== String(order.currency || '').toUpperCase()) {
+      console.warn(`[Cron] Skipping Razorpay order ${order.id}: captured currency mismatch`)
+      continue
+    }
+
     if (existingTopup) {
-      await confirmSuccess(order.id, payment.id, order.amount)
+      await confirmSuccess({
+        orderId: order.id,
+        paymentId: payment.id,
+        amountPaise: order.amount,
+        currency: order.currency,
+        source: 'reconciliation',
+        method: payment.method,
+        email: payment.email,
+        contact: payment.contact,
+      })
+      continue
+    }
+
+    if (!String(order.receipt || '').startsWith('wallet_') || !walletId) {
+      console.warn(`[Cron] Skipping Razorpay order ${order.id}: missing wallet receipt metadata`)
       continue
     }
 
     await db.transaction(async (tx) => {
       const wallet = await walletOfUser(userId, tx)
+      if (wallet.id !== walletId) {
+        console.warn(`[Cron] Skipping Razorpay order ${order.id}: wallet metadata mismatch`)
+        return
+      }
+
       const amount = order.amount / 100
       const topupId = crypto.randomUUID()
 
@@ -89,22 +128,35 @@ export async function reconcileWalletTopups(): Promise<void> {
         gateway: 'razorpay',
         gatewayOrderId: order.id,
         gatewayPaymentId: payment.id,
-        meta: { email: payment.email, contact: payment.contact },
+        meta: {
+          email: payment.email,
+          contact: payment.contact,
+          razorpayMode,
+          razorpay: {
+            mode: razorpayMode,
+            keyId: razorpayKeyId,
+            source: 'reconciliation',
+            creditedAt: new Date().toISOString(),
+          },
+        },
       })
 
-      await tx
-        .update(wallets)
-        .set({ balance: sql`balance + ${amount}` })
-        .where(eq(wallets.id, wallet.id))
-
-      await tx.insert(walletTransactions).values({
-        wallet_id: wallet.id,
+      await createWalletTransaction({
+        walletId: wallet.id,
         amount,
         currency: order.currency,
         type: 'credit',
         ref: payment.id,
-        reason: 'wallet_topup',
-        meta: { topupId, method: payment.method, email: payment.email },
+        reason: 'Wallet Recharge',
+        meta: {
+          topupId,
+          method: payment.method,
+          email: payment.email,
+          gateway: 'razorpay',
+          razorpayMode,
+          source: 'reconciliation',
+        },
+        tx,
       })
     })
 

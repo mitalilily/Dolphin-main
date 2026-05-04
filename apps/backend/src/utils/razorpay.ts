@@ -31,6 +31,41 @@ const CREDENTIALS: Record<RazorpayMode, { key_id: string; key_secret: string }> 
 
 export const isRazorpayConfigured = Boolean(CREDENTIALS[MODE].key_id && CREDENTIALS[MODE].key_secret)
 export const razorpayMode = MODE
+export const razorpayKeyId = CREDENTIALS[MODE].key_id
+export const isRazorpayLiveMode = MODE === 'live'
+export const razorpayWalletTopupsEnabled = isRazorpayConfigured && isRazorpayLiveMode
+
+export class RazorpayWalletTopupUnavailableError extends Error {
+  statusCode: number
+  code: string
+
+  constructor(message: string, statusCode = 403) {
+    super(message)
+    this.name = 'RazorpayWalletTopupUnavailableError'
+    this.statusCode = statusCode
+    this.code = 'RAZORPAY_LIVE_MODE_REQUIRED'
+  }
+}
+
+export function assertRazorpayWalletTopupsEnabled() {
+  assertRazorpayLiveMode('Wallet recharge')
+}
+
+export function assertRazorpayLiveMode(operationName = 'Razorpay operation') {
+  if (!isRazorpayConfigured) {
+    throw new RazorpayWalletTopupUnavailableError(
+      `${operationName} is not configured. Please set live Razorpay credentials before accepting real payments.`,
+      503,
+    )
+  }
+
+  if (!isRazorpayLiveMode) {
+    throw new RazorpayWalletTopupUnavailableError(
+      `${operationName} is disabled while Razorpay is in test mode. Switch Razorpay to live mode before accepting real payment activity.`,
+      403,
+    )
+  }
+}
 
 if (!isRazorpayConfigured) {
   console.warn(
@@ -64,16 +99,22 @@ export const razorpayApi = axios.create({
 })
 
 export function isValidSig(body: string, sig: string) {
+  const secret =
+    MODE === 'live'
+      ? process.env.RAZORPAY_WEBHOOK_SECRET_PROD || ''
+      : process.env.RAZORPAY_WEBHOOK_SECRET || ''
+  if (!secret || !sig) return false
+
   const expected = crypto
-    .createHmac(
-      'sha256',
-      MODE === 'live'
-        ? process.env.RAZORPAY_WEBHOOK_SECRET_PROD || ''
-        : process.env.RAZORPAY_WEBHOOK_SECRET || '',
-    )
+    .createHmac('sha256', secret)
     .update(body)
     .digest('hex')
-  return expected === sig
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig))
+  } catch {
+    return false
+  }
 }
 
 export function verifyRazorpayPaymentSignature(params: {
