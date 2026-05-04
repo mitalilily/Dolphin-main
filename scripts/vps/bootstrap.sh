@@ -151,15 +151,18 @@ server {
         alias /var/www/dolphin/apps/admin/build/static/;
         access_log off;
         expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
     }
 
     location ^~ /admin/ {
         alias /var/www/dolphin/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri $uri/ /admin/index.html;
     }
 
     location ^~ /auth/ {
         alias /var/www/dolphin/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri $uri/ /admin/index.html;
     }
 
@@ -170,9 +173,11 @@ server {
         try_files $uri =404;
         access_log off;
         expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
     }
 
     location / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri $uri/ /index.html;
     }
 }
