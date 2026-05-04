@@ -16,7 +16,7 @@ Then run:
 
 ```bash
 PUBLIC_ORIGIN=http://72.60.96.97 \
-PGADMIN_EMAIL=admin@dolphin.local \
+PGADMIN_EMAIL=admin@dolphin-enterprise.com \
 PGADMIN_PASSWORD='<strong-password>' \
 bash /var/www/dolphin/scripts/vps/bootstrap.sh
 ```

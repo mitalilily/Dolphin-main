@@ -5,7 +5,7 @@ APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-http://72.60.96.97}"
 API_PORT="${API_PORT:-5002}"
-PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@dolphin.local}"
+PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@dolphin-enterprise.com}"
 PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 
