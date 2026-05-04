@@ -7,16 +7,28 @@ export const useEmployeeSocket = () => {
   const { user, isAuthenticated } = useAuth()
 
   useEffect(() => {
-    if (!isAuthenticated || !user?.id) return
+    const socketUserId = user?.userId || user?.id
+    if (!isAuthenticated || !socketUserId) return
+
+    let cancelled = false
 
     const initSocket = async () => {
-      const employee = await getEmployeeByUserId(user.userId)
-      if (employee?.employee?.isActive) {
-        registerUserSocket({ id: user.userId, role: 'employee' })
+      try {
+        const employee = await getEmployeeByUserId(socketUserId)
+        if (!cancelled && employee?.employee?.isActive) {
+          registerUserSocket({ id: socketUserId, role: 'employee' })
+        }
+      } catch (error: any) {
+        if (error?.response?.status !== 404) {
+          console.error('Employee socket registration failed:', error)
+        }
       }
     }
 
     initSocket()
-    return () => disconnectSocket()
-  }, [isAuthenticated, user?.userId])
+    return () => {
+      cancelled = true
+      disconnectSocket()
+    }
+  }, [isAuthenticated, user?.id, user?.userId])
 }
