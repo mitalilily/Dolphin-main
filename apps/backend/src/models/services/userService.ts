@@ -413,10 +413,13 @@ export const verifyGoogleToken = async (idToken: string) => {
  * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
  */
 
+// Current rule: only signup may create a user; login never creates accounts.
+
 export const handleEmailVerificationRequest = async (
   email: string,
   password: string | null,
   googleId: string | null,
+  intent: 'login' | 'signup' = 'login',
 ): Promise<{ status: number; data: any }> => {
   return await db.transaction(async (tx) => {
     const normalizedEmail = normalizeEmail(email)
@@ -427,6 +430,16 @@ export const handleEmailVerificationRequest = async (
     const user = await findUserByEmail(normalizedEmail, tx)
 
     if (user) {
+      if (intent === 'signup') {
+        return {
+          status: 409,
+          data: {
+            code: 'ACCOUNT_EXISTS',
+            error: 'User already exists. Please log in to open your dashboard.',
+          },
+        }
+      }
+
       if (user.emailVerified) {
         if (googleId) {
           if (user.googleId && user.googleId !== googleId) {
@@ -455,13 +468,11 @@ export const handleEmailVerificationRequest = async (
         }
 
         if (!user.passwordHash) {
-          const hashed = await bcrypt.hash(password, 10)
-          await updateUserByEmail(normalizedEmail, { passwordHash: hashed }, tx)
           return {
-            status: 200,
+            status: 400,
             data: {
-              message: 'Password set successfully. You can now log in.',
-              user,
+              code: 'PASSWORD_LOGIN_UNAVAILABLE',
+              error: 'Password login is not set up for this account. Please use email OTP or contact support.',
             },
           }
         }
@@ -500,13 +511,18 @@ export const handleEmailVerificationRequest = async (
       }
 
       if (!user.passwordHash) {
-        const hashed = await bcrypt.hash(password, 10)
-        await updateUserByEmail(normalizedEmail, { passwordHash: hashed }, tx)
-      } else {
-        const valid = await bcrypt.compare(password, user.passwordHash)
-        if (!valid) {
-          return { status: 400, data: { error: 'Incorrect password.' } }
+        return {
+          status: 400,
+          data: {
+            code: 'PASSWORD_LOGIN_UNAVAILABLE',
+            error: 'Password login is not set up for this account. Please use email OTP or contact support.',
+          },
         }
+      }
+
+      const valid = await bcrypt.compare(password, user.passwordHash)
+      if (!valid) {
+        return { status: 400, data: { error: 'Incorrect password.' } }
       }
 
       await updateUserVerificationToken(normalizedEmail, token, expiresAt, tx)
@@ -537,6 +553,16 @@ export const handleEmailVerificationRequest = async (
     }
 
     // BRAND NEW USER
+
+    if (intent === 'login') {
+      return {
+        status: 404,
+        data: {
+          code: 'ACCOUNT_NOT_FOUND',
+          error: 'No account found for this email. Please sign up first.',
+        },
+      }
+    }
 
     if (googleId) {
       const user = await createUserWithWallet(

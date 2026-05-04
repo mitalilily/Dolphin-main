@@ -18,11 +18,13 @@ export const verifyOtpApi = async (email: string, otp: string) => {
 
 export const requestPasswordLoginApi = async (
   email: string,
-  password?: string
+  password?: string,
+  intent: 'login' | 'signup' = 'login',
 ) => {
   const { data } = await axiosInstance.post("/auth/request-password-login", {
     email: email.trim().toLowerCase(),
     password,
+    intent,
   });
   return data;
 };

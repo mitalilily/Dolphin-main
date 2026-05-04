@@ -5,8 +5,15 @@ import { requestPasswordLoginApi, verifyEmailOtpApi } from "../api/auth";
 
 export const useRequestPasswordLogin = () => {
   return useMutation({
-    mutationFn: ({ email, password }: { email: string; password?: string }) =>
-      requestPasswordLoginApi(email, password),
+    mutationFn: ({
+      email,
+      password,
+      intent = 'login',
+    }: {
+      email: string
+      password?: string
+      intent?: 'login' | 'signup'
+    }) => requestPasswordLoginApi(email, password, intent),
   });
 };
 

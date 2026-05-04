@@ -204,24 +204,18 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
       }
     }
 
-    if (user) {
-      await updateUserOtpByEmail(normalizedEmail, otp, expiry)
-      console.log('[Auth OTP] Updated existing user OTP', {
-        email: maskEmailForLog(normalizedEmail),
-        userId: user.id,
-      })
-    } else {
-      await createUserWithWallet({
-        email: normalizedEmail,
-        otp,
-        otpExpiresAt: expiry,
-        onboardingStep: 0,
-        emailVerified: false,
-      })
-      console.log('[Auth OTP] Created new user with OTP', {
-        email: maskEmailForLog(normalizedEmail),
+    if (!user) {
+      return res.status(404).json({
+        code: 'ACCOUNT_NOT_FOUND',
+        error: 'No account found for this email. Please sign up first.',
       })
     }
+
+    await updateUserOtpByEmail(normalizedEmail, otp, expiry)
+    console.log('[Auth OTP] Updated existing user OTP', {
+      email: maskEmailForLog(normalizedEmail),
+      userId: user.id,
+    })
 
     if (!exposeAuthCodes && !emailConfigError) {
       console.log('[Auth OTP] Sending OTP email', {
@@ -337,6 +331,7 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
 
 export const requestEmailVerification = async (req: Request, res: Response): Promise<any> => {
   const { idToken, password, email } = req.body
+  const intent = req.body?.intent === 'signup' ? 'signup' : 'login'
 
   try {
     let userEmail = email
@@ -357,6 +352,7 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
       userEmail,
       password,
       googleId, // null for password logins
+      intent,
     )
 
     const user = result.data?.user

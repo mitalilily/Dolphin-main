@@ -81,6 +81,7 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
       {
         email: email.trim().toLowerCase(),
         password,
+        intent: mode,
       },
       {
         onSuccess: (response: any) => {
