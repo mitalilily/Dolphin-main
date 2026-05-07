@@ -14,6 +14,7 @@ const GOOGLE_SMTP_PASSWORD = process.env.GOOGLE_SMTP_PASSWORD || ''
 const SMTP_HOST = process.env.SMTP_HOST
 const SMTP_PORT = Number(process.env.SMTP_PORT || 587)
 const SMTP_SECURE = process.env.SMTP_SECURE === 'true'
+const DOLPHIN_LOGO_BLUE = '#047DB3'
 
 const maskEmailForLog = (email: string) => {
   const [localPart = '', domain = ''] = email.split('@')
@@ -217,7 +218,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
               font-weight:700;
               letter-spacing:0.12em;
               text-transform:uppercase;
-              color:#8a6f5a;
+              color:${DOLPHIN_LOGO_BLUE};
             ">
               Verification Code
             </p>
@@ -226,7 +227,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
               display:inline-block;
               padding:16px 24px;
               border-radius:16px;
-              background:#171310;
+              background:${DOLPHIN_LOGO_BLUE};
               color:#ffffff;
               font-size:30px;
               line-height:1;
@@ -237,7 +238,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
             </div>
 
             <p style="margin:14px 0 0; font-size:13px; color:#6a5e59; line-height:1.6;">
-              This code expires in <strong style="color:#171310;">6 minutes</strong>.
+              This code expires in <strong style="color:${DOLPHIN_LOGO_BLUE};">6 minutes</strong>.
             </p>
           </div>
 
