@@ -4,103 +4,141 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import RequireAuth from '../components/auth/wrapper/RequireAuth'
 import RequireMerchantReady from '../components/auth/wrapper/RequireMerchantReady'
 import RequireOnboard from '../components/auth/wrapper/RequireOnboard'
-import Layout from '../components/UI/Layout'
 import FullScreenLoader from '../components/UI/loader/FullScreenLoader'
 import NavigationLoader from '../components/UI/loader/NavigationLoader'
-import LandingMainLayout from '../landing/components/dolphin/MainLayout.jsx'
-import LandingPage from '../landing/pages/LandingPage.jsx'
-import RateCalculatorLandingPage from '../landing/pages/RateCalculatorPage.jsx'
-import VolumetricCalculatorPage from '../landing/pages/VolumetricCalculatorPage.jsx'
-import Login from '../pages/auth/Login'
-import Signup from '../pages/auth/Signup'
-import ClientPreview from '../pages/preview/ClientPreview'
 import AppEntry from './AppEntry'
+import {
+  loadAboutUs,
+  loadApiIntegration,
+  loadB2bOrders,
+  loadB2COrdersList,
+  loadBankAccountsSection,
+  loadCancellationPolicy,
+  loadChannelList,
+  loadChannels,
+  loadClientPreview,
+  loadCodRemittancesList,
+  loadCompanyDetails,
+  loadCompanyInfoForm,
+  loadCourierPriorityPage,
+  loadCouriers,
+  loadCreateOrderWrapper,
+  loadDashboard,
+  loadDiscrepancyDetails,
+  loadHome,
+  loadInvoices,
+  loadInvoicePreferences,
+  loadKeyboardShortcutsPage,
+  loadKycSection,
+  loadLabelSettingsPage,
+  loadLandingLayout,
+  loadLandingPage,
+  loadLayout,
+  loadLogin,
+  loadNdrList,
+  loadOrderTracking,
+  loadOrderTrackingForm,
+  loadOrders,
+  loadPickupAddresses,
+  loadPoliciesLayout,
+  loadPrivacyPolicy,
+  loadProfileLayout,
+  loadRateCalculator,
+  loadRateCalculatorLandingPage,
+  loadRateCard,
+  loadReports,
+  loadRtoList,
+  loadSettings,
+  loadSignup,
+  loadSupportTicketsPage,
+  loadTermsOfService,
+  loadTicketDetailsPage,
+  loadUserOnboarding,
+  loadUserProfileSettings,
+  loadUsersManagement,
+  loadVolumetricCalculatorPage,
+  loadWalletTransactions,
+  loadWeightReconciliation,
+  loadWeightReconciliationSettings,
+} from './routePreload'
 import GlobalRedirectHandler from './WalletRedirectHandler'
 
 /* ---------- Lazy-loaded components ---------- */
+const LandingMainLayout = lazy(loadLandingLayout)
+const LandingPage = lazy(loadLandingPage)
+const RateCalculatorLandingPage = lazy(loadRateCalculatorLandingPage)
+const VolumetricCalculatorPage = lazy(loadVolumetricCalculatorPage)
+const Login = lazy(loadLogin)
+const Signup = lazy(loadSignup)
+const ClientPreview = lazy(loadClientPreview)
+const Layout = lazy(loadLayout)
+
 // Onboarding & Dashboard
-const UserOnboarding = lazy(() => import('../pages/onboarding/UserOnboarding'))
-const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'))
+const UserOnboarding = lazy(loadUserOnboarding)
+const Dashboard = lazy(loadDashboard)
 
 // Orders
-const Orders = lazy(() => import('../pages/orders/Orders'))
-const B2COrdersList = lazy(() => import('../components/orders/b2c/B2COrdersList'))
-const B2bOrders = lazy(() => import('../pages/orders/B2bOrders'))
-const CreateOrderWrapper = lazy(() => import('../components/orders/CreateOrderWrapper'))
-const OrderTracking = lazy(() => import('../pages/orders/OrderTracking'))
+const Orders = lazy(loadOrders)
+const B2COrdersList = lazy(loadB2COrdersList)
+const B2bOrders = lazy(loadB2bOrders)
+const CreateOrderWrapper = lazy(loadCreateOrderWrapper)
+const OrderTracking = lazy(loadOrderTracking)
 
 // Settings
-const Settings = lazy(() => import('../pages/settings/Settings'))
-const PickupAddresses = lazy(() => import('../pages/pickup-addresses/PickupAddresses'))
-const InvoicePreferences = lazy(() => import('../components/settings/InvoicePreference'))
-const LabelSettingsPage = lazy(() => import('../components/settings/Label/LabelSettings'))
-const UsersManagement = lazy(() => import('../pages/users-management/UsersManagement'))
-const CourierPriorityPage = lazy(
-  () => import('../components/settings/CourierPriority/CourierPriorityPage'),
-)
+const Settings = lazy(loadSettings)
+const PickupAddresses = lazy(loadPickupAddresses)
+const InvoicePreferences = lazy(loadInvoicePreferences)
+const LabelSettingsPage = lazy(loadLabelSettingsPage)
+const UsersManagement = lazy(loadUsersManagement)
+const CourierPriorityPage = lazy(loadCourierPriorityPage)
+const ApiIntegration = lazy(loadApiIntegration)
 
 // Billing
-const WalletTransactions = lazy(() => import('../pages/billings/WalletTransactions'))
-const Invoices = lazy(() => import('../pages/billings/Invoices'))
+const WalletTransactions = lazy(loadWalletTransactions)
+const Invoices = lazy(loadInvoices)
 
 // Channels
-const Channels = lazy(() => import('../pages/channels/Channels'))
-const ChannelList = lazy(() => import('../pages/channels/ChannelList'))
+const Channels = lazy(loadChannels)
+const ChannelList = lazy(loadChannelList)
 
 // Policies
-const PoliciesLayout = lazy(() => import('../pages/policy/PoliciesLayout'))
-const AboutUs = lazy(() => import('../pages/policy/AboutUs'))
-const CancellationPolicy = lazy(() => import('../pages/policy/CancellationPolicy'))
-const CompanyDetails = lazy(() => import('../pages/policy/CompanyDetails'))
-const PrivacyPolicy = lazy(() => import('../pages/policy/PrivacyPolicy'))
-const TermsOfService = lazy(() => import('../pages/policy/TermsOfService'))
+const PoliciesLayout = lazy(loadPoliciesLayout)
+const AboutUs = lazy(loadAboutUs)
+const CancellationPolicy = lazy(loadCancellationPolicy)
+const CompanyDetails = lazy(loadCompanyDetails)
+const PrivacyPolicy = lazy(loadPrivacyPolicy)
+const TermsOfService = lazy(loadTermsOfService)
 
 // Profile
-const ProfileLayout = lazy(() => import('../pages/profile/Profile'))
-const UserProfileSettings = lazy(() => import('../components/user/UserProfileSettings'))
-const CompanyInfoForm = lazy(() => import('../components/user/profile/CompanyInfoForm'))
-const BankAccountsSection = lazy(() =>
-  import('../components/user/profile/bankAccounts/BankAccountsSection').then((m) => ({
-    default: m.BankAccountsSection,
-  })),
-)
-const KycSection = lazy(() => import('../components/user/profile/Kyc/KycSection'))
+const ProfileLayout = lazy(loadProfileLayout)
+const UserProfileSettings = lazy(loadUserProfileSettings)
+const CompanyInfoForm = lazy(loadCompanyInfoForm)
+const BankAccountsSection = lazy(loadBankAccountsSection)
+const KycSection = lazy(loadKycSection)
 
 // Tools
-const RateCard = lazy(() => import('../pages/tools/RateCard'))
-const RateCalculator = lazy(() =>
-  import('../pages/tools/RateCalculator').then((m) => ({ default: m.RateCalculator })),
-)
-const OrderTrackingForm = lazy(() => import('../pages/tools/OrderTrackingForm'))
+const RateCard = lazy(loadRateCard)
+const RateCalculator = lazy(loadRateCalculator)
+const OrderTrackingForm = lazy(loadOrderTrackingForm)
 
 // Support
-const SupportTicketsPage = lazy(() =>
-  import('../pages/support/SupportTicketsPage').then((m) => ({ default: m.SupportTicketsPage })),
-)
-const TicketDetailsPage = lazy(
-  () => import('../pages/support/TicketDetailsPage').then((m) => ({ default: m.TicketDetailsPage })),
-)
+const SupportTicketsPage = lazy(loadSupportTicketsPage)
+const TicketDetailsPage = lazy(loadTicketDetailsPage)
 
 // Other
-const Home = lazy(() => import('../pages/home/Home'))
-const Couriers = lazy(() => import('../pages/couriers/Couriers'))
-const CodRemittancesList = lazy(() => import('../pages/cod-remittance/CodRemittancesList'))
-const KeyboardShortcutsPage = lazy(() => import('../pages/KeyboardShortcutsPage'))
-const Reports = lazy(() => import('../pages/reports/Reports'))
+const Home = lazy(loadHome)
+const Couriers = lazy(loadCouriers)
+const CodRemittancesList = lazy(loadCodRemittancesList)
+const KeyboardShortcutsPage = lazy(loadKeyboardShortcutsPage)
+const Reports = lazy(loadReports)
 
 // Weight Reconciliation
-const WeightReconciliation = lazy(
-  () => import('../pages/weight-reconciliation/WeightReconciliation'),
-)
-const DiscrepancyDetails = lazy(() => import('../pages/weight-reconciliation/DiscrepancyDetails'))
-const WeightReconciliationSettings = lazy(
-  () => import('../pages/weight-reconciliation/WeightReconciliationSettings'),
-)
+const WeightReconciliation = lazy(loadWeightReconciliation)
+const DiscrepancyDetails = lazy(loadDiscrepancyDetails)
+const WeightReconciliationSettings = lazy(loadWeightReconciliationSettings)
 // Ops (NDR/RTO)
-const NdrList = lazy(() => import('../pages/ops/NdrList'))
-const RtoList = lazy(() => import('../pages/ops/RtoList'))
-// API Integration
-const ApiIntegration = lazy(() => import('../pages/settings/ApiIntegration'))
+const NdrList = lazy(loadNdrList)
+const RtoList = lazy(loadRtoList)
 
 export default function AppRoutes() {
   return (

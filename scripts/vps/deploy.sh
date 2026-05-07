@@ -78,6 +78,32 @@ pm2 save
 echo "Reloading Nginx..."
 NGINX_SITE="/etc/nginx/sites-available/dolphin"
 if [ -f "$NGINX_SITE" ]; then
+  if ! grep -q 'gzip on;' "$NGINX_SITE"; then
+    sed -i '/client_max_body_size 50m;/a\
+    sendfile on;\
+    tcp_nopush on;\
+    tcp_nodelay on;\
+    keepalive_timeout 65;\
+\
+    gzip on;\
+    gzip_vary on;\
+    gzip_proxied any;\
+    gzip_comp_level 6;\
+    gzip_min_length 1024;\
+    gzip_types\
+        text/plain\
+        text/css\
+        text/xml\
+        application/json\
+        application/javascript\
+        application/xml\
+        application/xml+rss\
+        image/svg+xml\
+        font/ttf\
+        font/otf\
+        font/woff\
+        font/woff2;' "$NGINX_SITE"
+  fi
   if ! grep -q 'max-age=2592000, immutable' "$NGINX_SITE"; then
     sed -i '/expires 30d;/a\        add_header Cache-Control "public, max-age=2592000, immutable";' "$NGINX_SITE"
   fi

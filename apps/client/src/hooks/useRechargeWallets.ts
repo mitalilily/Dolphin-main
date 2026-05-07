@@ -55,6 +55,27 @@ declare global {
   }
 }
 
+let razorpayScriptPromise: Promise<void> | null = null
+
+const loadRazorpayCheckout = () => {
+  if (window.Razorpay) return Promise.resolve()
+  if (razorpayScriptPromise) return razorpayScriptPromise
+
+  razorpayScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.onload = () => resolve()
+    script.onerror = () => {
+      razorpayScriptPromise = null
+      reject(new Error('Razorpay checkout could not be loaded. Please check your connection.'))
+    }
+    document.head.appendChild(script)
+  })
+
+  return razorpayScriptPromise
+}
+
 export const useRechargeWallet = () =>
   useMutation<void, Error, RechargeOptions>({
     mutationFn: async (options) => {
@@ -69,6 +90,8 @@ export const useRechargeWallet = () =>
       if (!orderData?.orderId || !orderData?.key) {
         throw new Error('Invalid Razorpay order response')
       }
+
+      await loadRazorpayCheckout()
 
       // Initialize Razorpay Checkout
       const options_razorpay: RazorpayCheckoutOptions = {

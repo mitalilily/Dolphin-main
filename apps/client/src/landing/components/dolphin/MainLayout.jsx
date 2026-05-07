@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
+import "../../landing.css";
 
 function ScrollToTop() {
   const location = useLocation();

@@ -115,6 +115,29 @@ server {
     server_name _;
 
     client_max_body_size 50m;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        application/json
+        application/javascript
+        application/xml
+        application/xml+rss
+        image/svg+xml
+        font/ttf
+        font/otf
+        font/woff
+        font/woff2;
 
     location /api/ {
         proxy_pass http://127.0.0.1:5002/api/;

@@ -36,6 +36,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 
 import type { JSX } from '@emotion/react/jsx-runtime'
 import BrandLogo from '../brand/BrandLogo'
+import { preloadRouteModule } from '../../routes/routePreload'
 import { brand, brandGradients } from '../../theme/brand'
 import { DRAWER_WIDTH } from '../../utils/constants'
 import { isActive } from '../../utils/functions'
@@ -263,7 +264,8 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
     px: 1.6,
     color: brand.inkSoft,
     border: '1px solid transparent',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    transition:
+      'background-color 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease',
     '&:hover': {
       bgcolor: alpha('#FFFFFF', 0.72),
       color: brand.ink,
@@ -282,12 +284,25 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
           item.children?.some((sub) => isActive(location.pathname, sub.path)),
         )
         const showExpanded = isSidebarExpanded && isExpanded
+        const preloadItem = () => {
+          if (hasChildren) {
+            item.children?.forEach((sub) => {
+              void preloadRouteModule(sub.path)
+            })
+            return
+          }
+
+          void preloadRouteModule(item.path)
+        }
 
         const listItem = (
           <ListItemButton
             component={hasChildren ? 'div' : NavLink}
             to={hasChildren ? undefined : item.path}
             onClick={hasChildren ? () => toggleExpand(item.text) : undefined}
+            onMouseEnter={preloadItem}
+            onFocus={preloadItem}
+            onTouchStart={preloadItem}
             sx={{
               ...navItemSx,
               justifyContent: isSidebarExpanded ? 'flex-start' : 'center',
@@ -354,6 +369,9 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
                         key={sub.text}
                         component={NavLink}
                         to={sub.path}
+                        onMouseEnter={() => void preloadRouteModule(sub.path)}
+                        onFocus={() => void preloadRouteModule(sub.path)}
+                        onTouchStart={() => void preloadRouteModule(sub.path)}
                         sx={{
                           py: 0.65,
                           px: 1.3,
@@ -393,7 +411,7 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
         height: '100vh',
         background: 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(248,251,255,0.96) 100%)',
         borderRight: `1px solid ${alpha(brand.ink, 0.08)}`,
-        transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'width 180ms ease',
         display: 'flex',
         flexDirection: 'column',
         zIndex: theme.zIndex.drawer,
@@ -402,7 +420,6 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
         top: 0,
         overflowX: 'hidden',
         boxShadow: '16px 0 40px rgba(15,44,67,0.08)',
-        backdropFilter: 'blur(18px)',
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -474,6 +491,9 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
         <ListItemButton
           component={NavLink}
           to="/settings"
+          onMouseEnter={() => void preloadRouteModule('/settings')}
+          onFocus={() => void preloadRouteModule('/settings')}
+          onTouchStart={() => void preloadRouteModule('/settings')}
           sx={{
             ...navItemSx,
             justifyContent: isSidebarExpanded ? 'flex-start' : 'center',

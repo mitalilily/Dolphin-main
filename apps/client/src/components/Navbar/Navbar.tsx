@@ -8,6 +8,7 @@ import {
 } from 'react-icons/tb'
 import { useLocation, useNavigate } from 'react-router-dom'
 import BrandTopBar from '../brand/BrandTopBar'
+import { preloadRouteModule } from '../../routes/routePreload'
 import { brand, brandGradients } from '../../theme/brand'
 import GlobalSearch from './GlobalSearch'
 import QuickActions from './QuickActions'
@@ -133,6 +134,9 @@ export default function Navbar({ handleDrawerToggle, pinned }: NavbarProps) {
               <Button
                 variant="contained"
                 onClick={() => navigate('/orders/create')}
+                onMouseEnter={() => void preloadRouteModule('/orders/create')}
+                onFocus={() => void preloadRouteModule('/orders/create')}
+                onTouchStart={() => void preloadRouteModule('/orders/create')}
                 sx={{
                   minWidth: 'fit-content',
                   px: 1.7,

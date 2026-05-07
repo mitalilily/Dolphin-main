@@ -3,6 +3,7 @@
 import { Box, Button, CircularProgress, Grid, IconButton, Typography } from '@mui/material'
 import axios from 'axios'
 import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 import { useMemo, useState } from 'react'
 import { type Control, Controller, type Path, type UseFormSetValue } from 'react-hook-form'
 import { IoChevronBack } from 'react-icons/io5'

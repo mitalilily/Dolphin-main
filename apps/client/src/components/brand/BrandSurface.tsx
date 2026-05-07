@@ -18,7 +18,6 @@ const variantStyles: Record<BrandSurfaceVariant, SxProps<Theme>> = {
   glass: {
     backgroundColor: brand.surfaceGlass,
     border: `1px solid ${alpha('#FFFFFF', 0.72)}`,
-    backdropFilter: 'blur(18px)',
     boxShadow: brand.shadow,
   },
   hero: {

@@ -1,12 +1,29 @@
-import { Box, Container, Drawer, Stack, useMediaQuery, useTheme } from '@mui/material'
-import { Suspense, useState } from 'react'
+import { Box, Container, Drawer, LinearProgress, Stack, useMediaQuery, useTheme } from '@mui/material'
+import { Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
+import { warmCommonRoutes } from '../../routes/routePreload'
 import { brandGradients } from '../../theme/brand'
 import { DRAWER_WIDTH } from '../../utils/constants'
 import Navbar from '../Navbar/Navbar'
 import KeyboardShortcuts from './keyboard/KeyboardShortcuts'
-import FullScreenLoader from './loader/FullScreenLoader'
 import Sidebar, { COLLAPSED_WIDTH } from './Sidebar'
+
+function RouteFallback() {
+  return (
+    <Box sx={{ pt: 2, px: { xs: 1, md: 0 } }}>
+      <LinearProgress
+        sx={{
+          height: 3,
+          borderRadius: 999,
+          bgcolor: 'rgba(130, 194, 255, 0.22)',
+          '& .MuiLinearProgress-bar': {
+            background: 'linear-gradient(90deg, #82C2FF 0%, #FFE08A 100%)',
+          },
+        }}
+      />
+    </Box>
+  )
+}
 
 export default function Layout() {
   const theme = useTheme()
@@ -14,6 +31,8 @@ export default function Layout() {
   const [pinned, setPinned] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [hovered, setHovered] = useState(false)
+
+  useEffect(() => warmCommonRoutes(), [])
 
   const handleDrawerToggle = () => {
     if (isMobile) setMobileOpen(!mobileOpen)
@@ -92,6 +111,8 @@ export default function Layout() {
               flexGrow: 1,
               overflowY: 'auto',
               overflowX: 'hidden',
+              WebkitOverflowScrolling: 'touch',
+              overscrollBehavior: 'contain',
               bgcolor: 'transparent',
               px: { xs: 1, md: 2 },
               pb: { xs: 1.5, md: 2.5 },
@@ -107,7 +128,7 @@ export default function Layout() {
                 overflowX: 'hidden',
               }}
             >
-              <Suspense fallback={<FullScreenLoader />}>
+              <Suspense fallback={<RouteFallback />}>
                 <Outlet />
               </Suspense>
             </Container>
