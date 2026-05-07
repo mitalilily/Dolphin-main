@@ -9,8 +9,10 @@ API_PORT="${API_PORT:-5002}"
 cd "$APP_DIR"
 
 if [ -d .git ]; then
-  git fetch origin main
+  echo "Syncing repository with origin/main..."
+  git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
   git reset --hard origin/main
+  git show -s --oneline --decorate HEAD
 fi
 
 cat > apps/client/.env.production <<EOF
@@ -34,6 +36,9 @@ npm --prefix apps/backend run build
 
 echo "Installing client dependencies..."
 npm --prefix apps/client ci
+if [ -d .git ]; then
+  git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
+fi
 echo "Building client and landing frontend..."
 CLIENT_ASSET_BACKUP="$(mktemp -d)"
 if [ -d apps/client/dist/assets ]; then

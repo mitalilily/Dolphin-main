@@ -29,7 +29,9 @@ git clone https://github.com/mitalilily/Dolphin-main.git /var/www/dolphin
 
 ## GitHub Actions secrets
 
-Add these repository secrets before relying on automatic deploys:
+Add these repository secrets before relying on automatic deploys. `VPS_HOST`,
+`VPS_USER`, and `PUBLIC_ORIGIN` default to the values below, but keeping them as
+secrets makes future VPS moves easier.
 
 ```text
 VPS_HOST=72.60.96.97
@@ -39,7 +41,9 @@ VPS_PASSWORD=<optional fallback if no SSH key is configured>
 PUBLIC_ORIGIN=http://72.60.96.97
 ```
 
-The workflow runs on every push to `main` and executes `scripts/vps/deploy.sh` on the VPS.
+The workflow runs on every push to `main`, resets `/var/www/dolphin` to
+`origin/main`, and executes `scripts/vps/deploy.sh` on the VPS. Set either
+`VPS_SSH_KEY` or `VPS_PASSWORD`; the deploy job fails early if both are missing.
 
 For the one-time `Bootstrap VPS` workflow, also add:
 
