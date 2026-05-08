@@ -19,9 +19,9 @@ jobs:
             set -euo pipefail
             export APP_DIR=/var/www/dolphin
             export REPO_URL=https://github.com/mitalilily/Dolphin-main.git
-            export PUBLIC_ORIGIN=${{ secrets.PUBLIC_ORIGIN }}
-            export PGADMIN_EMAIL=${{ secrets.PGADMIN_EMAIL }}
-            export PGADMIN_PASSWORD=${{ secrets.PGADMIN_PASSWORD }}
+            export PUBLIC_ORIGIN="${{ secrets.PUBLIC_ORIGIN || 'https://dolphinenterprises.in' }}"
+            export PGADMIN_EMAIL="${{ secrets.PGADMIN_EMAIL || 'admin@dolphinenterprises.in' }}"
+            export PGADMIN_PASSWORD="${{ secrets.PGADMIN_PASSWORD }}"
 
             mkdir -p /root
             cat > /root/dolphin-backend.env <<'EOF'

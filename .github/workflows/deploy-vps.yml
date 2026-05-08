@@ -12,7 +12,7 @@ jobs:
     env:
       VPS_HOST: ${{ secrets.VPS_HOST || '72.60.96.97' }}
       VPS_USER: ${{ secrets.VPS_USER || 'root' }}
-      PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'http://72.60.96.97' }}
+      PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://dolphinenterprises.in' }}
       APP_DIR: /var/www/dolphin
     steps:
       - name: Deploy on VPS

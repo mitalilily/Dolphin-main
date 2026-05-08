@@ -2,7 +2,9 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
-PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-http://72.60.96.97}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
+PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 
@@ -83,6 +85,9 @@ pm2 save
 echo "Reloading Nginx..."
 NGINX_SITE="/etc/nginx/sites-available/dolphin"
 if [ -f "$NGINX_SITE" ]; then
+  if grep -q 'server_name _;' "$NGINX_SITE"; then
+    sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
+  fi
   if ! grep -q 'gzip on;' "$NGINX_SITE"; then
     sed -i '/client_max_body_size 50m;/a\
     sendfile on;\

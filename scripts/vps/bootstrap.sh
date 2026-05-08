@@ -3,11 +3,16 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
-PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-http://72.60.96.97}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
+PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
+API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
-PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@dolphin-enterprise.com}"
+PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@$PRIMARY_DOMAIN}"
 PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
+ENABLE_SSL="${ENABLE_SSL:-true}"
+SSL_EMAIL="${SSL_EMAIL:-admin@$PRIMARY_DOMAIN}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this script as root." >&2
@@ -44,15 +49,21 @@ if [ ! -d "$APP_DIR/.git" ]; then
 fi
 
 if [ ! -f "$BACKEND_ENV_SOURCE" ]; then
+  DOMAIN_ORIGINS=""
+  for domain in $DOMAIN_NAMES; do
+    DOMAIN_ORIGINS="${DOMAIN_ORIGINS},https://${domain},http://${domain}"
+  done
+  CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin${DOMAIN_ORIGINS}}"
+
   cat > "$BACKEND_ENV_SOURCE" <<EOF
 NODE_ENV=production
 PORT=${API_PORT}
 DATABASE_URL=
 PGSSLMODE=require
-CORS_ALLOWED_ORIGINS=${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin
-CORS_ORIGINS=${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin
+CORS_ALLOWED_ORIGINS=${CORS_ORIGIN_LIST}
+CORS_ORIGINS=${CORS_ORIGIN_LIST}
 FRONTEND_URL=${PUBLIC_ORIGIN}
-API_URL=${PUBLIC_ORIGIN}
+API_URL=${API_ORIGIN}
 EOF
   chmod 600 "$BACKEND_ENV_SOURCE"
   echo "Created ${BACKEND_ENV_SOURCE}. Fill it with backend secrets, then rerun bootstrap." >&2
@@ -205,6 +216,7 @@ server {
     }
 }
 EOF
+sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" /etc/nginx/sites-available/dolphin
 
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/dolphin /etc/nginx/sites-enabled/dolphin
@@ -216,7 +228,30 @@ ufw --force enable || true
 systemctl enable nginx
 systemctl restart nginx
 
-bash "$APP_DIR/scripts/vps/deploy.sh"
+if [ "$ENABLE_SSL" = "true" ]; then
+  SERVER_IP="${SERVER_IP:-$(curl -4fsS --max-time 5 https://api.ipify.org || true)}"
+  CERTBOT_DOMAINS=()
+
+  for domain in $DOMAIN_NAMES; do
+    DOMAIN_IP="$(getent ahostsv4 "$domain" | awk '{print $1; exit}' || true)"
+    if [ -n "$DOMAIN_IP" ] && { [ -z "$SERVER_IP" ] || [ "$DOMAIN_IP" = "$SERVER_IP" ]; }; then
+      CERTBOT_DOMAINS+=("-d" "$domain")
+    else
+      echo "Skipping SSL for ${domain}: DNS resolves to ${DOMAIN_IP:-nothing}; expected ${SERVER_IP:-this VPS IP}."
+    fi
+  done
+
+  if [ "${#CERTBOT_DOMAINS[@]}" -gt 0 ]; then
+    apt-get install -y certbot python3-certbot-nginx
+    if ! certbot --nginx --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect "${CERTBOT_DOMAINS[@]}"; then
+      echo "Certbot did not complete. Fix DNS, then rerun this script or run certbot manually." >&2
+    fi
+  else
+    echo "No domain currently resolves to this VPS, so SSL was not requested."
+  fi
+fi
+
+PUBLIC_ORIGIN="$PUBLIC_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
 pm2 startup systemd -u root --hp /root || true
 
 echo "Bootstrap complete."
