@@ -5,8 +5,11 @@ import { userProfiles } from '../schema/userProfile'
 import { users } from '../schema/users'
 import { createNotificationService } from './notifications.service'
 
-// Assuming you have something like this:
-export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed'
+export const ticketStatuses = ['open', 'in_progress', 'resolved', 'closed'] as const
+export type TicketStatus = (typeof ticketStatuses)[number]
+
+const isTicketStatus = (value: unknown): value is TicketStatus =>
+  ticketStatuses.includes(value as TicketStatus)
 
 export const createTicketService = async (data: {
   userId: string
@@ -190,6 +193,14 @@ export const updateTicketStatusService = async (ticketId: string, data: UpdateTi
   }
 
   let { status, dueDate } = data
+
+  if (status !== undefined && !isTicketStatus(status)) {
+    throw new Error('Invalid ticket status')
+  }
+
+  if (dueDate && Number.isNaN(dueDate.getTime())) {
+    throw new Error('Invalid due date')
+  }
 
   const updateData: {
     status?: TicketStatus

@@ -14,6 +14,7 @@ import {
   Icon,
   Image,
   Link,
+  Select,
   SimpleGrid,
   Spinner,
   Text,
@@ -30,7 +31,6 @@ import { useAdminTickets } from 'hooks/useTickets'
 import { useUserInfo } from 'hooks/useUser'
 import moment from 'moment'
 import { useEffect, useState } from 'react'
-import { Select } from 'react-day-picker'
 import { supportCategories } from 'utils/constants'
 import PaymentStatistics from 'views/Dashboard/Billing/components/PaymentStatistics'
 import { GenericTable } from 'views/Dashboard/Tables/components/GenericTable'

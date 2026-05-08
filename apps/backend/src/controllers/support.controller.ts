@@ -75,18 +75,25 @@ export const getTicketById = async (req: any, res: Response) => {
 export const updateTicket = async (req: any, res: Response) => {
   try {
     const { id } = req.params
-
-  
-
     const { status, dueDate } = req.body
+    const parsedDueDate = dueDate ? new Date(dueDate) : undefined
+
+    if (parsedDueDate && Number.isNaN(parsedDueDate.getTime())) {
+      return res.status(400).json({ message: 'Invalid due date' })
+    }
+
     const ticket = await updateTicketStatusService(id, {
       status,
-      dueDate: dueDate ? new Date(dueDate) : undefined,
+      dueDate: parsedDueDate,
     })
 
     res.status(200).json(ticket)
-  } catch (err) {
-    res.status(500).json({ message: 'Internal server error' })
+  } catch (err: any) {
+    const message = String(err?.message || 'Internal server error')
+    const statusCode =
+      message === 'Ticket not found' ? 404 : message.startsWith('Invalid ') ? 400 : 500
+
+    res.status(statusCode).json({ message })
   }
 }
 

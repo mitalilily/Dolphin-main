@@ -1,32 +1,63 @@
 import { Box, Button, FormControl, FormLabel, Select, VStack } from '@chakra-ui/react'
 import CustomDatePicker from 'components/Input/CustomDatePicker'
 import { useUpdateTicket } from 'hooks/useTickets'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+
+const statusOptions = [
+  { label: 'Open', value: 'open' },
+  { label: 'In Progress', value: 'in_progress' },
+  { label: 'Resolved', value: 'resolved' },
+  { label: 'Closed', value: 'closed' },
+]
+
+const allowedTransitions = {
+  open: ['in_progress', 'resolved', 'closed'],
+  in_progress: ['open', 'resolved', 'closed'],
+  resolved: ['in_progress', 'closed'],
+  closed: ['open', 'in_progress'],
+}
+
+const toValidDate = (value) => {
+  if (!value) return undefined
+  const nextDate = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(nextDate.getTime()) ? undefined : nextDate
+}
 
 export const TicketModal = ({ selectedTicket, onClose }) => {
   const [editedStatus, setEditedStatus] = useState(selectedTicket?.status)
-  const [editedDueBy, setEditedDueBy] = useState(
-    selectedTicket?.dueBy ? new Date(selectedTicket.dueBy) : undefined,
+  const [editedDueDate, setEditedDueDate] = useState(
+    toValidDate(selectedTicket?.dueDate || selectedTicket?.dueBy),
   )
 
   const { mutate: updateTicket, isPending: isUpdating } = useUpdateTicket(onClose)
+
+  useEffect(() => {
+    setEditedStatus(selectedTicket?.status || 'open')
+    setEditedDueDate(toValidDate(selectedTicket?.dueDate || selectedTicket?.dueBy))
+  }, [selectedTicket?.id, selectedTicket?.status, selectedTicket?.dueDate, selectedTicket?.dueBy])
 
   const handleStatusChange = (e) => {
     const newStatus = e.target.value
     setEditedStatus(newStatus)
 
     if (selectedTicket?.status === 'closed' && newStatus === 'open') {
-      setEditedDueBy(undefined)
+      setEditedDueDate(undefined)
     }
   }
 
+  const currentDueDate = useMemo(
+    () => toValidDate(selectedTicket?.dueDate || selectedTicket?.dueBy),
+    [selectedTicket?.dueDate, selectedTicket?.dueBy],
+  )
+
   const handleUpdate = () => {
+    if (!selectedTicket?.id) return
+
     const statusChanged = editedStatus !== selectedTicket?.status
     const dueByChanged =
-      editedDueBy instanceof Date &&
-      !isNaN(editedDueBy) &&
-      (!selectedTicket?.dueBy ||
-        new Date(selectedTicket.dueBy).toISOString() !== editedDueBy.toISOString())
+      editedDueDate instanceof Date &&
+      !Number.isNaN(editedDueDate.getTime()) &&
+      (!currentDueDate || currentDueDate.toISOString() !== editedDueDate.toISOString())
 
     if (!statusChanged && !dueByChanged) return
 
@@ -36,7 +67,7 @@ export const TicketModal = ({ selectedTicket, onClose }) => {
     }
 
     if (statusChanged) payload.data.status = editedStatus
-    if (dueByChanged) payload.data.dueBy = editedDueBy?.toISOString()
+    if (dueByChanged) payload.data.dueDate = editedDueDate?.toISOString()
 
     updateTicket(payload)
   }
@@ -44,14 +75,14 @@ export const TicketModal = ({ selectedTicket, onClose }) => {
   const isDisabledTransition = (toStatus) => {
     const from = selectedTicket?.status
 
-    if (from === 'open') return true
-    if (from === 'in_progress') return !['resolved', 'closed'].includes(toStatus)
-    if (from === 'resolved') return !['in_progress', 'closed'].includes(toStatus)
-    if (from === 'closed') return !['open', 'in_progress'].includes(toStatus)
-    return true
+    if (!from) return true
+    if (toStatus === from) return false
+    return !allowedTransitions[from]?.includes(toStatus)
   }
 
-  const showDueDatePicker = editedStatus === 'open'
+  const showDueDatePicker = editedStatus === 'open' || editedStatus === 'in_progress'
+
+  if (!selectedTicket) return null
 
   return (
     <Box px={6} py={4}>
@@ -59,18 +90,15 @@ export const TicketModal = ({ selectedTicket, onClose }) => {
         <FormControl>
           <FormLabel>Status</FormLabel>
           <Select value={editedStatus} onChange={handleStatusChange}>
-            <option value="open" disabled={isDisabledTransition('open')}>
-              Open
-            </option>
-            <option value="in_progress" disabled={isDisabledTransition('in_progress')}>
-              In Progress
-            </option>
-            <option value="resolved" disabled={isDisabledTransition('resolved')}>
-              Resolved
-            </option>
-            <option value="closed" disabled={isDisabledTransition('closed')}>
-              Closed
-            </option>
+            {statusOptions.map((option) => (
+              <option
+                key={option.value}
+                value={option.value}
+                disabled={isDisabledTransition(option.value)}
+              >
+                {option.label}
+              </option>
+            ))}
           </Select>
         </FormControl>
 
@@ -78,8 +106,8 @@ export const TicketModal = ({ selectedTicket, onClose }) => {
           <FormControl>
             <FormLabel>Due By</FormLabel>
             <CustomDatePicker
-              selectedDate={editedDueBy}
-              onChange={setEditedDueBy}
+              selectedDate={editedDueDate}
+              onChange={setEditedDueDate}
               minDate={new Date()}
             />
           </FormControl>

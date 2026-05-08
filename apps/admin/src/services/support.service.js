@@ -21,15 +21,21 @@ export const adminGetTickets = async ({ page = 1, limit = 10, filters = {} } = {
 
 // ✅ Fetch ticket by ID
 export const adminGetTicketById = async (ticketId) => {
-  const response = await api.get(`/admin/tickets/${ticketId}`)
+  const response = await api.get(`/admin/support-tickets/${ticketId}`)
   return response.data
 }
 
 // ✅ Update ticket status or due date
 export const adminUpdateTicket = async (data) => {
+  const nextStatus = data?.data?.status
+  const nextDueDate = data?.data?.dueDate ?? data?.data?.dueBy
+  const payload = {}
+
+  if (nextStatus) payload.status = nextStatus
+  if (nextDueDate) payload.dueDate = nextDueDate
+
   const response = await api.patch(`/admin/support-tickets/${data?.ticketId}`, {
-    ...(data?.data?.status && { status: data?.data?.status }),
-    ...(data?.data?.dueBy && { dueDate: data?.data?.dueBy }),
+    ...payload,
   })
   return response.data
 }
