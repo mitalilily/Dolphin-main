@@ -181,10 +181,9 @@ const RateCard = () => {
   const { zones } = useZones(businessType)
   const { data: couriers } = useAllCouriers()
   const { data, isLoading, isError } = useShippingRates({ ...filters, businessType: businessType })
+  const courierNames = (couriers ?? []) as string[]
 
   const rates: ShippingRate[] = data || []
-
-  console.log('rates', rates)
 
   // CSV export
   const handleExportCSV = (): void => {
@@ -235,7 +234,7 @@ const RateCard = () => {
       name: 'courier',
       label: 'Courier',
       type: 'multiselect',
-      options: couriers?.map((c: string) => ({ label: c, value: c })) || [],
+      options: courierNames.map((c) => ({ label: c, value: c })),
     },
     { name: 'min_weight', label: 'Min Weight (kg)', type: 'text', placeholder: 'Enter min weight' },
   ]
@@ -262,11 +261,19 @@ const RateCard = () => {
         fields={filterFields}
         defaultValues={filters}
         onApply={(applied) => {
+          const selectedCouriers = Array.isArray(applied?.courier)
+            ? applied.courier
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                .map((courier) => (typeof courier === 'string' ? courier : (courier as any)?.value))
+                .map((courier) => String(courier || '').trim())
+                .filter(Boolean)
+            : []
+
           setFilters((prev) => ({
             ...prev,
             ...applied,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            courier: applied?.courier?.map((cour) => (cour as any)?.value),
+            courier: selectedCouriers,
+            min_weight: applied?.min_weight ? String(applied.min_weight).trim() : '',
           }))
         }}
       />

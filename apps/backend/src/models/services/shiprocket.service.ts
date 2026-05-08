@@ -3262,6 +3262,8 @@ export const fetchAvailableCouriersWithRatesB2B = async (
 
     // Step 6: Build courier list with rates
     const courierMap = new Map<number, any>()
+    const chargeableWeightGrams = Math.max(Number(params.weight || 0), 1000)
+    const chargeableWeightKg = chargeableWeightGrams / 1000
 
     for (const rate of zoneToZoneRates) {
       if (!rate.courierId) continue
@@ -3287,6 +3289,7 @@ export const fetchAvailableCouriersWithRatesB2B = async (
           name: courierRow.name,
           integration_type: rate.serviceProvider?.toLowerCase() || 'unknown',
           serviceProvider: rate.serviceProvider?.toLowerCase(),
+          chargeable_weight: chargeableWeightGrams,
           localRates: {},
           approxZone: {
             originZoneId,
@@ -3298,8 +3301,12 @@ export const fetchAvailableCouriersWithRatesB2B = async (
 
       // Add rate to courier
       const courier = courierMap.get(rate.courierId)!
+      const ratePerKg = Number(rate.ratePerKg || 0)
+      const totalRate = Number((ratePerKg * chargeableWeightKg).toFixed(2))
+      courier.rate = totalRate
       courier.localRates.forward = {
-        ratePerKg: rate.ratePerKg,
+        rate: totalRate,
+        ratePerKg,
         volumetricFactor: rate.volumetricFactor,
       }
     }

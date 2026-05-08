@@ -215,6 +215,12 @@ export default function AppRoutes() {
               <Route path="kyc_details" element={<KycSection />} />
             </Route>
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/tools" element={<Navigate to="/tools/rate_card" replace />} />
+            <Route path="/tools/rate-card" element={<Navigate to="/tools/rate_card" replace />} />
+            <Route
+              path="/tools/rate-calculator"
+              element={<Navigate to="/tools/rate_calculator" replace />}
+            />
             <Route path="/tools/rate_card" element={<RateCard />} />
             <Route path="/tools/rate_calculator" element={<RateCalculator />} />
             <Route path="/tools/order_tracking" element={<OrderTrackingForm />} />

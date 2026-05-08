@@ -564,7 +564,7 @@ export function RateCalculatorCard({
           <button
             type="button"
             className="m-4 inline-flex items-center justify-center rounded-2xl border border-sky-200 bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:-translate-y-0.5 hover:bg-sky-50"
-            onClick={() => window.open("https://app.couriercart.in/tools/rate_calculator", "_blank")}
+            onClick={() => window.open(`${window.location.origin}/tools/rate_card`, "_blank")}
           >
             Get Full Rate Card
           </button>

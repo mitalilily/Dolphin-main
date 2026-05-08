@@ -116,20 +116,32 @@ export const fetchAvailableCouriers = async (params: any): Promise<any[]> => {
 }
 
 interface ShippingRatesFilters {
-  courier?: string
+  courier?: string | string[]
   mode?: string
-  min_weight?: number
+  min_weight?: number | string
   businessType?: 'b2b' | 'b2c'
   // add more fields if needed
 }
 
 export const fetchShippingRates = async (filters: ShippingRatesFilters = {}) => {
-  const params: Record<string, string | number> = {}
+  const params = new URLSearchParams()
 
-  if (filters.courier) params.courier_name = filters.courier
-  if (filters.mode) params.mode = filters.mode
-  if (filters.min_weight !== undefined) params.min_weight = filters.min_weight
-  if (filters.businessType) params.businessType = filters.businessType
+  const courierNames = Array.isArray(filters.courier)
+    ? filters.courier
+    : filters.courier
+      ? [filters.courier]
+      : []
+
+  courierNames
+    .map((name) => String(name || '').trim())
+    .filter(Boolean)
+    .forEach((name) => params.append('courier_name[]', name))
+
+  if (filters.mode) params.set('mode', filters.mode)
+  if (filters.min_weight !== undefined && filters.min_weight !== '') {
+    params.set('min_weight', String(filters.min_weight))
+  }
+  if (filters.businessType) params.set('businessType', filters.businessType)
 
   const response = await axiosInstance.get('/couriers/shipping-rates', { params })
   return response.data.data
@@ -138,7 +150,15 @@ export const fetchShippingRates = async (filters: ShippingRatesFilters = {}) => 
 export const fetchAllCouriers = async () => {
   const res = await axiosInstance.get(`/couriers/list`)
   if (!res.data?.success) throw new Error('Failed to fetch couriers')
-  return res.data.data // returns an array of courier names
+  const rows: Array<string | { name?: string | null }> = Array.isArray(res.data.data)
+    ? res.data.data
+    : []
+  const names = rows
+    .map((row) => (typeof row === 'string' ? row : row?.name))
+    .map((name) => String(name || '').trim())
+    .filter(Boolean)
+
+  return Array.from(new Set<string>(names)).sort((a, b) => a.localeCompare(b))
 }
 
 export const fetchCouriersWithDetails = async () => {

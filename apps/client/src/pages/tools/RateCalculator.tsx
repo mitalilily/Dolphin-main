@@ -70,8 +70,6 @@ export const cardStyles = {
   boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-
 export function RateCalculator() {
   const { mutateAsync, isPending, isError, error } = useAvailableCouriersMutation()
   const couriersRef = useRef<HTMLDivElement | null>(null) // 👈 ref for scrolling
@@ -82,6 +80,7 @@ export function RateCalculator() {
 
   const methods = useForm({
     mode: 'onBlur',
+    shouldUnregister: true,
     defaultValues: {
       pickupPincode: '',
       pickupCity: '',
@@ -131,14 +130,21 @@ export function RateCalculator() {
       const length = Number(formData.length) || 0
       const breadth = Number(formData.breadth) || 0
       const height = Number(formData.height) || 0
-      const actualWeightKg = Number(formData.weight) || 0 // kg from UI
+      const actualWeightKg =
+        shipmentType === 'b2b' ? Number(formData.totalWeight) || 0 : Number(formData.weight) || 0
 
       // volumetric weight in grams
-      const volumetricWeightGrams = ((length * breadth * height) / 5000) * 1000
+      const volumetricWeightGrams =
+        shipmentType === 'b2c' ? ((length * breadth * height) / 5000) * 1000 : 0
       // convert actual weight from kg → grams
       const actualWeightGrams = actualWeightKg * 1000
       // applicable weight in grams (freeze min 500g)
-      const applicableWeightGrams = Math.max(actualWeightGrams, volumetricWeightGrams, 500)
+      const minimumWeightGrams = shipmentType === 'b2b' ? 1000 : 500
+      const applicableWeightGrams = Math.max(
+        actualWeightGrams,
+        volumetricWeightGrams,
+        minimumWeightGrams,
+      )
 
       const orderAmountValue = Number(formData.orderAmount || 0)
 
@@ -151,6 +157,8 @@ export function RateCalculator() {
         length,
         breadth,
         height,
+        numberOfBoxes:
+          shipmentType === 'b2b' ? Number(formData.numberOfBoxes) || undefined : undefined,
         orderAmount: orderAmountValue > 0 ? orderAmountValue : undefined,
         shipmentType: shipmentType,
         payment_type: formData?.paymentType,
@@ -160,7 +168,6 @@ export function RateCalculator() {
 
       const result = await mutateAsync(payload) // 👈 awaited
       setAvailableCouriers(result ?? [])
-      console.log('Available couriers:', result)
     } catch (err) {
       setAvailableCouriers([])
       console.error('Failed fetching couriers:', err)
@@ -436,17 +443,19 @@ export function RateCalculator() {
         </Typography>
       )}
 
-      {isError ? (
-        <Typography sx={{ color: '#E74C3C', textAlign: 'center', py: 2 }}>
-          Failed to fetch couriers: {error?.message ?? 'Unknown error'}
-        </Typography>
-      ) : (
-        <CourierRateCards
-          shipmentType={watch('paymentType')}
-          availableCouriers={availableCouriers}
-          defaultLogo={defaultLogo}
-        />
-      )}
+      <div ref={couriersRef}>
+        {isError ? (
+          <Typography sx={{ color: '#E74C3C', textAlign: 'center', py: 2 }}>
+            Failed to fetch couriers: {error?.message ?? 'Unknown error'}
+          </Typography>
+        ) : (
+          <CourierRateCards
+            shipmentType={watch('paymentType')}
+            availableCouriers={availableCouriers}
+            defaultLogo={defaultLogo}
+          />
+        )}
+      </div>
 
       <Divider />
       <CardContent

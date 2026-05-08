@@ -1,16 +1,14 @@
 import { Box, Button, Card, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { FaShippingFast } from 'react-icons/fa'
+import { useNavigate } from 'react-router-dom'
 
 const ShippingRateCard = () => {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const navigate = useNavigate()
 
   const handleNavigate = () => {
-    // ✅ full redirect
-    window.location.href = 'http://localhost:5173/tools/rate_calculator'
-
-    // Or if inside React Router context:
-    // navigate('/tools/rate_calculator')
+    navigate('/tools/rate_calculator')
   }
 
   return (

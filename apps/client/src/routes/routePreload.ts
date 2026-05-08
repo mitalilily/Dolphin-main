@@ -164,11 +164,12 @@ const routePreloaders: Array<{
     loaders: withAppShell('weight', loadWeightReconciliation),
   },
   {
-    match: (pathname) => pathname === '/tools/rate_card',
+    match: (pathname) => pathname === '/tools' || pathname === '/tools/rate_card' || pathname === '/tools/rate-card',
     loaders: withAppShell('rate-card', loadRateCard),
   },
   {
-    match: (pathname) => pathname === '/tools/rate_calculator',
+    match: (pathname) =>
+      pathname === '/tools/rate_calculator' || pathname === '/tools/rate-calculator',
     loaders: withAppShell('rate-calculator', loadRateCalculator),
   },
   {

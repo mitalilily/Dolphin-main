@@ -19,6 +19,8 @@ import { courierLogos } from '../utils/constants'
 type ForwardRate = {
   mode?: string | null
   rate?: number | null
+  ratePerKg?: number | string | null
+  rate_per_kg?: number | string | null
   cod_charges?: number | null
   cod_percent?: number | null
   is_prepaid?: boolean
@@ -37,6 +39,9 @@ export type Courier = {
   slabs?: number | null
   rate?: number | null
   edd?: string | null
+  integration_type?: string | null
+  service_provider?: string | null
+  serviceProvider?: string | null
   localRates?: LocalRates | null
   special_zone?: boolean | null
   notes?: string | null
@@ -145,10 +150,7 @@ export default function CourierRateList({
       <Grid container spacing={3}>
         {availableCouriers?.map((courier) => {
           const providerKeyRaw = String(
-            (courier as any)?.integration_type ||
-              (courier as any)?.service_provider ||
-              (courier as any)?.serviceProvider ||
-              '',
+            courier.integration_type || courier.service_provider || courier.serviceProvider || '',
           )
             .trim()
             .toLowerCase()
@@ -159,6 +161,7 @@ export default function CourierRateList({
             )?.[1] ?? defaultLogo
 
           const forward: ForwardRate = courier?.localRates?.forward ?? {}
+          const ratePerKg = Number(forward?.ratePerKg ?? forward?.rate_per_kg ?? 0)
 
           // Calculate total charges using slabbed rate
           const freight =
@@ -166,6 +169,8 @@ export default function CourierRateList({
               ? Number(courier.rate)
               : forward?.rate
               ? Number(forward?.rate)
+              : ratePerKg > 0
+              ? ratePerKg
               : 0
           const codCharges = forward?.cod_charges ? Number(forward?.cod_charges) : 0
           const isCOD = shipmentType === 'cod'
@@ -280,6 +285,7 @@ export default function CourierRateList({
                       }}
                     >
                       {isCOD ? 'Including COD Charges' : 'Prepaid Rate'}
+                      {ratePerKg > 0 && courier?.rate ? ` | ${ratePerKg.toLocaleString('en-IN')}/kg` : ''}
                     </Typography>
                   </Box>
 

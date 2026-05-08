@@ -77,6 +77,12 @@ export const FilterBar = <T extends Record<string, any>>({
   const primaryFields = fields.filter((f) => !f.isAdvanced)
   const advancedFields = fields.filter((f) => f.isAdvanced)
 
+  const getEmptyValues = () =>
+    fields.reduce((acc, field) => {
+      acc[field.name] = field.type === 'multiselect' ? [] : ''
+      return acc
+    }, {} as Record<string, any>) as T
+
   const renderFieldControl = (field: FilterField, controllerField: any) => {
     if (field.type === 'select') {
       return (
@@ -212,8 +218,9 @@ export const FilterBar = <T extends Record<string, any>>({
                   sx={desktopActionButtonSx}
                   size="small"
                   onClick={() => {
-                    reset(defaultValues)
-                    onApply({} as T)
+                    const emptyValues = getEmptyValues()
+                    reset(emptyValues)
+                    onApply(emptyValues)
                   }}
                 >
                   <MdDelete />
@@ -345,8 +352,9 @@ export const FilterBar = <T extends Record<string, any>>({
                 variant="outlined"
                 startIcon={<MdDelete />}
                 onClick={() => {
-                  reset(defaultValues)
-                  onApply({} as T)
+                  const emptyValues = getEmptyValues()
+                  reset(emptyValues)
+                  onApply(emptyValues)
                   setDrawerOpen(false)
                 }}
                 sx={{

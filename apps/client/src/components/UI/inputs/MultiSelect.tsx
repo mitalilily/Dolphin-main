@@ -120,7 +120,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
 
   // Mobile dropdown as full-screen dialog
   const mobileDropdown = isMobile && (
-    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
+    <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm" disableScrollLock>
       <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         {label}
         <IconButton onClick={() => setOpen(false)}>

@@ -32,6 +32,7 @@ export interface UseAvailableCouriersParams {
   weight?: number
   cod?: number
   orderAmount?: number
+  numberOfBoxes?: number
   length?: number
   breadth?: number
   height?: number
@@ -118,8 +119,10 @@ export const useAvailableCouriersMutation = () => {
         length: params.length,
         breadth: params.breadth,
         height: params.height,
+        number_of_boxes: params.numberOfBoxes,
         shipment_type: params?.shipmentType,
         isCalculator: params.isCalculator === true || params.context === 'rate_calculator',
+        service_providers: params.serviceProviders,
       })
     },
     retry: 1,

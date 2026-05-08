@@ -36,6 +36,7 @@ const CustomDrawer: React.FC<GlassDrawerProps> = ({
       anchor={anchor}
       open={open}
       onClose={onClose}
+      ModalProps={{ disableScrollLock: true }}
       slotProps={{
         paper: {
           sx: {
