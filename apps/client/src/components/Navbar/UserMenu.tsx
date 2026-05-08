@@ -46,6 +46,7 @@ const UserMenu = () => {
     keys: user?.companyInfo?.profilePicture,
     enabled: !!user?.companyInfo?.profilePicture,
   })
+  const avatarSrc = Array.isArray(avatarUrl) ? avatarUrl[0] : avatarUrl
 
   const handleClose = () => setAnchorEl(null)
 
@@ -120,7 +121,7 @@ const UserMenu = () => {
         }}
       >
         <Avatar
-          src={avatarUrl?.[0] ?? ''}
+          src={avatarSrc ?? ''}
           sx={{
             width: 32,
             height: 32,

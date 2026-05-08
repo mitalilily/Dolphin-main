@@ -26,7 +26,6 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
   const thumbColor = useColorModeValue('rgba(16,50,74,0.22)', 'rgba(255,255,255,0.24)')
   const brandText = useColorModeValue('gray.800', 'gray.100')
   const mutedText = useColorModeValue('rgba(95,122,143,0.78)', 'rgba(255,255,255,0.66)')
-  const collapsedLogoBg = useColorModeValue('rgba(198,231,255,0.3)', 'rgba(44,143,255,0.18)')
   const panelBg = useColorModeValue('rgba(255,255,255,0.72)', 'rgba(255,255,255,0.06)')
   const laneColor = useColorModeValue('rgba(16,50,74,0.08)', 'rgba(255,255,255,0.12)')
 
@@ -63,6 +62,8 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
       <Button
         justifyContent={collapsed ? 'center' : 'flex-start'}
         w="100%"
+        minW="0"
+        whiteSpace="normal"
         bg={isActive ? activeBg : 'transparent'}
         borderRadius="16px"
         mb="1.5"
@@ -81,7 +82,7 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
         _active={{ transform: 'scale(0.98)' }}
         transition="all 0.2s ease"
       >
-        <Flex align="center" gap="12px" w="100%">
+        <Flex align="center" gap="12px" w="100%" minW="0">
           {prop.icon && (
             <Box
               w={collapsed ? '42px' : '38px'}
@@ -99,7 +100,15 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
             </Box>
           )}
           {showText && (
-            <Text color={isActive ? brandText : textColor} fontWeight={isActive ? '700' : '600'} fontSize="sm">
+            <Text
+              color={isActive ? brandText : textColor}
+              fontWeight={isActive ? '700' : '600'}
+              fontSize="sm"
+              lineHeight="1.2"
+              noOfLines={2}
+              minW="0"
+              overflowWrap="anywhere"
+            >
               {prop.name}
             </Text>
           )}
@@ -126,6 +135,8 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
                 onClick={() => toggleCollapse(prop.state)}
                 justifyContent={collapsed ? 'center' : 'space-between'}
                 w="100%"
+                minW="0"
+                whiteSpace="normal"
                 bg={isChildActive ? activeBg : 'transparent'}
                 borderRadius="18px"
                 mb="1"
@@ -140,7 +151,7 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
                 }}
                 transition="all 0.2s ease"
               >
-                <Flex align="center" gap="12px" w="100%">
+                <Flex align="center" gap="12px" w="100%" minW="0">
                   <Box
                     p="8px"
                     borderRadius="14px"
@@ -160,6 +171,11 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
                       fontSize="sm"
                       textAlign="left"
                       flex="1"
+                      minW="0"
+                      noOfLines={2}
+                      whiteSpace="normal"
+                      lineHeight="1.2"
+                      overflowWrap="anywhere"
                     >
                       {prop.name}
                     </Text>
@@ -239,14 +255,14 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
             textAlign="left"
           >
             <Text fontSize="10px" fontWeight="800" letterSpacing="0.18em" textTransform="uppercase" color="rgba(255,255,255,0.62)" mb="8px">
-              {adminBrand.panelName}
+              Admin Console
             </Text>
-            <Box as="img" src={adminBrand.logo} alt={adminBrand.panelName} h="44px" w="156px" objectFit="contain" mb="12px" />
+            <Box as="img" src={adminBrand.logo} alt={adminBrand.panelName} h="58px" w="190px" objectFit="contain" mb="12px" filter="drop-shadow(0 8px 16px rgba(0,0,0,0.18))" />
             <Text fontWeight="800" fontSize="16px">
-              {logoText}
+              Shipping Control Center
             </Text>
             <Text mt="6px" fontSize="11px" color="rgba(255,255,255,0.72)" lineHeight="1.6">
-              The admin surface for shipping, support, and finance operations.
+              Manage sellers, orders, courier setup, support tickets, wallets, and billing from one focused dashboard.
             </Text>
             <Box
               mt="12px"
@@ -257,7 +273,7 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
               border="1px solid rgba(255,255,255,0.1)"
             >
               <Text fontSize="11px" fontWeight="700" color="rgba(255,255,255,0.9)">
-                Brand-matched to the client experience.
+                Built for daily shipping decisions.
               </Text>
             </Box>
           </Box>
@@ -270,9 +286,9 @@ const SidebarContent = ({ logoText, routes, sidebarWidth }) => {
             w="50px"
             mx="auto"
             objectFit="contain"
-            p="6px"
-            borderRadius="12px"
-            bg={collapsedLogoBg}
+            p="0"
+            borderRadius="0"
+            filter="drop-shadow(0 6px 12px rgba(0,0,0,0.16))"
           />
         )}
       </Box>

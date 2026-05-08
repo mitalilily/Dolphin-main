@@ -289,7 +289,10 @@ export const generateManifestController = async (req: any, res: Response) => {
     const { awbs, type = 'b2c' } = req.body
 
     if (!awbs || !Array.isArray(awbs) || awbs.length === 0) {
-      return res.status(400).json({ success: false, message: 'AWBs are required' })
+      return res.status(400).json({
+        success: false,
+        message: 'Order numbers or AWBs are required',
+      })
     }
 
     if (!['b2c', 'b2b'].includes(type)) {

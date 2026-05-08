@@ -18,6 +18,78 @@ import { userProfiles } from '../schema/userProfile'
 import { userPlans } from '../schema/userPlans'
 import { users } from '../schema/users'
 
+const DEFAULT_COMPANY_INFO: CompanyInfo = {
+  businessName: '',
+  contactPerson: '',
+  POCEmailVerified: false,
+  POCPhoneVerified: false,
+  companyAddress: '',
+  pincode: '',
+  state: '',
+  city: '',
+  profilePicture: '',
+  contactNumber: '',
+  contactEmail: '',
+  companyContactNumber: '',
+  brandName: '',
+  companyEmail: '',
+  companyLogoUrl: '',
+  website: '',
+}
+
+const buildDefaultProfile = (
+  userId: string,
+  user?: Partial<typeof users.$inferSelect> | null,
+) => ({
+  userId,
+  onboardingStep: 0,
+  monthlyOrderCount: '0-100',
+  salesChannels: {},
+  companyInfo: {
+    ...DEFAULT_COMPANY_INFO,
+    contactEmail: user?.email ?? '',
+    companyEmail: user?.email ?? '',
+    contactNumber: user?.phone ?? '',
+    companyContactNumber: user?.phone ?? '',
+    POCEmailVerified: Boolean(user?.emailVerified),
+    POCPhoneVerified: Boolean(user?.phoneVerified),
+    profilePicture: user?.profilePicture ?? '',
+  },
+  domesticKyc: { status: 'pending' as const, updatedAt: null },
+  bankDetails: null,
+  gstDetails: null,
+  businessType: [],
+  approved: false,
+  rejectionReason: null,
+  onboardingComplete: false,
+  profileComplete: false,
+  approvedAt: null,
+})
+
+const normalizeProfilePayload = (profile: Record<string, any>, userId: string) => ({
+  ...profile,
+  userId,
+  onboardingStep: Number.isFinite(profile.onboardingStep) ? profile.onboardingStep : 0,
+  monthlyOrderCount: profile.monthlyOrderCount ?? '0-100',
+  salesChannels: profile.salesChannels ?? {},
+  companyInfo: {
+    ...DEFAULT_COMPANY_INFO,
+    ...(profile.companyInfo ?? {}),
+  },
+  domesticKyc: profile.domesticKyc ?? { status: 'pending', updatedAt: null },
+  bankDetails: profile.bankDetails ?? null,
+  gstDetails: profile.gstDetails ?? null,
+  businessType: Array.isArray(profile.businessType) ? profile.businessType : [],
+  approved: Boolean(profile.approved),
+  onboardingComplete: Boolean(profile.onboardingComplete),
+  profileComplete: Boolean(profile.profileComplete),
+})
+
+const stripReadOnlyProfileFields = (profile: Record<string, any>) => {
+  const { id, submittedAt, updatedAt, currentPlanId, currentPlanName, ...settable } = profile
+  return settable
+}
+
 /**
  * Fetch the profile for a specific userId (returns null if none exists)
  */
@@ -48,24 +120,36 @@ export const getProfileByUserId = async (userId: string) => {
  * Users can only touch whitelisted fields; flags such as `approved`
  * stay under admin control.
  */
-export const upsertUserProfile = async (userId: string, input: IUserProfileDB) => {
-  const existing = await getProfileByUserId(userId)
+export const upsertUserProfile = async (userId: string, input: Partial<IUserProfileDB>) => {
+  const [existing] = await db
+    .select()
+    .from(userProfiles)
+    .where(eq(userProfiles.userId, userId))
+    .limit(1)
 
   // Sanitise input (strip undefined so jsonb merge below is clean)
-  const payload: any = Object.fromEntries(
-    Object.entries(input).filter(([, v]) => v !== undefined),
-  ) as IUserProfileDB
+  const payload = Object.fromEntries(Object.entries(input).filter(([, v]) => v !== undefined))
 
   // Merge JSONB blocks (keeps untouched keys intact)
-  const merged = {
-    ...existing,
-    ...payload, // new/updated blocks overwrite existing ones
+  const [user] = existing
+    ? []
+    : await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  const base = existing ?? buildDefaultProfile(userId, user)
+  const merged = normalizeProfilePayload(deepMerge(base as any, payload), userId)
+
+  if (!existing) {
+    const [created] = await db
+      .insert(userProfiles)
+      .values(stripReadOnlyProfileFields(merged) as typeof userProfiles.$inferInsert)
+      .returning()
+
+    return created
   }
 
   const [updated] = await db
     .update(userProfiles)
     .set({
-      ...merged,
+      ...stripReadOnlyProfileFields(merged),
       updatedAt: new Date(),
     })
     .where(eq(userProfiles.userId, userId))
@@ -94,7 +178,7 @@ export const updateUserProfileService = async (userId: string, data: Record<stri
     .where(eq(userProfiles.userId, userId))
     .limit(1)
 
-  if (!existing) return null
+  if (!existing) return upsertUserProfile(userId, data as Partial<IUserProfileDB>)
 
   /* 2. deep merge incoming into existing */
   const merged = deepMerge(existing, data as any)
@@ -364,7 +448,7 @@ export const verifyProfilePhoneOTP = async (
 
   const companyInfoWithPhone = sql`jsonb_set(
   ${userProfiles.companyInfo},
-  '{contactPhone}',
+  '{contactNumber}',
   ${JSON.stringify(phone)}::jsonb,
   true
 )`

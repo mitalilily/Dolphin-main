@@ -6,6 +6,7 @@ import { FiSave } from 'react-icons/fi'
 import { useAuth } from '../../../context/auth/AuthContext'
 import { useUpdateUserProfile } from '../../../hooks/User/useUpdateUserProfile'
 import { usePresignedDownloadUrls } from '../../../hooks/Uploads/usePresignedDownloadUrls'
+import { brand, brandGradients } from '../../../theme/brand'
 import type { CompanyInfo, IUserProfileDB } from '../../../types/user.types'
 import type { UploadedFileInfo } from '../../UI/uploader/FileUploader'
 import CustomIconLoadingButton from '../../UI/button/CustomLoadingButton'
@@ -16,9 +17,9 @@ import FileUploader from '../../UI/uploader/FileUploader'
 import ProfileEmailVerificationModal from './ProfileEmailVerificationModal'
 import PhoneVerificationModal from './ProfilePhoneVerificationModal'
 
-export const DE_BLUE = '#0052CC'
-export const DE_AMBER = '#FFAB00'
-export const BRAND_GRADIENT = `linear-gradient(135deg, ${DE_BLUE} 0%, #2a5fbe 100%)`
+export const DE_BLUE = brand.ink
+export const DE_AMBER = brand.warning
+export const BRAND_GRADIENT = brandGradients.button
 
 export default function UserProfileForm() {
   const { user, loading } = useAuth()
@@ -56,6 +57,7 @@ export default function UserProfileForm() {
     keys: avatarKey,
     enabled: !!avatarKey,
   })
+  const avatarSrc = Array.isArray(avatarUrl) ? avatarUrl[0] : avatarUrl
 
   const handleAvatarUploaded = useCallback(
     (files: UploadedFileInfo[]) => {
@@ -125,12 +127,12 @@ export default function UserProfileForm() {
             <FileUploader
               variant="avatar"
               accept="image/*,.png,.jpg,.jpeg"
-              placeholder={avatarUrl?.[0]}
+              placeholder={avatarSrc}
               showPlaceholderImgByDefault
               loadingPreview={loading}
               onUploaded={handleAvatarUploaded}
             />
-            <Typography variant="caption" sx={{ color: '#6b778c', mt: 1.5, display: 'block', fontWeight: 600 }}>
+            <Typography variant="caption" sx={{ color: brand.inkSoft, mt: 1.5, display: 'block', fontWeight: 600 }}>
               Profile Picture
             </Typography>
           </Box>
@@ -142,7 +144,7 @@ export default function UserProfileForm() {
                 <Typography variant="h6" sx={{ fontWeight: 800, color: DE_BLUE }}>
                   Account Information
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#5e759a' }}>
+                <Typography variant="body2" sx={{ color: brand.inkSoft }}>
                   Update your contact details and identity.
                 </Typography>
               </Box>
@@ -223,7 +225,7 @@ export default function UserProfileForm() {
                   borderRadius: 1,
                   bgcolor: DE_BLUE,
                   boxShadow: `0 8px 20px ${alpha(DE_BLUE, 0.3)}`,
-                  '&:hover': { bgcolor: '#0043A4' },
+                  '&:hover': { bgcolor: DE_BLUE },
                 }}
               />
             </Box>

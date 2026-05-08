@@ -4,6 +4,7 @@ import React, { useEffect, useState, type ChangeEvent, type Dispatch, type SetSt
 import { FiUser } from 'react-icons/fi'
 import { MdBusiness, MdEmail, MdLocationPin, MdPhone } from 'react-icons/md'
 import { useAuth } from '../../context/auth/AuthContext'
+import { brand } from '../../theme/brand'
 import type { FormErrors } from '../../pages/onboarding/UserOnboarding'
 import type { UserInfoData } from '../../types/user.types'
 import { createSyntheticEvent } from '../../utils/functions'
@@ -21,8 +22,8 @@ interface StepOneProps {
   setErrors: React.Dispatch<React.SetStateAction<FormErrors>>
 }
 
-const DE_BLUE = '#8A1F43'
-const BRAND_ORANGE = '#56C0A5'
+const DE_BLUE = brand.ink
+const BRAND_ORANGE = brand.success
 
 export default function StepOneForm({ formData, onChange, errors, setFormData, setErrors }: StepOneProps) {
   const { user: userData } = useAuth()

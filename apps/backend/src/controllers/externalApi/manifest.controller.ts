@@ -1,5 +1,5 @@
 import { Response } from 'express'
-import { eq, inArray } from 'drizzle-orm'
+import { inArray } from 'drizzle-orm'
 import { db } from '../../models/client'
 import { b2c_orders, b2b_orders } from '../../schema/schema'
 import { generateManifestService } from '../../models/services/shiprocket.service'
@@ -69,20 +69,13 @@ export const generateManifestController = async (req: any, res: Response) => {
       })
     }
 
-    // Extract AWB numbers for manifest generation
-    const awbNumbers = orders.map((o) => o.awb_number).filter(Boolean) as string[]
-
-    if (awbNumbers.length === 0) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid orders',
-        message: 'No valid AWB numbers found for the specified orders',
-      })
-    }
+    // The manifest service accepts either AWB numbers or merchant order numbers.
+    // Delhivery and other deferred-manifest orders may not have AWB until this step.
+    const manifestRefs = identifiers.map((value: unknown) => String(value || '').trim()).filter(Boolean)
 
     // Generate manifest
     const { manifest_id, manifest_url, manifest_key, warnings } = await generateManifestService({
-      awbs: awbNumbers,
+      awbs: manifestRefs,
       type: type as 'b2c' | 'b2b',
       userId,
     })
@@ -95,7 +88,7 @@ export const generateManifestController = async (req: any, res: Response) => {
         manifest_url,
         manifest_key,
         warnings,
-        order_count: awbNumbers.length,
+        order_count: manifestRefs.length,
         type,
       },
     })

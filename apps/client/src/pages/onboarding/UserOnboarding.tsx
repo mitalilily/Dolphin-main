@@ -1,7 +1,7 @@
 import { Box, Button, Paper, Stack, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FiCheckCircle } from 'react-icons/fi'
 import { MdArrowBack, MdArrowForward } from 'react-icons/md'
 import { useNavigate } from 'react-router-dom'
@@ -39,11 +39,13 @@ export default function UserOnboarding() {
   const navigate = useNavigate()
 
   const { user: userData, loading: fetchingUserData } = useAuth()
-  const { mutateAsync: completeOnboarding, isPending } = useCompleteUserOnboarding()
+  const { mutateAsync: completeOnboarding } = useCompleteUserOnboarding()
 
   const [step, setStep] = useState<number>(1)
   const [formData, setFormData] = useState<UserInfoData>({ ...initialFormData })
   const [formErrors, setFormErrors] = useState<FormErrors>({ ...initialFormData })
+  const [finalSubmitting, setFinalSubmitting] = useState(false)
+  const hydratedUserIdRef = useRef<string | null>(null)
 
   const progressPercent = useMemo(() => Math.round((step / steps.length) * 100), [step])
 
@@ -57,11 +59,12 @@ export default function UserOnboarding() {
 
     const resumeStep = (userData.onboardingStep ?? 0) + 1
     const clamped = Math.min(Math.max(resumeStep, 1), steps.length)
-    setStep(clamped)
+    setStep((current) => Math.max(current, clamped))
   }, [userData, navigate])
 
   useEffect(() => {
-    if (!userData || !Object.keys(userData).length) return
+    if (!userData?.id || hydratedUserIdRef.current === userData.id) return
+    hydratedUserIdRef.current = userData.id
 
     const prefill = getOnboardingPrefill()
     const activeEmail = sessionStorage.getItem('activeEmail') || ''
@@ -149,31 +152,30 @@ export default function UserOnboarding() {
 
     if (step < steps.length) {
       const submittedStep = step
-      setStep((prev) => prev + 1)
+      setStep((current) => Math.max(current, submittedStep + 1))
 
       completeOnboarding({ step: submittedStep, data: formData })
-        .then((response: any) => {
-          if (response?.user) {
-            queryClient.setQueryData(['userProfile'], response.user)
-          }
-        })
         .catch(() => {
-          // The mutation hook already shows a toast. Do not trap the user on
-          // Step 1; the final submit sends the complete onboarding payload.
+          // Keep the wizard usable on transient save failures. The final step
+          // sends the complete payload again before marking onboarding complete.
         })
       return
     }
 
     try {
+      setFinalSubmitting(true)
       const response: any = await completeOnboarding({ step, data: formData })
 
       if (response?.user) {
         queryClient.setQueryData(['userProfile'], response.user)
-        queryClient.invalidateQueries({ queryKey: ['userProfile'] })
-        navigate('/dashboard')
       }
+
+      queryClient.invalidateQueries({ queryKey: ['userProfile'] })
+      navigate('/dashboard')
     } catch {
       // useCompleteUserOnboarding already shows the API error toast.
+    } finally {
+      setFinalSubmitting(false)
     }
   }
 
@@ -391,7 +393,7 @@ export default function UserOnboarding() {
             <CustomIconLoadingButton
               variant="solid"
               fullWidth
-              loading={isPending}
+              loading={finalSubmitting}
               onClick={handleNext}
               endIcon={step < steps.length ? <MdArrowForward /> : <FiCheckCircle />}
               text={step < steps.length ? 'Continue Setup' : 'Finish Panel Setup'}

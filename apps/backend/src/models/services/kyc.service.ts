@@ -6,6 +6,7 @@ import { kyc } from '../schema/kyc'
 
 import { HttpError } from '../../utils/classes'
 import { userProfiles } from '../schema/userProfile'
+import { upsertUserProfile } from './userProfile.service'
 
 // Optional image clarity checker
 // import { isImageBlurrySharp } from "@/utils/imageBlurriness";
@@ -18,6 +19,8 @@ export const UpdateKYCDetails = async (userId: string, details: KycDetails): Pro
   }
 
   // ✅ Determine required fields based on structure + companyType
+  await upsertUserProfile(userId, {})
+
   const requiredFieldsMap =
     structure === 'company' && companyType
       ? (

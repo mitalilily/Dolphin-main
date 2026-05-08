@@ -1,8 +1,10 @@
 import { Alert, Box, Button, Stack, Typography } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import React, { useEffect, useState } from 'react'
 import { MdCheckCircleOutline } from 'react-icons/md'
 import { usePresignedDownloadUrls } from '../../../../hooks/Uploads/usePresignedDownloadUrls'
 import { useMediaPipeFace } from '../../../../hooks/useMediaPipe'
+import { brand } from '../../../../theme/brand'
 interface Props {
   onCapture: (img: string) => void
   img: string
@@ -20,13 +22,17 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
     enabled: !!img && !img.startsWith('data'),
   })
 
+  const resolvedPresignedUrl = Array.isArray(presignedUrls) ? presignedUrls[0] : presignedUrls
+
   useEffect(() => {
-    if (img && presignedUrls) {
-      setCaptured(presignedUrls as string)
-    } else if (img && !presignedUrls) {
+    if (img && resolvedPresignedUrl) {
+      setCaptured(resolvedPresignedUrl)
+      setIsValid(true)
+    } else if (img && !resolvedPresignedUrl) {
       setCaptured(img)
+      setIsValid(true)
     }
-  }, [img, presignedUrls])
+  }, [img, resolvedPresignedUrl])
 
   // Report validity upward
 
@@ -50,20 +56,22 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
 
   const reset = () => {
     setCaptured(null)
+    setIsValid(false)
+    onCapture('')
     setError('')
   }
 
   const borderColor = () => {
-    if (captured || img) return isValid ? 'green' : 'orange'
-    if (error) return 'red'
-    if (!detected) return 'gray'
-    if (!canCapture) return 'orange'
-    return 'green'
+    if (captured || img) return isValid ? brand.success : brand.warning
+    if (error) return brand.danger
+    if (!detected) return alpha(brand.ink, 0.32)
+    if (!canCapture) return brand.warning
+    return brand.success
   }
 
   return (
     <Box textAlign="center">
-      <Typography variant="h6" mb={3} fontWeight={700} color="#333369">
+      <Typography variant="h6" mb={3} fontWeight={700} color={brand.ink}>
         Align your face and take a selfie
       </Typography>
 
@@ -117,6 +125,12 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
         </Alert>
       )}
 
+      {error && !captured && (
+        <Alert sx={{ m: 1 }} severity="error">
+          {error}
+        </Alert>
+      )}
+
       {!captured ? (
         <Button
           sx={{
@@ -125,10 +139,12 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
             py: 1.5,
             fontWeight: 600,
             borderRadius: 2,
-            boxShadow: '0 4px 12px rgba(51, 51, 105, 0.2)',
+            bgcolor: brand.ink,
+            boxShadow: `0 12px 24px ${alpha(brand.ink, 0.14)}`,
             '&:hover': {
               transform: 'translateY(-1px)',
-              boxShadow: '0 6px 16px rgba(51, 51, 105, 0.3)',
+              bgcolor: brand.ink,
+              boxShadow: `0 16px 28px ${alpha(brand.ink, 0.18)}`,
             },
             transition: 'all 0.3s ease',
           }}
@@ -148,11 +164,11 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
                 py: 1,
                 fontWeight: 600,
                 borderRadius: 2,
-                borderColor: '#E0E6ED',
-                color: '#E74C3C',
+                borderColor: alpha(brand.danger, 0.24),
+                color: brand.danger,
                 '&:hover': {
-                  bgcolor: 'rgba(231, 76, 60, 0.1)',
-                  borderColor: '#E74C3C',
+                  bgcolor: alpha(brand.danger, 0.08),
+                  borderColor: brand.danger,
                 },
               }}
               variant="outlined"
@@ -165,11 +181,11 @@ const ImageCaptureStep: React.FC<Props> = ({ onCapture, img }) => {
             icon={<MdCheckCircleOutline fontSize="inherit" />}
             severity="success"
             sx={{
-              bgcolor: 'rgba(61, 213, 152, 0.1)',
-              border: '1px solid rgba(61, 213, 152, 0.3)',
-              color: '#1A1A1A',
+              bgcolor: alpha(brand.success, 0.1),
+              border: `1px solid ${alpha(brand.success, 0.3)}`,
+              color: brand.ink,
               '& .MuiAlert-icon': {
-                color: '#3DD598',
+                color: brand.success,
               },
             }}
           >

@@ -186,7 +186,7 @@ export default function CompanyInfoForm() {
           <Stack alignItems={{ md: 'flex-start', xs: 'center' }} gap={1}>
             <Typography fontSize={'12px'} display={'flex'} alignItems={'center'} gap={1}>
               <Tooltip title="Please click save button to save the company logo">
-                <BiInfoCircle color="#5a9de6" />
+                <BiInfoCircle color={DE_BLUE} />
               </Tooltip>{' '}
               Company Logo (optional){' '}
             </Typography>
@@ -332,7 +332,7 @@ export default function CompanyInfoForm() {
             bgcolor: DE_BLUE,
             boxShadow: `0 8px 20px ${alpha(DE_BLUE, 0.3)}`,
             '&:hover': {
-              bgcolor: '#0043A4',
+              bgcolor: DE_BLUE,
             },
           }}
         />

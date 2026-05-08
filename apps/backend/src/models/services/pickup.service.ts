@@ -3,6 +3,7 @@ import { db } from '../client'
 import { b2c_orders } from '../schema/b2cOrders'
 import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
+import { IcarryService } from './couriers/icarry.service'
 import { ShiprocketCourierService } from './couriers/shiprocket.service'
 import { ShipmozoService } from './couriers/shipmozo.service'
 import { TruxcargoService } from './couriers/truxcargo.service'
@@ -32,14 +33,58 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
   })
 
   const integration = (order.integration_type || '').toLowerCase()
-  if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo'].includes(integration)) {
+  const normalizedStatus = String(order.order_status || '').trim().toLowerCase()
+  const cancellableStatuses = new Set([
+    'pending',
+    'booked',
+    'shipment_created',
+    'pickup_initiated',
+    'manifest_failed',
+  ])
+  const localOnlyCancelableStatuses = new Set(['pending', 'booked', 'manifest_failed'])
+
+  if (normalizedStatus === 'cancelled') {
+    throw new Error('Order is already cancelled')
+  }
+
+  if (normalizedStatus === 'cancellation_requested') {
+    throw new Error('Cancellation has already been requested')
+  }
+
+  if (!cancellableStatuses.has(normalizedStatus)) {
+    throw new Error(`Order with status "${order.order_status}" cannot be cancelled`)
+  }
+
+  if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo', 'icarry'].includes(integration)) {
     console.error('❌ Unsupported integration type:', { orderId, integration })
     throw new Error(
-      'Only Delhivery, Ekart, Xpressbees, Shipmozo, Shiprocket and Truxcargo are supported for cancellation',
+      'Only Delhivery, Ekart, Xpressbees, Shipmozo, Shiprocket, Truxcargo and iCarry are supported for cancellation',
     )
   }
 
-  if (!order.awb_number) {
+  if (!order.awb_number && !(integration === 'icarry' && order.shipment_id)) {
+    if (localOnlyCancelableStatuses.has(normalizedStatus)) {
+      console.log('Cancelling local pre-manifest order without courier call', {
+        orderId,
+        integration,
+        currentStatus: order.order_status,
+      })
+
+      await db.transaction(async (tx) => {
+        await tx
+          .update(b2c_orders)
+          .set({ order_status: 'cancelled', updated_at: new Date() })
+          .where(eq(b2c_orders.id, orderId))
+
+        await applyCancellationRefundOnce(tx, order, 'pre_manifest_cancel')
+      })
+
+      return {
+        success: true,
+        localOnly: true,
+        message: 'Pre-manifest order cancelled locally',
+      }
+    }
     console.error('❌ Courier cancellation failed: Missing AWB number', { orderId, integration })
     throw new Error('Cancellation requires an AWB number')
   }
@@ -50,28 +95,36 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
     integration,
   })
 
+  const awbNumber = String(order.awb_number || '').trim()
   let cancellationResult: any = null
   if (integration === 'delhivery') {
     const svc = new DelhiveryService()
-    cancellationResult = await svc.cancelShipment(order.awb_number)
+    cancellationResult = await svc.cancelShipment(awbNumber)
   } else if (integration === 'ekart') {
     const svc = new EkartService()
-    cancellationResult = await svc.cancelShipment(order.awb_number)
+    cancellationResult = await svc.cancelShipment(awbNumber)
   } else if (integration === 'shipmozo') {
     const svc = new ShipmozoService()
     cancellationResult = await svc.cancelOrder({
       order_id: order.order_number || order.id,
-      awb_number: order.awb_number,
+      awb_number: awbNumber,
     })
   } else if (integration === 'shiprocket') {
     const svc = new ShiprocketCourierService()
-    cancellationResult = await svc.cancelShipmentByAwbs({ awbs: [order.awb_number] })
+    cancellationResult = await svc.cancelShipmentByAwbs({ awbs: [awbNumber] })
   } else if (integration === 'truxcargo') {
     const svc = new TruxcargoService()
-    cancellationResult = await svc.cancelOrder({ waybill: order.awb_number })
+    cancellationResult = await svc.cancelOrder({ waybill: awbNumber })
+  } else if (integration === 'icarry') {
+    const shipmentId = Number(order.shipment_id || order.awb_number || 0)
+    if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
+      throw new Error('iCarry cancellation requires a numeric shipment_id')
+    }
+    const svc = new IcarryService()
+    cancellationResult = await svc.cancelShipment({ shipment_id: shipmentId })
   } else {
     const svc = new XpressbeesService()
-    cancellationResult = await svc.cancelShipment(order.awb_number)
+    cancellationResult = await svc.cancelShipment(awbNumber)
   }
 
   // Validate courier response

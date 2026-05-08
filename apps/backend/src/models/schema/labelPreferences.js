@@ -76,7 +76,7 @@ exports.labelPreferences = createTable('label_preferences', {
   char_limit: (0, pg_core_1.integer)('char_limit').default(25).notNull(),
   max_items: (0, pg_core_1.integer)('max_items').default(3).notNull(),
   brand_logo: (0, pg_core_1.text)('brand_logo'), // S3 key or URL
-  powered_by: (0, pg_core_1.varchar)('powered_by', { length: 120 }).default('Mera Courier Wala'),
+  powered_by: (0, pg_core_1.varchar)('powered_by', { length: 120 }).default('Dolphin Enterprise'),
   created_at: (0, pg_core_1.timestamp)('created_at', { withTimezone: true }).defaultNow().notNull(),
   updated_at: (0, pg_core_1.timestamp)('updated_at', { withTimezone: true })
     .defaultNow()

@@ -69,7 +69,7 @@ export const createOrderController = async (req: any, res: Response) => {
       shipment_data: shipmentData,
     })
 
-    // Delhivery manifestation is part of shipment creation.
+    // Manifest is a separate user-triggered step unless the courier explicitly returns it.
     const createManifest = false
 
     // Generate opaque provider code to hide actual integration_type from external API users
@@ -321,8 +321,16 @@ export const cancelOrderController = async (req: any, res: Response) => {
     }
 
     // Check if order can be cancelled
-    const cancellableStatuses = ['booked', 'pending', 'confirmed', 'pickup_initiated']
-    if (!cancellableStatuses.includes(order.order_status?.toLowerCase() || '')) {
+    const normalizedStatus = String(order.order_status || '').trim().toLowerCase()
+    const cancellableStatuses = [
+      'pending',
+      'booked',
+      'confirmed',
+      'shipment_created',
+      'pickup_initiated',
+      'manifest_failed',
+    ]
+    if (!cancellableStatuses.includes(normalizedStatus)) {
       return res.status(400).json({
         success: false,
         error: 'Order cannot be cancelled',
@@ -341,6 +349,42 @@ export const cancelOrderController = async (req: any, res: Response) => {
     }
 
     if (!order.awb_number) {
+      const localOnlyCancelableStatuses = ['pending', 'booked', 'manifest_failed']
+      if (localOnlyCancelableStatuses.includes(normalizedStatus)) {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(b2c_orders)
+            .set({
+              order_status: 'cancelled',
+              updated_at: new Date(),
+            })
+            .where(eq(b2c_orders.id, order.id))
+
+          await applyCancellationRefundOnce(tx, order, 'pre_manifest_cancel_api')
+        })
+
+        await sendWebhookEvent(userId, 'order.cancelled', {
+          order_id: order.id,
+          order_number: order.order_number,
+          awb_number: order.awb_number,
+          status: 'cancelled',
+          cancellation_reason: reason || 'Cancelled via API before manifest',
+          cancelled_at: new Date().toISOString(),
+        })
+
+        return res.status(200).json({
+          success: true,
+          message: 'Order cancelled successfully',
+          data: {
+            order_id: order.id,
+            order_number: order.order_number,
+            awb_number: order.awb_number,
+            status: 'cancelled',
+            cancellation_reason: reason || 'Cancelled via API before manifest',
+          },
+        })
+      }
+
       return res.status(400).json({
         success: false,
         error: 'Missing AWB',
@@ -416,7 +460,7 @@ export const cancelOrderController = async (req: any, res: Response) => {
           cancellationResult?.message ||
           'Delhivery did not confirm cancellation',
         data: {
-          provider: 'delhivery',
+          provider,
           awb_number: order.awb_number,
           provider_response: cancellationResult,
         },

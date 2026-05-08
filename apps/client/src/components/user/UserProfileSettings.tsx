@@ -2,11 +2,12 @@ import { Box, Paper, Stack, Typography } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 import { BiLock, BiUserCircle } from 'react-icons/bi'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { brand } from '../../theme/brand'
 import PasswordSettingsForm from './profile/PasswordSettings'
 import UserProfileForm from './profile/UserProfileForm'
 
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
+const DE_BLUE = brand.ink
+const DE_AMBER = brand.warning
 
 const tabs = [
   {
@@ -27,7 +28,9 @@ export default function UserProfileSettings() {
   const location = useLocation()
   const navigate = useNavigate()
 
-  const isPasswordTab = location.pathname.includes('/profile/password')
+  const isPasswordTab =
+    location.pathname.includes('/profile/password') ||
+    location.pathname.includes('/settings/password')
   const currentTab = isPasswordTab ? 'password' : 'profile'
 
   return (
@@ -66,14 +69,14 @@ export default function UserProfileSettings() {
                 }}
               >
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Box sx={{ color: active ? DE_BLUE : '#5f769d', display: 'flex', alignItems: 'center' }}>
+                  <Box sx={{ color: active ? DE_BLUE : brand.inkSoft, display: 'flex', alignItems: 'center' }}>
                     {tab.icon}
                   </Box>
-                  <Typography sx={{ fontWeight: 800, color: active ? DE_BLUE : '#2f4e77', fontSize: '0.92rem' }}>
+                  <Typography sx={{ fontWeight: 800, color: active ? DE_BLUE : brand.ink, fontSize: '0.92rem' }}>
                     {tab.label}
                   </Typography>
                 </Stack>
-                <Typography sx={{ color: '#6b82a8', fontSize: '0.8rem', mt: 0.4 }}>
+                <Typography sx={{ color: brand.inkSoft, fontSize: '0.8rem', mt: 0.4 }}>
                   {tab.description}
                 </Typography>
               </Box>

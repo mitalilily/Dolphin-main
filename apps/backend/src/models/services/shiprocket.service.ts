@@ -6846,7 +6846,7 @@ export const generateManifestService = async (params: {
         )
 
         if (normalizedRefs.length === 0) {
-          throw new Error('No AWBs provided for manifest generation')
+          throw new Error('No order numbers or AWBs provided for manifest generation')
         }
 
         const orderLookupColumns =
@@ -6857,12 +6857,16 @@ export const generateManifestService = async (params: {
                 order_number: b2c_orders.order_number,
                 awb_number: b2c_orders.awb_number,
                 integration_type: b2c_orders.integration_type,
+                order_status: b2c_orders.order_status,
+                manifest: b2c_orders.manifest,
               }
             : {
                 id: b2b_orders.id,
                 user_id: b2b_orders.user_id,
                 order_number: b2b_orders.order_number,
                 awb_number: b2b_orders.awb_number,
+                order_status: b2b_orders.order_status,
+                manifest: b2b_orders.manifest,
               }
 
         const orderMatchCondition = or(
@@ -6896,6 +6900,50 @@ export const generateManifestService = async (params: {
           throw new HttpError(
             404,
             `Manifest could not be started for: ${summarizeManifestRefs(missingRefs)}.`,
+          )
+        }
+
+        const manifestableStatuses = new Set([
+          'pending',
+          'booked',
+          'shipment_created',
+          'manifest_failed',
+        ])
+        const alreadyManifestedStatuses = new Set([
+          'pickup_initiated',
+          'manifest_generated',
+          'in_transit',
+          'out_for_delivery',
+          'delivered',
+          'ndr',
+          'undelivered',
+          'rto',
+          'rto_in_transit',
+          'rto_delivered',
+        ])
+        const blockedManifestOrders = orders
+          .map((order) => {
+            const status = String((order as any).order_status || '').trim().toLowerCase()
+            const manifestValue = String((order as any).manifest || '').trim()
+            const orderRef = String((order as any).order_number || (order as any).awb_number || '').trim()
+
+            if (status === 'cancelled') {
+              return `${orderRef || 'order'} is cancelled`
+            }
+            if ((manifestValue && status !== 'manifest_failed') || alreadyManifestedStatuses.has(status)) {
+              return `${orderRef || 'order'} is already manifested`
+            }
+            if (!manifestableStatuses.has(status)) {
+              return `${orderRef || 'order'} is ${status || 'not ready'}`
+            }
+            return null
+          })
+          .filter((message): message is string => Boolean(message))
+
+        if (blockedManifestOrders.length > 0) {
+          throw new HttpError(
+            400,
+            `Manifest can only be generated for booked, pending, or failed-manifest orders. ${blockedManifestOrders.join('; ')}.`,
           )
         }
 

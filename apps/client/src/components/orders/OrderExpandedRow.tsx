@@ -1,4 +1,4 @@
-import { alpha, Box, Button, Chip, Divider, Paper, Stack, Typography } from '@mui/material'
+import { alpha, Box, Button, Chip, Divider, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { FaFilePdf } from 'react-icons/fa'
@@ -18,6 +18,7 @@ import {
   downloadFile,
   getActionableErrorMessage,
   getB2CManifestIdentifier,
+  getB2CManifestDisabledReason,
   getDocumentReference,
   getDownloadFileName,
   isDirectDownloadUrl,
@@ -157,6 +158,15 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
       setGeneratingDocumentType(documentType)
 
       if (documentType === 'manifest') {
+        const manifestDisabledReason = getB2CManifestDisabledReason(row)
+        if (manifestDisabledReason) {
+          toast.open({
+            message: manifestDisabledReason,
+            severity: 'error',
+          })
+          return
+        }
+
         const manifestRef = getB2CManifestIdentifier(row)
         if (!manifestRef) {
           toast.open({
@@ -227,12 +237,15 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
     urlValue?: string
     type: DocumentType
   }) => {
-    const canGenerate = isManifestedOrOperational
-    if (!keyValue && !urlValue && !canGenerate) return null
+    const manifestDisabledReason =
+      type === 'manifest' ? getB2CManifestDisabledReason(row) : null
+    const canGenerate = type === 'manifest' ? !manifestDisabledReason : isManifestedOrOperational
+    if (!keyValue && !urlValue && !canGenerate && type !== 'manifest') return null
 
     const isDownloading = downloadingKey === keyValue
     const isGenerating = generatingDocumentType === type
     const hasDocument = Boolean(keyValue || urlValue)
+    const disabledReason = !hasDocument ? manifestDisabledReason : null
 
     return (
       <Paper
@@ -260,35 +273,40 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
             )}
           </Stack>
 
-          <Button
-            size="small"
-            variant={hasDocument ? 'outlined' : 'contained'}
-            sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
-            onClick={() => {
-              if (urlValue && isDirectDownloadUrl(urlValue)) {
-                handleDirectDownload(urlValue, type)
-                return
-              }
-              if (keyValue) {
-                handleDownload(keyValue, type)
-                return
-              }
-              handleGenerateDocument(type)
-            }}
-            disabled={Boolean(
-              isGenerating ||
-                isRegeneratingDocuments ||
-                ((isDownloading || isPending) && !urlValue),
-            )}
-          >
-            {isGenerating
-              ? 'Generating...'
-              : isDownloading
-                ? 'Downloading...'
-                : hasDocument
-                  ? 'Download'
-                  : `Generate ${title}`}
-          </Button>
+          <Tooltip title={disabledReason || ''} arrow disableHoverListener={!disabledReason}>
+            <span>
+              <Button
+                size="small"
+                variant={hasDocument ? 'outlined' : 'contained'}
+                sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
+                onClick={() => {
+                  if (urlValue && isDirectDownloadUrl(urlValue)) {
+                    handleDirectDownload(urlValue, type)
+                    return
+                  }
+                  if (keyValue) {
+                    handleDownload(keyValue, type)
+                    return
+                  }
+                  handleGenerateDocument(type)
+                }}
+                disabled={Boolean(
+                  disabledReason ||
+                    isGenerating ||
+                    isRegeneratingDocuments ||
+                    ((isDownloading || isPending) && !urlValue),
+                )}
+              >
+                {isGenerating
+                  ? 'Generating...'
+                  : isDownloading
+                    ? 'Downloading...'
+                    : hasDocument
+                      ? 'Download'
+                      : `Generate ${title}`}
+              </Button>
+            </span>
+          </Tooltip>
         </Stack>
       </Paper>
     )

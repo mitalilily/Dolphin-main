@@ -244,7 +244,7 @@ const RateCard = () => {
       <PageHeading
         eyebrow="Tools Panel"
         title="Rate Card"
-        subtitle="Review B2C and B2B rate slabs, filter courier pricing, and export the latest commercial matrix from one utility workspace."
+        subtitle="Review courier charges for B2C and B2B shipments, filter by courier, and export the rate card when needed."
       />
 
       {/* Tabs for B2C / B2B */}

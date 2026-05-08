@@ -131,7 +131,7 @@ export default function OrderTrackingForm() {
       <PageHeading
         eyebrow="Tools Panel"
         title="Track Order"
-        subtitle="Track by AWB or order details, review shipment timelines, and keep the utility view aligned with the rest of the panel."
+        subtitle="Enter an AWB or order details to see the latest shipment status and movement history."
       />
       <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ p: 4, ...cardStyles }}>
         {/* Header */}
@@ -139,7 +139,7 @@ export default function OrderTrackingForm() {
           Track Your <span style={{ color: '#333369' }}>Order</span>
         </Typography>
         <Typography variant="body2" color="text.secondary" mb={3}>
-          Enter your AWB number or order details to track shipment.
+          Check where a shipment is right now and review the updates received from the courier.
         </Typography>
 
         {/* Tabs */}

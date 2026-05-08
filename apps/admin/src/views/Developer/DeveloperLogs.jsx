@@ -42,6 +42,7 @@ import {
 } from 'react-icons/fi'
 import { useHistory } from 'react-router-dom'
 import { useAuthStore } from 'store/useAuthStore'
+import { adminBrand } from 'theme/brand'
 import { GenericTable } from 'views/Dashboard/Tables/components/GenericTable'
 
 const ISSUE_OWNER_LABELS = {
@@ -57,6 +58,33 @@ const ACTION_REQUIRED_LABELS = {
   fix_data: 'Fix data',
   ignore: 'Ignore',
   escalate: 'Escalate',
+}
+
+const brandButton = {
+  outline: {
+    variant: 'outline',
+    borderColor: 'rgba(16,50,74,0.22)',
+    color: adminBrand.ink,
+    _hover: {
+      bg: 'rgba(198,231,255,0.28)',
+      borderColor: adminBrand.ink,
+    },
+  },
+  primary: {
+    bg: adminBrand.ink,
+    color: 'white',
+    _hover: { bg: '#0B2232' },
+  },
+  success: {
+    bg: adminBrand.success,
+    color: adminBrand.ink,
+    _hover: { bg: '#47AE95' },
+  },
+  warning: {
+    bg: adminBrand.warning,
+    color: adminBrand.ink,
+    _hover: { bg: '#D97706' },
+  },
 }
 
 const StatCard = ({ label, value, icon, tone = 'blue' }) => {
@@ -143,7 +171,7 @@ export default function DeveloperLogs() {
   const textColor = useColorModeValue('gray.700', 'white')
   const mutedColor = useColorModeValue('gray.600', 'gray.300')
   const cardBg = useColorModeValue('white', '#0F172A')
-  const headerIconBg = useColorModeValue('red.500', 'red.400')
+  const headerIconBg = useColorModeValue(adminBrand.ink, adminBrand.sky)
   const alertBg = useColorModeValue('red.50', 'rgba(127,29,29,0.22)')
   const alertBorder = useColorModeValue('red.100', 'red.900')
   const alertItemBg = useColorModeValue('white', 'rgba(15,23,42,0.4)')
@@ -484,45 +512,45 @@ export default function DeveloperLogs() {
     const retryOrder = getRetryOrder(row)
     return (
       <Flex direction="column" gap={2}>
-        <Button size="xs" leftIcon={<FiEye />} onClick={() => openIssueDetails(row)}>
+        <Button size="xs" leftIcon={<FiEye />} onClick={() => openIssueDetails(row)} {...brandButton.outline}>
           Details
         </Button>
 
         {row.owner_admin_id !== currentAdminId ? (
           <Button
             size="xs"
-            variant="outline"
             leftIcon={<FiUserCheck />}
             onClick={() => handleIssueUpdate(row.issue_key, { assignToMe: true }, 'Issue assigned to you')}
             isLoading={updateIssueMutation.isPending}
+            {...brandButton.outline}
           >
             Assign to me
           </Button>
         ) : (
           <Button
             size="xs"
-            variant="outline"
             onClick={() => handleIssueUpdate(row.issue_key, { clearOwner: true }, 'Issue owner cleared')}
             isLoading={updateIssueMutation.isPending}
+            {...brandButton.outline}
           >
             Unassign
           </Button>
         )}
 
         {row.merchant_user_id ? (
-          <Button size="xs" variant="outline" leftIcon={<FiExternalLink />} onClick={() => openMerchant(row.merchant_user_id)}>
+          <Button size="xs" leftIcon={<FiExternalLink />} onClick={() => openMerchant(row.merchant_user_id)} {...brandButton.outline}>
             Open Merchant
           </Button>
         ) : null}
 
         {row.order_number || row.awb_number ? (
-          <Button size="xs" variant="outline" leftIcon={<FiArrowUpRight />} onClick={() => openOrder(row)}>
+          <Button size="xs" leftIcon={<FiArrowUpRight />} onClick={() => openOrder(row)} {...brandButton.outline}>
             Open Order
           </Button>
         ) : null}
 
         {row.awb_number ? (
-          <Button size="xs" variant="outline" leftIcon={<FiCopy />} onClick={() => handleCopy('AWB', row.awb_number)}>
+          <Button size="xs" leftIcon={<FiCopy />} onClick={() => handleCopy('AWB', row.awb_number)} {...brandButton.outline}>
             Copy AWB
           </Button>
         ) : null}
@@ -530,10 +558,10 @@ export default function DeveloperLogs() {
         {retryOrder?.id ? (
           <Button
             size="xs"
-            colorScheme="blue"
             leftIcon={<FiRefreshCw />}
             onClick={() => handleRetryManifest(row)}
             isLoading={retryManifestMutation.isPending}
+            {...brandButton.primary}
           >
             Retry Manifest
           </Button>
@@ -542,19 +570,19 @@ export default function DeveloperLogs() {
         {row.status_label === 'resolved' ? (
           <Button
             size="xs"
-            colorScheme="orange"
             onClick={() => handleIssueUpdate(row.issue_key, { status: 'open' }, 'Issue reopened')}
             isLoading={updateIssueMutation.isPending}
+            {...brandButton.warning}
           >
             Reopen
           </Button>
         ) : (
           <Button
             size="xs"
-            colorScheme="green"
             leftIcon={<FiCheckCircle />}
             onClick={() => handleIssueUpdate(row.issue_key, { status: 'resolved' }, 'Issue marked resolved')}
             isLoading={updateIssueMutation.isPending}
+            {...brandButton.success}
           >
             Mark Resolved
           </Button>
@@ -590,7 +618,7 @@ export default function DeveloperLogs() {
           leftIcon={<FiRefreshCw />}
           onClick={() => refetch()}
           isLoading={isFetching}
-          variant="outline"
+          {...brandButton.outline}
         >
           Refresh
         </Button>
@@ -635,10 +663,10 @@ export default function DeveloperLogs() {
                   </Text>
                 </Box>
                 <HStack spacing={2} wrap="wrap">
-                  <Button size="xs" variant="outline" onClick={() => openIssueDetails(alert)}>
+                  <Button size="xs" onClick={() => openIssueDetails(alert)} {...brandButton.outline}>
                     View
                   </Button>
-                  <Button size="xs" variant="outline" onClick={() => handleMarkAlertSeen(alert.issue_key)}>
+                  <Button size="xs" onClick={() => handleMarkAlertSeen(alert.issue_key)} {...brandButton.outline}>
                     Mark seen
                   </Button>
                 </HStack>
@@ -813,45 +841,50 @@ function DrawerPlacement({
               <Heading size="sm">Direct actions</Heading>
               <HStack spacing={2} wrap="wrap">
                 {issue.merchant_user_id ? (
-                  <Button size="sm" variant="outline" onClick={() => onOpenMerchant(issue.merchant_user_id)}>
+                  <Button size="sm" onClick={() => onOpenMerchant(issue.merchant_user_id)} {...brandButton.outline}>
                     Open Merchant
                   </Button>
                 ) : null}
                 {issue.order_number || issue.awb_number ? (
-                  <Button size="sm" variant="outline" onClick={() => onOpenOrder(issue)}>
+                  <Button size="sm" onClick={() => onOpenOrder(issue)} {...brandButton.outline}>
                     Open Order
                   </Button>
                 ) : null}
                 {issue.awb_number ? (
-                  <Button size="sm" variant="outline" onClick={() => onCopy('AWB', issue.awb_number)}>
+                  <Button size="sm" onClick={() => onCopy('AWB', issue.awb_number)} {...brandButton.outline}>
                     Copy AWB
                   </Button>
                 ) : null}
                 {issue.awb_number ? (
-                  <Button size="sm" variant="outline" onClick={() => onOpenTracking(issue.awb_number)}>
+                  <Button size="sm" onClick={() => onOpenTracking(issue.awb_number)} {...brandButton.outline}>
                     Track AWB
                   </Button>
                 ) : null}
                 {issue.can_retry_manifest ? (
-                  <Button size="sm" colorScheme="blue" onClick={() => onRetryManifest(issue)} isLoading={isRetrying}>
+                  <Button
+                    size="sm"
+                    onClick={() => onRetryManifest(issue)}
+                    isLoading={isRetrying}
+                    {...brandButton.primary}
+                  >
                     Retry Manifest
                   </Button>
                 ) : null}
                 {issue.status_label === 'resolved' ? (
                   <Button
                     size="sm"
-                    colorScheme="orange"
                     onClick={() => onIssueUpdate(issue.issue_key, { status: 'open' }, 'Issue reopened')}
                     isLoading={isUpdating}
+                    {...brandButton.warning}
                   >
                     Reopen
                   </Button>
                 ) : (
                   <Button
                     size="sm"
-                    colorScheme="green"
                     onClick={() => onIssueUpdate(issue.issue_key, { status: 'resolved' }, 'Issue marked resolved')}
                     isLoading={isUpdating}
+                    {...brandButton.success}
                   >
                     Mark Resolved
                   </Button>
@@ -859,9 +892,9 @@ function DrawerPlacement({
                 {issue.owner_admin_id ? null : (
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={() => onIssueUpdate(issue.issue_key, { assignToMe: true }, 'Issue assigned to you')}
                     isLoading={isUpdating}
+                    {...brandButton.outline}
                   >
                     Assign to me
                   </Button>
@@ -888,26 +921,26 @@ function DrawerPlacement({
                       </Box>
                       <HStack spacing={2} wrap="wrap">
                         {order.order_number || order.awb_number ? (
-                          <Button size="xs" variant="outline" onClick={() => onOpenOrder(order)}>
+                          <Button size="xs" onClick={() => onOpenOrder(order)} {...brandButton.outline}>
                             Open Order
                           </Button>
                         ) : null}
                         {order.awb_number ? (
-                          <Button size="xs" variant="outline" onClick={() => onCopy('AWB', order.awb_number)}>
+                          <Button size="xs" onClick={() => onCopy('AWB', order.awb_number)} {...brandButton.outline}>
                             Copy AWB
                           </Button>
                         ) : null}
                         {order.awb_number ? (
-                          <Button size="xs" variant="outline" onClick={() => onOpenTracking(order.awb_number)}>
+                          <Button size="xs" onClick={() => onOpenTracking(order.awb_number)} {...brandButton.outline}>
                             Track AWB
                           </Button>
                         ) : null}
                         {order.can_retry_manifest ? (
                           <Button
                             size="xs"
-                            colorScheme="blue"
                             onClick={() => onRetryManifest(issue, order.id)}
                             isLoading={isRetrying}
+                            {...brandButton.primary}
                           >
                             Retry Manifest
                           </Button>
@@ -1046,7 +1079,7 @@ function DrawerShell({ isOpen, onClose, children }) {
           >
             <Flex justify="space-between" align="center" mb={4}>
               <Heading size="md">Issue details</Heading>
-              <Button size="sm" variant="outline" onClick={onClose}>
+              <Button size="sm" onClick={onClose} {...brandButton.outline}>
                 Close
               </Button>
             </Flex>

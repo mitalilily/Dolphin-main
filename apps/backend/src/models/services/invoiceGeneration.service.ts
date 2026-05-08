@@ -18,6 +18,7 @@ import {
   getAdminInvoicePreferences,
   getInvoicePreferences,
 } from './invoicePreferences.service'
+import { loadPlatformLogoDataUrl } from './platformLogo.service'
 import { presignDownload, presignUpload } from './upload.service'
 
 interface GenerateInvoiceParams {
@@ -163,7 +164,6 @@ export const generateInvoiceForUser = async (
   const prefs = await getInvoicePreferences(userId)
 
   const adminPrefs = await getAdminInvoicePreferences()
-  const adminLogoFile = adminPrefs?.logoFile ?? null
   let adminSignatureBuffer: Buffer | undefined
   let adminIncludeSignature = adminPrefs?.includeSignature ?? false // Track if admin wants to include signature
   try {
@@ -238,7 +238,7 @@ export const generateInvoiceForUser = async (
     .where(eq(userProfiles.userId, userId))
     .limit(1)
 
-  const issuerName = adminPrefs?.brandName || 'Dolphin'
+  const issuerName = adminPrefs?.brandName || 'Dolphin Enterprise'
   const issuerAddress = adminPrefs?.sellerAddress || 'N/A'
   const issuerStateCode = adminPrefs?.stateCode || 'N/A'
   const issuerGST = adminPrefs?.gstNumber || 'N/A'
@@ -357,18 +357,9 @@ export const generateInvoiceForUser = async (
   // Platform (Dolphin) logo for footer branding
   let platformLogoDataUrl: string | undefined
   try {
-    const platformLogoKey = adminLogoFile || 'dolphin-logo-transparent.png'
-    const logoUrl = await presignDownload(platformLogoKey)
-    if (logoUrl && typeof logoUrl === 'string') {
-      const resp = await axios.get(logoUrl, { responseType: 'arraybuffer' })
-      const buffer = Buffer.from(resp.data)
-      const dataUrl = await bufferToDataUrl(buffer)
-      if (dataUrl) {
-        platformLogoDataUrl = dataUrl
-      }
-    }
+    platformLogoDataUrl = (await loadPlatformLogoDataUrl()) || undefined
   } catch (err) {
-    console.warn('âš ï¸ Failed to fetch platform logo for summary invoice from R2:', err)
+    console.warn('Failed to fetch platform logo for summary invoice:', err)
   }
 
   // GST disabled: no taxes applied
@@ -588,7 +579,7 @@ export const generateInvoiceForUser = async (
             : null,
 
           {
-            text: 'Powered by Dolphin',
+            text: 'Powered by Dolphin Enterprise',
             alignment: 'center',
             italics: true,
             fontSize: fontSize - 1,
@@ -894,7 +885,7 @@ export const generateInvoiceForUser = async (
               }
             : null,
           {
-            text: 'Powered by Dolphin',
+            text: 'Powered by Dolphin Enterprise',
             alignment: 'center',
             italics: true,
             margin: [0, 6, 0, 0],

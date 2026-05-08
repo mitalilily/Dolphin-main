@@ -3,6 +3,7 @@ import { alpha } from '@mui/material/styles'
 import { useEffect, useMemo, useState } from 'react'
 import { MdBusiness } from 'react-icons/md'
 import type { FormErrors } from '../../pages/onboarding/UserOnboarding'
+import { brand } from '../../theme/brand'
 import type { UserInfoData } from '../../types/user.types'
 import { createSyntheticEvent } from '../../utils/functions'
 import CustomInput from '../UI/inputs/CustomInput'
@@ -17,8 +18,8 @@ interface StepTwoFormProps {
   errors: FormErrors
 }
 
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
+const DE_BLUE = brand.ink
+const DE_AMBER = brand.warning
 
 const BUSINESS_OPTIONS = [
   {
@@ -53,8 +54,10 @@ export default function StepTwoForm({ formData, onChange, errors }: StepTwoFormP
     if (!sameAsCompany) return
 
     const companyName = formData.basicInfo?.companyName || ''
-    onChange(createSyntheticEvent('brandName', companyName), 'businessLegal')
-  }, [sameAsCompany, formData.basicInfo?.companyName, onChange])
+    if ((formData.businessLegal?.brandName || '') !== companyName) {
+      onChange(createSyntheticEvent('brandName', companyName), 'businessLegal')
+    }
+  }, [sameAsCompany, formData.basicInfo?.companyName, formData.businessLegal?.brandName, onChange])
 
   const toggleCategory = (value: string) => {
     const next = selectedCategories.includes(value)

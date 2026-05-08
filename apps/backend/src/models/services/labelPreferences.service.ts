@@ -2,6 +2,20 @@ import { eq } from 'drizzle-orm'
 import { db } from '../client'
 import { labelPreferences } from '../schema/labelPreferences'
 
+const PLATFORM_POWERED_BY = 'Dolphin Enterprise'
+const LEGACY_POWERED_BY_PATTERN = /(?:mera\s*courier\s*wala|meracourierwala)/i
+
+export const normalizePoweredBy = (value: unknown) => {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (!text || LEGACY_POWERED_BY_PATTERN.test(text)) return PLATFORM_POWERED_BY
+  return text
+}
+
+const normalizePreferences = <T extends Record<string, any>>(prefs: T): T => ({
+  ...prefs,
+  powered_by: normalizePoweredBy(prefs.powered_by),
+})
+
 export const DEFAULT_PREFERENCES = {
   printer_type: 'thermal',
   char_limit: 25,
@@ -36,7 +50,7 @@ export const DEFAULT_PREFERENCES = {
     otherCharges: true,
   },
   brand_logo: null,
-  powered_by: 'Dolphin',
+  powered_by: PLATFORM_POWERED_BY,
   created_at: new Date(),
   updated_at: new Date(),
 }
@@ -48,19 +62,22 @@ export const labelPreferencesService = {
       .from(labelPreferences)
       .where(eq(labelPreferences.user_id, userId))
 
-    if (prefs) {
-      return prefs
-    }
+    if (prefs) return normalizePreferences(prefs)
 
     // Fallback defaults
-    return {
+    return normalizePreferences({
       id: null,
       user_id: userId,
       ...DEFAULT_PREFERENCES,
-    }
+    })
   },
 
   async createOrUpdate(userId: string, data: any) {
+    const payload = {
+      ...data,
+      powered_by: normalizePoweredBy(data?.powered_by),
+    }
+
     const [existing] = await db
       .select()
       .from(labelPreferences)
@@ -69,16 +86,16 @@ export const labelPreferencesService = {
     if (existing) {
       const [updated] = await db
         .update(labelPreferences)
-        .set({ ...data, updated_at: new Date() })
+        .set({ ...payload, updated_at: new Date() })
         .where(eq(labelPreferences.user_id, userId))
         .returning()
-      return updated
+      return normalizePreferences(updated)
     } else {
       const [created] = await db
         .insert(labelPreferences)
-        .values({ user_id: userId, ...DEFAULT_PREFERENCES, ...data })
+        .values({ user_id: userId, ...DEFAULT_PREFERENCES, ...payload })
         .returning()
-      return created
+      return normalizePreferences(created)
     }
   },
 }

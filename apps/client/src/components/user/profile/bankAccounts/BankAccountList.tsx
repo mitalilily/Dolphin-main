@@ -9,26 +9,28 @@ import {
   styled,
   Typography,
 } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { BiEdit } from 'react-icons/bi'
 import { FaClock } from 'react-icons/fa6'
 import { FcCancel } from 'react-icons/fc'
 import { MdCheckCircle, MdDeleteOutline } from 'react-icons/md'
 import type { BankAccount } from '../../../../types/user.types'
+import { brand } from '../../../../theme/brand'
 import { toast } from '../../../UI/Toast'
 import { BRAND_GRADIENT } from '../UserProfileForm'
 
 /* ---------- Styled components ---------- */
 const GlassCard = styled(Card)(() => ({
-  backgroundColor: '#FFFFFF',
-  border: '1px solid #E0E6ED',
+  backgroundColor: brand.surface,
+  border: `1px solid ${alpha(brand.ink, 0.08)}`,
   borderRadius: 16,
   overflow: 'hidden',
   minHeight: 150,
-  boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+  boxShadow: `0 10px 22px ${alpha(brand.ink, 0.06)}`,
   transition: 'all 0.3s ease',
   '&:hover': {
     transform: 'translateY(-4px)',
-    boxShadow: '0 8px 20px rgba(51, 51, 105, 0.12)',
+    boxShadow: `0 16px 30px ${alpha(brand.ink, 0.1)}`,
   },
 }))
 
@@ -47,7 +49,7 @@ const PrimaryRibbon = styled('div')(() => ({
   position: 'absolute',
   top: 16,
   right: 16,
-  background: 'linear-gradient(135deg, #3DD598 0%, #2AB87B 100%)',
+  background: brand.success,
   color: '#FFFFFF',
   padding: '6px 14px',
   borderRadius: 8,
@@ -56,7 +58,7 @@ const PrimaryRibbon = styled('div')(() => ({
   letterSpacing: 0.5,
   textTransform: 'uppercase',
   zIndex: 3,
-  boxShadow: '0 4px 12px rgba(61, 213, 152, 0.3)',
+  boxShadow: `0 10px 22px ${alpha(brand.success, 0.24)}`,
 }))
 
 /* ---------- List container ---------- */
@@ -82,7 +84,7 @@ export const BankAccountsList: React.FC<{
             mt: 4,
             pl: 0.5,
             fontWeight: 700,
-            color: '#333369',
+            color: brand.ink,
             display: 'flex',
             alignItems: 'center',
             gap: 1,
@@ -90,7 +92,7 @@ export const BankAccountsList: React.FC<{
               content: '""',
               width: 4,
               height: 24,
-              bgcolor: '#3DD598',
+              bgcolor: brand.success,
               borderRadius: 1,
             },
           }}
@@ -158,35 +160,35 @@ export const BankAccountCard: React.FC<{
                 alignItems="center"
                 gap={1}
                 fontWeight={700}
-                color="#1A1A1A"
+                color={brand.ink}
                 noWrap
               >
                 {isUpiOnly ? a.accountHolder : a.bankName}
                 {a.status === 'verified' ? (
-                  <MdCheckCircle color="#3DD598" size={20} />
+                  <MdCheckCircle color={brand.success} size={20} />
                 ) : a.status === 'pending' ? (
-                  <FaClock color="#FFA726" size={16} />
+                  <FaClock color={brand.warning} size={16} />
                 ) : (
                   <FcCancel size={20} />
                 )}
               </Typography>
 
               {!isUpiOnly && (
-                <Typography variant="body2" color="#4A5568" noWrap fontWeight={500}>
+                <Typography variant="body2" color={brand.inkSoft} noWrap fontWeight={500}>
                   {a.accountHolder}
                 </Typography>
               )}
 
               {isUpiOnly ? (
-                <Typography variant="body2" color="#4A5568" noWrap>
+                <Typography variant="body2" color={brand.inkSoft} noWrap>
                   UPI ID: {a.upiId}
                 </Typography>
               ) : (
                 <>
-                  <Typography variant="body2" color="#4A5568" noWrap>
+                  <Typography variant="body2" color={brand.inkSoft} noWrap>
                     A/C No: {a.accountNumber}
                   </Typography>
-                  <Typography variant="body2" color="#4A5568" noWrap>
+                  <Typography variant="body2" color={brand.inkSoft} noWrap>
                     IFSC {a.ifsc}
                     {a.branch && ` • ${a.branch}`}
                   </Typography>
@@ -197,13 +199,13 @@ export const BankAccountCard: React.FC<{
                 <Typography
                   variant="caption"
                   sx={{
-                    color: '#E74C3C',
+                    color: brand.danger,
                     fontStyle: 'italic',
                     fontWeight: 600,
                     mt: 0.5,
                     whiteSpace: 'normal',
                     wordBreak: 'break-word',
-                    bgcolor: 'rgba(231, 76, 60, 0.1)',
+                    bgcolor: alpha(brand.danger, 0.1),
                     p: 1,
                     borderRadius: 1,
                   }}
@@ -220,18 +222,18 @@ export const BankAccountCard: React.FC<{
                     disabled={a.isPrimary || a.status !== 'verified'}
                     onClick={() => onMakePrimary?.(a.id)}
                     sx={{
-                      bgcolor: '#3DD598',
+                      bgcolor: brand.success,
                       color: '#FFFFFF',
                       fontWeight: 600,
                       px: 2,
                       py: 0.8,
                       borderRadius: 1.5,
                       textTransform: 'none',
-                      boxShadow: '0 2px 8px rgba(61, 213, 152, 0.3)',
+                      boxShadow: `0 10px 22px ${alpha(brand.success, 0.22)}`,
                       '&:hover': {
-                        bgcolor: '#2AB87B',
+                        bgcolor: brand.success,
                         transform: 'translateY(-1px)',
-                        boxShadow: '0 4px 12px rgba(61, 213, 152, 0.4)',
+                        boxShadow: `0 14px 28px ${alpha(brand.success, 0.28)}`,
                       },
                       transition: 'all 0.3s ease',
                     }}
@@ -246,11 +248,11 @@ export const BankAccountCard: React.FC<{
                     aria-label="Edit account"
                     onClick={() => onEdit?.(a.id)}
                     sx={{
-                      color: '#333369',
-                      bgcolor: '#F5F7FA',
-                      border: '1px solid #E0E6ED',
+                      color: brand.ink,
+                      bgcolor: alpha(brand.sky, 0.18),
+                      border: `1px solid ${alpha(brand.ink, 0.08)}`,
                       '&:hover': {
-                        bgcolor: '#E0E6ED',
+                        bgcolor: alpha(brand.sky, 0.3),
                         transform: 'scale(1.1)',
                       },
                       transition: 'all 0.3s ease',
@@ -265,11 +267,11 @@ export const BankAccountCard: React.FC<{
                   aria-label="Delete account"
                   onClick={handleDelete}
                   sx={{
-                    color: '#E74C3C',
-                    bgcolor: 'rgba(231, 76, 60, 0.1)',
-                    border: '1px solid rgba(231, 76, 60, 0.2)',
+                    color: brand.danger,
+                    bgcolor: alpha(brand.danger, 0.1),
+                    border: `1px solid ${alpha(brand.danger, 0.2)}`,
                     '&:hover': {
-                      bgcolor: 'rgba(231, 76, 60, 0.2)',
+                      bgcolor: alpha(brand.danger, 0.18),
                       transform: 'scale(1.1)',
                     },
                     transition: 'all 0.3s ease',

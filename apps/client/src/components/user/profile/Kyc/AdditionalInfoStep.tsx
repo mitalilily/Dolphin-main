@@ -5,6 +5,7 @@ import type {
   BusinessStructure,
   CompanyType,
 } from "../../../../types/generic.types";
+import { brand, brandGradients } from "../../../../theme/brand";
 import FileUploader from "../../../UI/uploader/FileUploader";
 import CustomInput from "../../../UI/inputs/CustomInput";
 import {
@@ -147,7 +148,7 @@ export default function AdditionalDetailsStep({
 
   return (
     <Box component="form" onSubmit={handleSubmit(onComplete)}>
-      <Typography variant="h6" mb={2}>
+      <Typography variant="h6" mb={2} color={brand.ink} fontWeight={800}>
         Enter Additional KYC Details
       </Typography>
       <Grid container spacing={3}>
@@ -337,7 +338,18 @@ export default function AdditionalDetailsStep({
 
       {/* Submit Button */}
       <Box mt={4} display="flex" justifyContent="flex-end">
-        <Button variant="contained" type="submit" disabled={!isValid}>
+        <Button
+          variant="contained"
+          type="submit"
+          disabled={!isValid}
+          sx={{
+            background: brandGradients.button,
+            color: brand.ink,
+            fontWeight: 800,
+            textTransform: "none",
+            "&:hover": { background: brandGradients.button },
+          }}
+        >
           Submit KYC
         </Button>
       </Box>

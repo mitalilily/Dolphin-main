@@ -2,6 +2,7 @@ import { alpha } from '@mui/material/styles'
 import { Box, Chip, Stack, Typography } from '@mui/material'
 import { FiClock, FiLink, FiTool } from 'react-icons/fi'
 import CustomInput from '../UI/inputs/CustomInput'
+import { brand } from '../../theme/brand'
 import type { UserInfoData } from '../../types/user.types'
 import type { FormErrors } from '../../pages/onboarding/UserOnboarding'
 
@@ -17,8 +18,8 @@ interface IStepThree {
   setErrors: React.Dispatch<React.SetStateAction<FormErrors>>
 }
 
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
+const DE_BLUE = brand.ink
+const DE_AMBER = brand.warning
 
 export default function StepThree({ formData, errors, onChange, setErrors }: IStepThree) {
   return (

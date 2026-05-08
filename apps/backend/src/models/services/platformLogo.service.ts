@@ -30,6 +30,17 @@ const resolveSignedUrl = async (key: string): Promise<string | null> => {
 export const loadPlatformLogoDataUrl = async (logoKey?: string | null): Promise<string | null> => {
   const key = String(logoKey || DEFAULT_PLATFORM_LOGO_KEY).trim()
 
+  // The platform brand should always be Dolphin Enterprise. Prefer the committed
+  // transparent asset so stale uploaded logos cannot leak old branding into PDFs.
+  for (const candidate of localPlatformLogoCandidates) {
+    try {
+      const buffer = await fs.readFile(candidate)
+      return toImageDataUrl(buffer)
+    } catch {
+      // Try the next committed logo candidate.
+    }
+  }
+
   if (key) {
     try {
       const signedUrl = await resolveSignedUrl(key)
@@ -45,15 +56,6 @@ export const loadPlatformLogoDataUrl = async (logoKey?: string | null): Promise<
         key,
         message: error?.message || error,
       })
-    }
-  }
-
-  for (const candidate of localPlatformLogoCandidates) {
-    try {
-      const buffer = await fs.readFile(candidate)
-      return toImageDataUrl(buffer)
-    } catch {
-      // Try the next committed logo candidate.
     }
   }
 

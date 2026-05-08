@@ -4,11 +4,12 @@ import { Suspense } from 'react'
 import { FiCreditCard, FiFileText, FiShield, FiUser } from 'react-icons/fi'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import FullScreenLoader from '../../components/UI/loader/FullScreenLoader'
+import { brand } from '../../theme/brand'
 
 type TopSection = 'user_profile' | 'company' | 'bank_details' | 'kyc_details'
 
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
+const DE_BLUE = brand.ink
+const DE_AMBER = brand.warning
 
 const sectionTabs: Array<{ label: string; value: TopSection; icon: React.ReactNode }> = [
   { label: 'User', value: 'user_profile', icon: <FiUser size={15} /> },
@@ -53,7 +54,7 @@ export default function ProfileLayout() {
             <Typography sx={{ fontSize: { xs: '1.25rem', md: '1.6rem' }, fontWeight: 800, color: DE_BLUE }}>
               Profile & Verification
             </Typography>
-            <Typography variant="body2" sx={{ color: '#5d769e', mt: 0.3 }}>
+            <Typography variant="body2" sx={{ color: brand.inkSoft, mt: 0.3 }}>
               Manage personal details, business identity, bank accounts, and KYC status.
             </Typography>
           </Box>
@@ -79,7 +80,7 @@ export default function ProfileLayout() {
                     cursor: 'pointer',
                     border: `1px solid ${isActive ? alpha(DE_BLUE, 0.4) : alpha(DE_BLUE, 0.18)}`,
                     backgroundColor: isActive ? alpha(DE_BLUE, 0.08) : '#fff',
-                    color: isActive ? DE_BLUE : '#5c759b',
+                    color: isActive ? DE_BLUE : brand.inkSoft,
                     fontWeight: 700,
                     fontSize: '0.86rem',
                     transition: 'all .2s ease',

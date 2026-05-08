@@ -1036,7 +1036,7 @@ export async function processDelhiveryWebhook(payload: any, tx = db) {
     }
 
     // 2️⃣ When Manifested → generate invoice (labels will be generated during manifest)
-    // Also generate invoice when status becomes pickup_initiated (auto-manifested)
+    // Also generate invoice when the courier reports pickup_initiated.
     if (internalStatus === 'booked' || internalStatus === 'pickup_initiated') {
       try {
         // Fetch fresh order data

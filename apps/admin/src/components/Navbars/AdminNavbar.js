@@ -87,11 +87,18 @@ export default function AdminNavbar(props) {
             as="img"
             src={adminBrand.logo}
             alt={adminBrand.panelName}
-            h="34px"
-            w="126px"
+            h="38px"
+            w="142px"
             objectFit="contain"
+            borderRadius="0"
+            filter="drop-shadow(0 6px 12px rgba(15,44,67,0.14))"
+            flexShrink={0}
           />
-          <Box minW={0} display={{ base: "none", md: "block" }}>
+          <Box
+            minW={0}
+            maxW={{ md: "180px", xl: "240px", "2xl": "280px" }}
+            display={{ base: "none", md: "block" }}
+          >
             <Text
               fontSize="10px"
               fontWeight="800"
@@ -99,13 +106,14 @@ export default function AdminNavbar(props) {
               textTransform="uppercase"
               color={secondaryText}
             >
-              {adminBrand.panelName}
+              Admin Console
             </Text>
             <Text
               fontSize="sm"
               fontWeight="800"
               color={mainText}
               noOfLines={1}
+              lineHeight="1.25"
             >
               {brandText || "Admin dashboard"}
             </Text>

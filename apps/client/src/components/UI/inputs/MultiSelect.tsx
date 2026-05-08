@@ -1,4 +1,5 @@
 import {
+  alpha,
   Box,
   Checkbox,
   ClickAwayListener,
@@ -43,6 +44,10 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
 
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+  const textColor = '#171310'
+  const mutedColor = '#5F7A8F'
+  const brandColor = '#10324A'
+  const accentColor = '#D97943'
 
   const filteredOptions = useMemo(() => {
     if (!inputValue) return options
@@ -88,10 +93,13 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         width: dropdownPos.width,
         maxHeight: 250,
         overflowY: 'auto',
-        bgcolor: 'rgb(22, 14, 45, 0.95)',
-        backdropFilter: 'blur(5px)',
+        bgcolor: '#FFFFFF',
+        color: textColor,
+        border: `1px solid ${alpha(brandColor, 0.12)}`,
+        boxShadow: '0 16px 34px rgba(15,44,67,0.14)',
         zIndex: 9999,
         p: 1,
+        borderRadius: 2,
       }}
     >
       {filteredOptions.map((opt) => {
@@ -105,13 +113,22 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
               gap: 1,
               px: 1,
               py: 0.5,
+              borderRadius: 1.5,
               cursor: 'pointer',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+              '&:hover': { bgcolor: alpha(accentColor, 0.08) },
             }}
             onClick={() => toggleOption(opt)}
           >
-            <Checkbox checked={selected} sx={{ color: '#fff' }} />
-            <Typography sx={{ color: '#fff', fontSize: 14 }}>{opt.label}</Typography>
+            <Checkbox
+              checked={selected}
+              sx={{
+                color: mutedColor,
+                '&.Mui-checked': { color: brandColor },
+              }}
+            />
+            <Typography sx={{ color: textColor, fontSize: 14, fontWeight: 600 }}>
+              {opt.label}
+            </Typography>
           </Box>
         )
       })}
@@ -139,13 +156,22 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 gap: 1,
                 px: 1,
                 py: 1,
+                borderRadius: 1.5,
                 cursor: 'pointer',
-                '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+                '&:hover': { bgcolor: alpha(accentColor, 0.08) },
               }}
               onClick={() => toggleOption(opt)}
             >
-              <Checkbox checked={selected} sx={{ color: '#000' }} />
-              <Typography sx={{ fontSize: 16 }}>{opt.label}</Typography>
+              <Checkbox
+                checked={selected}
+                sx={{
+                  color: mutedColor,
+                  '&.Mui-checked': { color: brandColor },
+                }}
+              />
+              <Typography sx={{ color: textColor, fontSize: 16, fontWeight: 600 }}>
+                {opt.label}
+              </Typography>
             </Box>
           )
         })}
@@ -169,7 +195,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
           ref={inputRef}
           postfix={
             value.length > 0 ? (
-              <Typography sx={{ color: '#fff', fontSize: 13, fontWeight: 500 }}>
+              <Typography sx={{ color: brandColor, fontSize: 13, fontWeight: 800 }}>
                 {value.length} selected
               </Typography>
             ) : undefined

@@ -6,6 +6,7 @@ import {
   Button,
   Link,
   Stack,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
@@ -38,10 +39,14 @@ import {
   type DocumentEntry,
   type DocumentType,
   getActionableErrorMessage,
+  getB2CCancelDisabledReason,
   getB2CManifestIdentifier,
+  getB2CManifestDisabledReason,
   getB2CManifestProvider,
   getDocumentReference,
   getDownloadFileName,
+  hasManifestDocument,
+  isB2CManifestComplete,
   isB2CManifestEligible,
   summarizeMessages,
   summarizeOrderNumbers,
@@ -147,7 +152,7 @@ const B2COrdersList = () => {
   const { mutateAsync: presignDownloads } = usePresignedDownloadMutation()
   const { data: couriers } = useAllCouriersWithDetails()
   const { data: warehouses } = usePickupAddresses()
-  const { mutate: cancelShipment } = useCancelShipment()
+  const { mutate: cancelShipment, isPending: cancellingShipment } = useCancelShipment()
   const { mutate: createReverse } = useCreateReverseShipment()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [reverseOrder, setReverseOrder] = useState<any | null>(null)
@@ -169,6 +174,17 @@ const B2COrdersList = () => {
 
   /* ───────────── Handlers ───────────── */
   const handleGenerateManifest = async (order: B2COrder) => {
+    const manifestDisabledReason = getB2CManifestDisabledReason(order)
+    if (manifestDisabledReason) {
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message: manifestDisabledReason,
+      })
+      toast.open({ message: manifestDisabledReason, severity: 'error' })
+      return
+    }
+
     const manifestRef = getB2CManifestIdentifier(order)
     if (!manifestRef) {
       const message = `Manifest cannot be started for ${order.order_number} yet.`
@@ -562,14 +578,6 @@ const B2COrdersList = () => {
   }
 
   /* ───────────── Columns ───────────── */
-  const isCancellable = (row: B2COrder) => {
-    const status = (row.order_status || '').toLowerCase()
-    const cancellableStatuses = new Set(['pending', 'booked', 'pickup_initiated'])
-    const provider = (row.integration_type || '').toLowerCase()
-    const providerSupports = ['delhivery', 'ekart', 'xpressbees', 'shipmozo'].includes(provider)
-    return providerSupports && cancellableStatuses.has(status)
-  }
-
   const hasLabelGenerated = (row: B2COrder) =>
     Boolean(String(row.label_url || row.label_key || row.label || '').trim())
 
@@ -659,20 +667,21 @@ const B2COrdersList = () => {
     {
       label: 'Actions',
       id: 'id',
-      minWidth: 140,
+      minWidth: 280,
       sticky: 'right',
       stickyOffset: 0,
       render: (_, row) => {
-        // 1) Build actions compactly; include Reverse + Manifest + Cancel where applicable
         const actions: ReactNode[] = []
         const currentStatus = String(row.order_status || '').toLowerCase()
-        const isManifested = [
-          'pickup_initiated',
-          'manifest_generated',
-          'in_transit',
-          'out_for_delivery',
-          'delivered',
-        ].includes(currentStatus)
+        const manifestDisabledReason = getB2CManifestDisabledReason(row)
+        const cancelDisabledReason = getB2CCancelDisabledReason(row)
+        const manifestComplete = isB2CManifestComplete(row)
+        const hasManifest = hasManifestDocument(row)
+        const manifestButtonText = bulkManifesting
+          ? 'Manifesting...'
+          : manifestComplete
+            ? 'Manifested'
+            : 'Manifest'
 
         // Show Reverse for delivered (all providers)
         if (currentStatus === 'delivered') {
@@ -689,33 +698,59 @@ const B2COrdersList = () => {
           )
         }
 
-        if (isManifested) {
-          actions.push(
-            <Button
-              key="manifested"
-              size="small"
-              variant="outlined"
-              color="success"
-              disabled
-              sx={{ px: 1.25, minWidth: 0 }}
-            >
-              Manifested
-            </Button>,
-          )
-        } else if (isB2CManifestEligible(row)) {
-          actions.push(
-            <Button
-              key="manifest"
-              size="small"
-              variant="contained"
-              disabled={bulkManifesting}
-              onClick={() => handleGenerateManifest(row)}
-              sx={{ px: 1.25, minWidth: 0 }}
-            >
-              Manifest
-            </Button>,
-          )
+        actions.push(
+          <Tooltip key="manifest" title={manifestDisabledReason || ''} arrow disableHoverListener={!manifestDisabledReason}>
+            <span>
+              <Button
+                size="small"
+                variant={manifestComplete ? 'outlined' : 'contained'}
+                color={manifestComplete ? 'success' : 'primary'}
+                disabled={bulkManifesting || Boolean(manifestDisabledReason)}
+                onClick={() => handleGenerateManifest(row)}
+                sx={{ px: 1.25, minWidth: 0 }}
+              >
+                {manifestButtonText}
+              </Button>
+            </span>
+          </Tooltip>,
+        )
+
+        if (hasManifest) {
+          const manifestUrl =
+            row.manifest_url ||
+            (/^https?:\/\//i.test(String(row.manifest || '')) ? row.manifest : '')
+          if (manifestUrl) {
+            actions.push(
+              <Link
+                key="view-manifest"
+                href={manifestUrl}
+                target="_blank"
+                rel="noopener"
+                underline="hover"
+                sx={{ alignSelf: 'center', fontSize: 13, fontWeight: 700 }}
+              >
+                View
+              </Link>,
+            )
+          }
         }
+
+        actions.push(
+          <Tooltip key="cancel" title={cancelDisabledReason || ''} arrow disableHoverListener={!cancelDisabledReason}>
+            <span>
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                disabled={cancellingShipment || Boolean(cancelDisabledReason)}
+                onClick={() => cancelShipment(row.id as unknown as string)}
+                sx={{ px: 1.25, minWidth: 0 }}
+              >
+                Cancel
+              </Button>
+            </span>
+          </Tooltip>,
+        )
 
         const retriesRemaining = Number(row.manifest_retries_remaining ?? 0)
         const canRetryManifest =
@@ -738,69 +773,8 @@ const B2COrdersList = () => {
           )
         }
 
-        if (isCancellable(row)) {
-          actions.push(
-            <Button
-              key="cancel"
-              size="small"
-              variant="outlined"
-              color="error"
-              onClick={() => cancelShipment(row.id as unknown as string)}
-              sx={{ px: 1.25, minWidth: 0, border: '1px solid red', color: 'red' }}
-            >
-              Cancel
-            </Button>,
-          )
-        }
-
-        // If the provider already returned a manifest/label flow and there are no direct actions, show info text
-        if (
-          actions.length === 0 &&
-          currentStatus !== 'manifest_failed' &&
-          ['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo', 'icarry'].includes(
-            String(row.integration_type || '').toLowerCase(),
-          )
-        ) {
-          return (
-            <Typography variant="body2" color="text.secondary">
-              Auto-Manifested{' '}
-              {/* {row.manifest && (
-                <Typography component="span" color="primary" fontWeight={500}>
-                  (Batch ID: {row.manifest})
-                </Typography>
-              )} */}
-            </Typography>
-          )
-        }
-
-        if (
-          actions.length === 0 &&
-          currentStatus === 'manifest_failed' &&
-          String(row.integration_type || '').toLowerCase() === 'delhivery'
-        ) {
-          return (
-            <Typography variant="body2" color="error.main">
-              Retry limit reached
-            </Typography>
-          )
-        }
-
-        if (row.order_status === 'manifest_generated' && row.manifest) {
-          actions.push(
-            <Link
-              key="view-manifest"
-              href={row.manifest}
-              target="_blank"
-              rel="noopener"
-              underline="hover"
-            >
-              View
-            </Link>,
-          )
-        }
-
         return (
-          <Stack direction="row" spacing={0.75}>
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
             {actions}
           </Stack>
         )

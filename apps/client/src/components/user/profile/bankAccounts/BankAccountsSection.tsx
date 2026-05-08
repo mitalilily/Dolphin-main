@@ -8,14 +8,14 @@ import {
   useEditBankAccount,
   useMakePrimaryBankAccount,
 } from '../../../../hooks/User/BankAccounts/useBankAccounts'
+import { brand, brandGradients } from '../../../../theme/brand'
 import type { BankAccount } from '../../../../types/user.types'
 import { toast } from '../../../UI/Toast'
 import { AddBankAccountDialog } from './AddBankAccountDialog'
 import { BankAccountsList } from './BankAccountList'
 
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
-const BRAND_GRADIENT = `linear-gradient(135deg, ${DE_BLUE} 0%, ${DE_AMBER} 100%)`
+const DE_BLUE = brand.ink
+const BRAND_GRADIENT = brandGradients.button
 
 export const BankAccountsSection: React.FC = () => {
   const [open, setOpen] = useState(false)
@@ -92,7 +92,17 @@ export const BankAccountsSection: React.FC = () => {
         }}
       >
         {accounts && accounts.length > 0 && (
-          <Button variant="contained" onClick={() => setOpen(true)}>
+          <Button
+            variant="contained"
+            onClick={() => setOpen(true)}
+            sx={{
+              background: BRAND_GRADIENT,
+              color: brand.ink,
+              fontWeight: 800,
+              textTransform: 'none',
+              '&:hover': { background: BRAND_GRADIENT },
+            }}
+          >
             + Add Account
           </Button>
         )}
@@ -104,7 +114,7 @@ export const BankAccountsSection: React.FC = () => {
           {Array.from({ length: 2 }).map((_, i) => (
             <Grid size={{ md: 6, xs: 12 }} key={i}>
               <Skeleton
-                variant="rectangular"
+              variant="rectangular"
                 animation="wave"
                 height={190}
                 sx={{
@@ -190,10 +200,7 @@ export const BankAccountsSection: React.FC = () => {
               variant="h6"
               fontWeight={700}
               sx={{
-                background: BRAND_GRADIENT,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
+                color: brand.ink,
                 fontSize: { xs: '1.125rem', md: '1.25rem' },
               }}
             >
@@ -201,7 +208,7 @@ export const BankAccountsSection: React.FC = () => {
             </Typography>
             <Typography
               variant="body2"
-              sx={{ color: '#6b6b6b', maxWidth: 400, fontSize: '0.9rem' }}
+              sx={{ color: brand.inkSoft, maxWidth: 400, fontSize: '0.9rem' }}
             >
               Add your bank account to receive payments and settlements securely
             </Typography>
@@ -217,11 +224,11 @@ export const BankAccountsSection: React.FC = () => {
               background: BRAND_GRADIENT,
               boxShadow: `0 4px 16px ${alpha(DE_BLUE, 0.3)}`,
               textTransform: 'none',
-              color: '#FFFFFF',
+              color: brand.ink,
               '&:hover': {
                 transform: 'translateY(-2px)',
                 boxShadow: `0 6px 20px ${alpha(DE_BLUE, 0.4)}`,
-                background: `linear-gradient(135deg, ${DE_BLUE} 0%, ${DE_AMBER} 100%)`,
+                background: BRAND_GRADIENT,
               },
               transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
             }}

@@ -5,6 +5,7 @@ import {
   requestProfileEmailVerificationOTP,
   requestProfilePhoneVerificationOTP,
   updateUserProfileService,
+  upsertUserProfile,
   verifyProfileEmailOTP,
   verifyProfilePhoneOTP,
 } from "../models/services/userProfile.service";
@@ -18,9 +19,14 @@ export const getUserProfile = async (
 ): Promise<any> => {
   try {
     const userId = req.user!.sub;
-    const profile = await getProfileByUserId(userId);
+    let profile: any = await getProfileByUserId(userId);
     if (!profile) {
-      return res.status(404).json({ message: "Profile not found" });
+      const created = await upsertUserProfile(userId, {});
+      profile = {
+        ...created,
+        currentPlanId: null,
+        currentPlanName: null,
+      };
     }
     res.json(profile);
   } catch (err) {

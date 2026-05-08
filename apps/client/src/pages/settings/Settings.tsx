@@ -152,18 +152,18 @@ const sections: Section[] = [
 
 const heroStats = [
   {
-    label: 'Settings domains',
-    value: String(sections.length),
+    label: 'Account ready',
+    value: 'Profile, KYC & bank',
     tone: INK,
   },
   {
-    label: 'Config modules',
-    value: String(sections.reduce((sum, section) => sum + section.items.length, 0)),
+    label: 'Shipping setup',
+    value: 'Pickups, labels & invoices',
     tone: CLAY,
   },
   {
-    label: 'Ops focus',
-    value: 'Account + Shipping + Integrations',
+    label: 'Connected tools',
+    value: 'Channels, APIs & routing',
     tone: TEAL,
   },
 ]
@@ -319,11 +319,11 @@ export default function SettingsPage() {
                       fontSize: { xs: '2rem', md: '3rem' },
                       lineHeight: 0.98,
                       fontWeight: 800,
-                      letterSpacing: '-0.05em',
+                      letterSpacing: 0,
                       color: INK,
                     }}
                   >
-                    Settings built like an operations workspace, not a flat menu.
+                    Settings that keep your shipping account easy to manage.
                   </Typography>
 
                   <Typography
@@ -335,8 +335,8 @@ export default function SettingsPage() {
                       maxWidth: 680,
                     }}
                   >
-                    Manage account controls, shipping configuration, payout logic, and integrations from
-                    a single professional admin surface.
+                    Update your business profile, pickup locations, billing preferences, team
+                    access, and integrations from one simple place.
                   </Typography>
                 </Box>
 

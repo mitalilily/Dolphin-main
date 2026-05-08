@@ -208,7 +208,7 @@ export function RateCalculator() {
       <PageHeading
         eyebrow="Tools Panel"
         title="Rate Calculator"
-        subtitle="Estimate shipping charges, compare courier availability, and validate shipment economics in a cleaner utility panel."
+        subtitle="Estimate shipping charges and compare available couriers before you create an order."
       />
       <FormProvider {...methods}>
         <CardContent

@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { Alert, AlertTitle, Box, Button, Stack, Typography } from '@mui/material'
+import { Alert, AlertTitle, Box, Button, Stack, Tooltip, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
 import { TbFilter, TbPlus, TbRefresh } from 'react-icons/tb'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
@@ -23,10 +23,13 @@ import {
   type DocumentEntry,
   type DocumentType,
   getActionableErrorMessage,
+  getB2CCancelDisabledReason,
   getB2CManifestIdentifier,
+  getB2CManifestDisabledReason,
   getB2CManifestProvider,
   getDocumentReference,
   getDownloadFileName,
+  isB2CManifestComplete,
   isB2CManifestEligible,
   summarizeMessages,
   summarizeOrderNumbers,
@@ -73,37 +76,6 @@ const renderDocumentTags = (order: Order) => (
 )
 const isManifestEligible = (order: Order) => {
   return order.type === 'b2c' ? isB2CManifestEligible(order) : false
-}
-
-const getOrderStatus = (order: Order) => String(order.order_status || '').trim().toLowerCase()
-
-const isManifestedOrMoving = (order: Order) =>
-  [
-    'pickup_initiated',
-    'manifest_generated',
-    'in_transit',
-    'out_for_delivery',
-    'delivered',
-  ].includes(getOrderStatus(order))
-
-const isCancellableOrder = (order: Order) => {
-  if (order.type !== 'b2c') return false
-
-  const status = getOrderStatus(order)
-  const cancellableStatuses = new Set(['pending', 'booked', 'shipment_created', 'pickup_initiated'])
-  const provider = String(order.integration_type || order.courier_partner || '')
-    .trim()
-    .toLowerCase()
-  const providerSupports = [
-    'delhivery',
-    'ekart',
-    'xpressbees',
-    'shipmozo',
-    'shiprocket',
-    'truxcargo',
-  ].includes(provider)
-
-  return providerSupports && cancellableStatuses.has(status) && Boolean(order.awb_number)
 }
 
 const AllOrders = () => {
@@ -600,56 +572,52 @@ const AllOrders = () => {
       truncate: false,
       render: (_v, row) => {
         const isB2COrder = row.type === 'b2c'
-        const canManifest = isManifestEligible(row)
-        const canCancel = isCancellableOrder(row)
         const isManifesting = manifestingOrderId === row.id
         const isCancelling = cancellingOrderId === row.id
-        const isManifested = isManifestedOrMoving(row)
-
-        if (!isB2COrder) {
-          return (
-            <Typography variant="body2" color="text.secondary">
-              Details only
-            </Typography>
-          )
-        }
+        const manifestDisabledReason = isB2COrder
+          ? getB2CManifestDisabledReason(row)
+          : 'Manifest is only available for B2C orders.'
+        const cancelDisabledReason = isB2COrder
+          ? getB2CCancelDisabledReason(row)
+          : 'Cancellation is only available for B2C orders.'
+        const isManifested = isB2COrder && isB2CManifestComplete(row)
 
         return (
-          <Stack direction="row" spacing={0.75} flexWrap="nowrap">
-            {isManifested ? (
-              <Button
-                size="small"
-                variant="outlined"
-                color="success"
-                disabled
-                sx={{ minWidth: 98, px: 1.25 }}
-              >
-                Manifested
-              </Button>
-            ) : (
-              <Button
-                size="small"
-                variant="contained"
-                disabled={!canManifest || bulkManifesting || isManifesting || isCancelling}
-                onClick={() => handleSingleManifest(row)}
-                sx={{ minWidth: 86, px: 1.25 }}
-              >
-                {isManifesting ? 'Working...' : 'Manifest'}
-              </Button>
-            )}
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            <Tooltip title={manifestDisabledReason || ''} arrow disableHoverListener={!manifestDisabledReason}>
+              <span>
+                <Button
+                  size="small"
+                  variant={isManifested ? 'outlined' : 'contained'}
+                  color={isManifested ? 'success' : 'primary'}
+                  disabled={
+                    Boolean(manifestDisabledReason) ||
+                    bulkManifesting ||
+                    isManifesting ||
+                    isCancelling
+                  }
+                  onClick={() => handleSingleManifest(row)}
+                  sx={{ minWidth: 98, px: 1.25 }}
+                >
+                  {isManifesting ? 'Working...' : isManifested ? 'Manifested' : 'Manifest'}
+                </Button>
+              </span>
+            </Tooltip>
 
-            {canCancel ? (
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                disabled={isCancelling || isManifesting}
-                onClick={() => handleCancelOrder(row)}
-                sx={{ minWidth: 72, px: 1.25 }}
-              >
-                {isCancelling ? 'Canceling...' : 'Cancel'}
-              </Button>
-            ) : null}
+            <Tooltip title={cancelDisabledReason || ''} arrow disableHoverListener={!cancelDisabledReason}>
+              <span>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="error"
+                  disabled={Boolean(cancelDisabledReason) || isCancelling || isManifesting}
+                  onClick={() => handleCancelOrder(row)}
+                  sx={{ minWidth: 72, px: 1.25 }}
+                >
+                  {isCancelling ? 'Canceling...' : 'Cancel'}
+                </Button>
+              </span>
+            </Tooltip>
           </Stack>
         )
       },

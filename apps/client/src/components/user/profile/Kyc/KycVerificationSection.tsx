@@ -1,10 +1,12 @@
 import { Box, Button, Container, Grid, Paper, Step, StepLabel, Stepper } from '@mui/material'
+import { alpha } from '@mui/material/styles'
 import { useQueryClient } from '@tanstack/react-query'
 import axios from 'axios'
 import React, { useEffect, useRef, useState } from 'react'
 import { IoChevronBack, IoChevronForward } from 'react-icons/io5'
 import axiosInstance from '../../../../api/axiosInstance'
 import { useSubmitKyc } from '../../../../hooks/User/Kyc/UseKyc'
+import { brand, brandGradients } from '../../../../theme/brand'
 import type { BusinessStructure, CompanyType } from '../../../../types/generic.types'
 import type { KycDetails } from '../../../../types/user.types'
 import { dataUrlToFile } from '../../../../utils/functions'
@@ -58,7 +60,7 @@ const KYCVerificationStep: React.FC<{
 
   const handleSelfieCapture = (img: string) => {
     updateKycData({ selfieUrl: img })
-    setIsStepValid(true)
+    setIsStepValid(Boolean(img))
   }
 
   const handleAdditionalInfoChange = async (value: AdditionalKYCForm) => {
@@ -223,9 +225,9 @@ const KYCVerificationStep: React.FC<{
             sx={{
               p: { xs: 2, md: 3 },
               borderRadius: 3,
-              bgcolor: '#FFFFFF',
-              border: '1px solid #E0E6ED',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              bgcolor: brand.surface,
+              border: `1px solid ${alpha(brand.ink, 0.08)}`,
+              boxShadow: brand.shadow,
               position: 'relative',
               '&::before': {
                 content: '""',
@@ -234,7 +236,7 @@ const KYCVerificationStep: React.FC<{
                 left: 0,
                 right: 0,
                 height: '4px',
-                background: 'linear-gradient(90deg, #333369 0%, #3DD598 100%)',
+                background: brandGradients.button,
                 borderRadius: '12px 12px 0 0',
               },
             }}
@@ -246,12 +248,12 @@ const KYCVerificationStep: React.FC<{
                 startIcon={<IoChevronBack />}
                 disabled={activeStep === 0}
                 sx={{
-                  borderColor: '#E0E6ED',
-                  color: '#333369',
+                  borderColor: alpha(brand.ink, 0.12),
+                  color: brand.ink,
                   fontWeight: 600,
                   '&:hover': {
-                    bgcolor: '#F5F7FA',
-                    borderColor: '#333369',
+                    bgcolor: alpha(brand.ink, 0.04),
+                    borderColor: brand.ink,
                   },
                 }}
               >
@@ -264,12 +266,12 @@ const KYCVerificationStep: React.FC<{
                     variant="outlined"
                     onClick={onCancelEdit}
                     sx={{
-                      borderColor: '#E0E6ED',
-                      color: '#E74C3C',
+                      borderColor: alpha(brand.danger, 0.24),
+                      color: brand.danger,
                       fontWeight: 600,
                       '&:hover': {
-                        bgcolor: 'rgba(231, 76, 60, 0.1)',
-                        borderColor: '#E74C3C',
+                        bgcolor: alpha(brand.danger, 0.08),
+                        borderColor: brand.danger,
                       },
                     }}
                   >
@@ -285,10 +287,12 @@ const KYCVerificationStep: React.FC<{
                     endIcon={<IoChevronForward />}
                     sx={{
                       fontWeight: 600,
-                      boxShadow: '0 4px 12px rgba(51, 51, 105, 0.2)',
+                      background: brandGradients.button,
+                      color: brand.ink,
+                      boxShadow: `0 12px 24px ${alpha(brand.ink, 0.12)}`,
                       '&:hover': {
                         transform: 'translateY(-1px)',
-                        boxShadow: '0 6px 16px rgba(51, 51, 105, 0.3)',
+                        boxShadow: `0 16px 28px ${alpha(brand.ink, 0.16)}`,
                       },
                       transition: 'all 0.3s ease',
                     }}
@@ -308,9 +312,9 @@ const KYCVerificationStep: React.FC<{
             sx={{
               p: { xs: 2, md: 3 },
               borderRadius: 3,
-              bgcolor: '#FFFFFF',
-              border: '1px solid #E0E6ED',
-              boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+              bgcolor: brand.surface,
+              border: `1px solid ${alpha(brand.ink, 0.08)}`,
+              boxShadow: `0 18px 36px ${alpha(brand.ink, 0.08)}`,
               position: 'sticky',
               top: 24,
             }}
@@ -320,24 +324,24 @@ const KYCVerificationStep: React.FC<{
               orientation="vertical"
               sx={{
                 '& .MuiStepLabel-label': {
-                  color: '#4A5568',
+                  color: brand.inkSoft,
                   fontWeight: 500,
                   '&.Mui-active': {
-                    color: '#333369',
+                    color: brand.ink,
                     fontWeight: 700,
                   },
                   '&.Mui-completed': {
-                    color: '#3DD598',
+                    color: brand.success,
                     fontWeight: 600,
                   },
                 },
                 '& .MuiStepIcon-root': {
-                  color: '#E0E6ED',
+                  color: alpha(brand.ink, 0.16),
                   '&.Mui-active': {
-                    color: '#333369',
+                    color: brand.ink,
                   },
                   '&.Mui-completed': {
-                    color: '#3DD598',
+                    color: brand.success,
                   },
                 },
               }}

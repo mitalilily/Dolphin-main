@@ -77,6 +77,15 @@ const fonts = {
   },
 }
 
+const PLATFORM_POWERED_BY = 'Dolphin Enterprise'
+const LEGACY_POWERED_BY_PATTERN = /(?:mera\s*courier\s*wala|meracourierwala)/i
+
+function normalizePoweredBy(value: unknown) {
+  const text = typeof value === 'string' ? value.trim() : ''
+  if (!text || LEGACY_POWERED_BY_PATTERN.test(text)) return PLATFORM_POWERED_BY
+  return text
+}
+
 const DEFAULT_LABEL_SETTINGS = {
   printer_type: 'thermal',
   char_limit: 25,
@@ -111,7 +120,7 @@ const DEFAULT_LABEL_SETTINGS = {
     deadWeight: false,
     otherCharges: true,
   },
-  powered_by: 'Dolphin',
+  powered_by: PLATFORM_POWERED_BY,
 }
 
 function mergeSettings(prefs: any) {
@@ -129,7 +138,7 @@ function mergeSettings(prefs: any) {
       ...(DEFAULT_LABEL_SETTINGS.product_info as any),
       ...(prefs.product_info || {}),
     },
-    powered_by: prefs.powered_by ?? DEFAULT_LABEL_SETTINGS.powered_by,
+    powered_by: normalizePoweredBy(prefs.powered_by ?? DEFAULT_LABEL_SETTINGS.powered_by),
   }
 }
 

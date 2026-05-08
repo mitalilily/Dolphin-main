@@ -2,6 +2,28 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { completeUserOnboarding } from "../api/user";
 import { toast } from "../components/UI/Toast";
+import type { IUserProfileDB } from "../types/user.types";
+
+const mergeOnboardingProfile = (
+  current: IUserProfileDB | undefined,
+  incoming: IUserProfileDB
+) => {
+  if (!current) return incoming;
+
+  // A slower background save from step 1/2 must never downgrade a profile
+  // after the final onboarding submit has already marked it complete.
+  if (current.onboardingComplete && !incoming.onboardingComplete) {
+    return current;
+  }
+
+  return {
+    ...current,
+    ...incoming,
+    onboardingStep: incoming.onboardingComplete
+      ? incoming.onboardingStep
+      : Math.max(current.onboardingStep ?? 0, incoming.onboardingStep ?? 0),
+  };
+};
 
 export const useCompleteUserOnboarding = () => {
   const queryClient = useQueryClient();
@@ -16,13 +38,19 @@ export const useCompleteUserOnboarding = () => {
       data: Record<string, any>;
     }) => completeUserOnboarding(step, data),
 
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       if (data?.user) {
-        queryClient.setQueryData(["userProfile"], data.user);
-        queryClient.setQueryData(["userInfo"], data.user);
+        queryClient.setQueryData<IUserProfileDB | undefined>(["userProfile"], (current) =>
+          mergeOnboardingProfile(current, data.user)
+        );
+        queryClient.setQueryData<IUserProfileDB | undefined>(["userInfo"], (current) =>
+          mergeOnboardingProfile(current, data.user)
+        );
       }
-      queryClient.invalidateQueries({ queryKey: ["userProfile"] });
-      queryClient.invalidateQueries({ queryKey: ["userInfo"] });
+      if (variables.step >= 3) {
+        queryClient.invalidateQueries({ queryKey: ["userProfile"] });
+        queryClient.invalidateQueries({ queryKey: ["userInfo"] });
+      }
       return data;
     },
 

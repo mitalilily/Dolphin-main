@@ -42,8 +42,12 @@ export const useUpdateUserProfile = (
     onError: (error, variables, context) => {
       // Forward to consumer‑supplied handler
       options?.onError?.(error, variables, context);
+      const apiError = error as any;
       toast.open({
-        message: "Error saving profile details!",
+        message:
+          apiError?.response?.data?.message ??
+          apiError?.response?.data?.error ??
+          "Error saving profile details!",
         severity: "error",
       });
     },

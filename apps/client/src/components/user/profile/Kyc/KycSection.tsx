@@ -26,7 +26,7 @@ const KycSection = () => {
           variant="rectangular"
           sx={{
             borderRadius: 3,
-            bgcolor: '#F5F7FA',
+            bgcolor: 'rgba(255,255,255,0.72)',
             '&::after': {
               background:
                 'linear-gradient(90deg, transparent, rgba(51, 51, 105, 0.08), transparent)',

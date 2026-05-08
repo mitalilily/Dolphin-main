@@ -26,7 +26,7 @@ export const userProfiles = pgTable("user_profiles", {
     .unique()
     .notNull(),
 
-  onboardingStep: integer("onboardingStep").notNull().default(1),
+  onboardingStep: integer("onboardingStep").notNull().default(0),
   monthlyOrderCount: varchar("monthlyOrderCount").default("0-100"),
   salesChannels: jsonb("salesChannels"),
   /* OBJECT BLOCKS (jsonb) --------------------------------------------- */

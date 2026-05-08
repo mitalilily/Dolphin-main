@@ -17,8 +17,9 @@ import CustomInput from '../../UI/inputs/CustomInput'
 import { toast } from '../../UI/Toast'
 import { useChangePassword } from '../../../hooks/Auth/useChangePassword'
 import { useUserInfo } from '../../../hooks/useUserInfo'
+import { brand } from '../../../theme/brand'
 
-const DE_BLUE = '#0052CC'
+const DE_BLUE = brand.ink
 
 interface PasswordFormValues {
   currentPassword?: string
@@ -78,7 +79,7 @@ export default function PasswordSettingsForm() {
         aria-label={visible ? 'Hide password' : 'Show password'}
         onClick={() => setVisible(!visible)}
         edge="end"
-        sx={{ color: '#6b6b6b', '&:hover': { color: DE_BLUE, bgcolor: alpha(DE_BLUE, 0.08) } }}
+        sx={{ color: brand.inkSoft, '&:hover': { color: DE_BLUE, bgcolor: alpha(DE_BLUE, 0.08) } }}
       >
         {visible ? <BiHide /> : <BiShow />}
       </IconButton>
@@ -115,7 +116,7 @@ export default function PasswordSettingsForm() {
             <Typography variant="h6" sx={{ fontWeight: 800, color: DE_BLUE }}>
               Password Security
             </Typography>
-            <Typography variant="body2" sx={{ color: '#5e759a' }}>
+            <Typography variant="body2" sx={{ color: brand.inkSoft }}>
               Update your account password regularly to keep your business data secure.
             </Typography>
           </Box>
@@ -175,7 +176,7 @@ export default function PasswordSettingsForm() {
               px: 4,
               borderRadius: 1,
               bgcolor: DE_BLUE,
-              '&:hover': { bgcolor: '#0043A4' },
+              '&:hover': { bgcolor: DE_BLUE },
             }}
           />
         </Box>
