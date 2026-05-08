@@ -25,6 +25,7 @@ import b2bAdminRoutes from './routes/adminRoutes/b2b.routes'
 import adminBillingInvoiceRoutes from './routes/adminRoutes/billingInvoice.admin.routes'
 import adminBillingPreferencesRoutes from './routes/adminRoutes/billingPreferences.admin.routes'
 import adminCodRemittanceRoutes from './routes/adminRoutes/codRemittance.admin.routes'
+import adminDashboardRoutes from './routes/adminRoutes/dashboard.routes'
 import adminDeveloperRoutes from './routes/adminRoutes/developer.routes'
 import locationRoutes from './routes/adminRoutes/location.routes'
 import adminOrderRoutes from './routes/adminRoutes/order.routes'
@@ -224,6 +225,7 @@ app.use('/api/plans', planRoutes)
 app.use('/api/billing-preferences', billingPreferencesRoutes)
 app.use('/api/cod-remittance', codRemittanceRoutes)
 app.use('/api/admin/cod-remittance', adminCodRemittanceRoutes)
+app.use('/api/admin/dashboard', adminDashboardRoutes)
 app.use('/api/admin/weight-reconciliation', adminWeightReconciliationRoutes)
 app.use('/api/admin/wallets', adminWalletRoutes)
 app.use('/api/admin/payment-options', adminPaymentOptionsRoutes)

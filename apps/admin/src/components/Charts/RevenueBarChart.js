@@ -1,14 +1,30 @@
-import React from 'react'
-import Chart from 'react-apexcharts'
 import { useColorModeValue } from '@chakra-ui/react'
+import Chart from 'react-apexcharts'
+import { adminBrand } from 'theme/brand'
+
+const formatChartDate = (value) => {
+  const [year, month, day] = String(value || '')
+    .split('-')
+    .map(Number)
+  if (!year || !month || !day) return value
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+const formatCompactCurrency = (value) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: Number(value) >= 1000 ? 1 : 0,
+    notation: Number(value) >= 1000 ? 'compact' : 'standard',
+  }).format(Number(value) || 0)
 
 const RevenueBarChart = ({ data = [] }) => {
   const textColor = useColorModeValue('gray.700', 'white')
   const textColorSecondary = useColorModeValue('gray.500', 'gray.400')
   const gridColor = useColorModeValue('gray.200', 'gray.700')
-
-  // Enhanced gradient colors for revenue
-  const gradientColors = ['#10B981', '#34D399', '#6EE7B7']
 
   const chartData = [
     {
@@ -50,18 +66,13 @@ const RevenueBarChart = ({ data = [] }) => {
     },
     dataLabels: {
       enabled: true,
-      formatter: (val) => {
-        if (val >= 1000) {
-          return `₹${(val / 1000).toFixed(1)}k`
-        }
-        return `₹${val}`
-      },
+      formatter: (val) => formatCompactCurrency(val),
       offsetY: -20,
       style: {
         fontSize: '11px',
         colors: [textColor],
         fontWeight: 600,
-        fontFamily: 'Inter, sans-serif',
+        fontFamily: 'Poppins, sans-serif',
       },
     },
     fill: {
@@ -70,21 +81,21 @@ const RevenueBarChart = ({ data = [] }) => {
         shade: 'light',
         type: 'vertical',
         shadeIntensity: 0.5,
-        gradientToColors: ['#10B981', '#34D399', '#6EE7B7'],
+        gradientToColors: [adminBrand.success, adminBrand.aqua, adminBrand.accent],
         inverseColors: false,
         opacityFrom: 1,
         opacityTo: 0.8,
         stops: [0, 50, 100],
       },
     },
-    colors: ['#10B981'],
+    colors: [adminBrand.success],
     xaxis: {
       categories: data.map((item) => formatChartDate(item.date)),
       labels: {
         style: {
           colors: textColorSecondary,
           fontSize: '12px',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'Poppins, sans-serif',
           fontWeight: 500,
         },
       },
@@ -100,15 +111,10 @@ const RevenueBarChart = ({ data = [] }) => {
         style: {
           colors: textColorSecondary,
           fontSize: '12px',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'Poppins, sans-serif',
           fontWeight: 500,
         },
-        formatter: (val) => {
-          if (val >= 1000) {
-            return `₹${(val / 1000).toFixed(1)}k`
-          }
-          return `₹${Math.round(val)}`
-        },
+        formatter: (val) => formatCompactCurrency(val),
       },
     },
     grid: {
@@ -135,16 +141,15 @@ const RevenueBarChart = ({ data = [] }) => {
       theme: useColorModeValue('light', 'dark'),
       style: {
         fontSize: '12px',
-        fontFamily: 'Inter, sans-serif',
+        fontFamily: 'Poppins, sans-serif',
       },
       y: {
-        formatter: (val) => {
-          return new Intl.NumberFormat('en-IN', {
+        formatter: (val) =>
+          new Intl.NumberFormat('en-IN', {
             style: 'currency',
             currency: 'INR',
             maximumFractionDigits: 0,
-          }).format(val)
-        },
+          }).format(val),
       },
       marker: {
         show: true,
@@ -155,25 +160,7 @@ const RevenueBarChart = ({ data = [] }) => {
     },
   }
 
-  return (
-    <Chart
-      options={chartOptions}
-      series={chartData}
-      type="bar"
-      width="100%"
-      height="100%"
-    />
-  )
+  return <Chart options={chartOptions} series={chartData} type="bar" width="100%" height="100%" />
 }
 
 export default RevenueBarChart
-  const formatChartDate = (value) => {
-    const [year, month, day] = String(value || '')
-      .split('-')
-      .map(Number)
-    if (!year || !month || !day) return value
-    return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    })
-  }

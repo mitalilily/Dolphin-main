@@ -33,6 +33,7 @@ import OrdersLineChart from 'components/Charts/OrdersLineChart'
 import RevenueBarChart from 'components/Charts/RevenueBarChart'
 import { useDashboardStats } from 'hooks/useDashboardStats'
 import { useHistory } from 'react-router-dom'
+import { adminBrand } from 'theme/brand'
 
 const formatCurrency = (amount) =>
   new Intl.NumberFormat('en-IN', {
@@ -47,12 +48,14 @@ const toNum = (value) => {
 }
 
 function MetricCard({ title, value, subtitle, icon, color = 'brand.500' }) {
-  const textPrimary = useColorModeValue('#241A1B', 'gray.100')
-  const textSecondary = useColorModeValue('#6A5E59', 'gray.400')
-  const iconBg = useColorModeValue('rgba(12,59,128,0.06)', 'rgba(148,163,184,0.14)')
+  const textPrimary = useColorModeValue(adminBrand.ink, 'gray.100')
+  const textSecondary = useColorModeValue(adminBrand.inkSoft, 'gray.400')
+  const iconBg = useColorModeValue('rgba(198,231,255,0.48)', 'rgba(148,163,184,0.14)')
+  const cardBg = useColorModeValue(adminBrand.surfaceGradient, 'rgba(18,27,45,0.9)')
+  const cardBorder = useColorModeValue('rgba(16,50,74,0.1)', 'rgba(255,255,255,0.08)')
 
   return (
-    <Card borderRadius="24px" h="full" bg={useColorModeValue('rgba(255,253,248,0.96)', 'rgba(18,27,45,0.9)')} borderWidth="1px" borderColor={useColorModeValue('rgba(12,59,128,0.1)', 'rgba(255,255,255,0.08)')}>
+    <Card borderRadius="22px" h="full" bg={cardBg} borderWidth="1px" borderColor={cardBorder}>
       <CardBody p={4.5}>
         <HStack justify="space-between" align="flex-start" mb={2}>
           <Text fontSize="xs" color={textSecondary} fontWeight="700" textTransform="uppercase" letterSpacing="0.45px">
@@ -77,12 +80,12 @@ export default function Dashboard() {
   const history = useHistory()
   const { data: statsData, isLoading, error, refetch, isRefetching } = useDashboardStats()
 
-  const pageBg = useColorModeValue('#F7EBDD', '#142238')
-  const panelBg = useColorModeValue('rgba(255,253,248,0.96)', '#101D36')
-  const borderColor = useColorModeValue('rgba(12,59,128,0.12)', 'rgba(148,163,184,0.2)')
-  const textPrimary = useColorModeValue('#241A1B', 'gray.100')
-  const textSecondary = useColorModeValue('#6A5E59', 'gray.400')
-  const tileBg = useColorModeValue('rgba(255,244,232,0.8)', 'rgba(148,163,184,0.1)')
+  const pageBg = useColorModeValue(adminBrand.pageGradient, '#142238')
+  const panelBg = useColorModeValue(adminBrand.surfaceGradient, '#101D36')
+  const borderColor = useColorModeValue('rgba(16,50,74,0.12)', 'rgba(148,163,184,0.2)')
+  const textPrimary = useColorModeValue(adminBrand.ink, 'gray.100')
+  const textSecondary = useColorModeValue(adminBrand.inkSoft, 'gray.400')
+  const tileBg = useColorModeValue('rgba(245,251,255,0.82)', 'rgba(148,163,184,0.1)')
 
   const stats = statsData?.data || {}
   const todayOps = stats.todayOperations || {}
@@ -107,6 +110,22 @@ export default function Dashboard() {
       value: formatCurrency(financial.totalRevenue),
     },
   ]
+
+  const sceneMetrics = {
+    todayOrders: toNum(todayOps.orders).toLocaleString(),
+    todayPending: `${toNum(todayOps.pending)} pending dispatch`,
+    deliverySuccess: `${toNum(operational.deliverySuccessRate)}%`,
+    deliveryHint: `${toNum(operational.deliveredOrders)} delivered of ${toNum(operational.totalOrders)}`,
+    codDue: formatCurrency(financial.codRemittanceDue),
+    codHint: 'Pending remittance',
+    outForDelivery: toNum(operational.outForDeliveryOrders).toLocaleString(),
+    finalHandoff: `${toNum(operational.outForDeliveryOrders).toLocaleString()} shipments out for delivery`,
+    exceptions: (toNum(operational.ndrOrders) + toNum(operational.stuckOrders)).toLocaleString(),
+    exceptionsHint: `${toNum(operational.ndrOrders)} NDR, ${toNum(operational.stuckOrders)} stuck`,
+    inTransit: toNum(todayOps.inTransit).toLocaleString(),
+    inTransitHint: 'Moving today',
+    routeReadiness: toNum(operational.deliverySuccessRate),
+  }
 
   const topCouriers = Object.entries(couriers.performance || {})
     .map(([name, value]) => ({
@@ -157,11 +176,10 @@ export default function Dashboard() {
                       Dolphin operations deck
                     </Text>
                     <Heading size="lg" color={textPrimary} letterSpacing="-0.04em">
-                      Run admin operations from a clearer top layer.
+                      Admin dashboard
                     </Heading>
                     <Text color={textSecondary} maxW="520px" lineHeight="1.75">
-                      The admin home now uses softer surfaces, stronger sectioning, and a more
-                      product-led flow for orders, finance, risk, and courier control.
+                      Live order, finance, courier, and exception metrics across the platform.
                     </Text>
                   </VStack>
                   <HStack spacing={3}>
@@ -182,7 +200,7 @@ export default function Dashboard() {
                   </HStack>
                 </HStack>
 
-                <RollingVanScene compact />
+                <RollingVanScene compact metrics={sceneMetrics} />
 
                 <SimpleGrid columns={{ base: 1, md: 3 }} spacing={2.5}>
                   {heroHighlights.map((item) => (
@@ -201,7 +219,7 @@ export default function Dashboard() {
           </Card>
 
           <Box display={{ base: 'none', '2xl': 'block' }}>
-            <DoorstepCourierScene compact />
+            <DoorstepCourierScene compact metrics={sceneMetrics} />
           </Box>
         </Grid>
 
