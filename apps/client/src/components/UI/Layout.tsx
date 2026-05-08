@@ -45,7 +45,7 @@ export default function Layout() {
         display: 'flex',
         width: '100%',
         minHeight: '100vh',
-        overflow: 'hidden',
+        overflowX: 'hidden',
         backgroundImage: brandGradients.page,
       }}
     >
@@ -56,7 +56,7 @@ export default function Layout() {
           variant="temporary"
           open={mobileOpen}
           onClose={() => setMobileOpen(false)}
-          ModalProps={{ keepMounted: true }}
+          ModalProps={{ keepMounted: true, disableScrollLock: true }}
           sx={{
             '& .MuiDrawer-paper': {
               width: DRAWER_WIDTH,
@@ -109,10 +109,9 @@ export default function Layout() {
             component="main"
             sx={{
               flexGrow: 1,
-              overflowY: 'auto',
               overflowX: 'hidden',
               WebkitOverflowScrolling: 'touch',
-              overscrollBehavior: 'contain',
+              scrollBehavior: 'smooth',
               bgcolor: 'transparent',
               px: { xs: 1, md: 2 },
               pb: { xs: 1.5, md: 2.5 },

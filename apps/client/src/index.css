@@ -1,7 +1,7 @@
 html,
 body,
 #root {
-  height: 100%;
+  min-height: 100%;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -15,12 +15,22 @@ body,
   font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
+  min-height: 100vh;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  overscroll-behavior-y: contain;
+  overflow-y: auto;
+  overscroll-behavior-y: auto;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 a {
