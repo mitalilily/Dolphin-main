@@ -1,7 +1,10 @@
 import { randomUUID } from 'crypto'
-import { and, asc, desc, eq, gte, ilike, inArray, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, ilike, inArray, or, sql } from 'drizzle-orm'
 import { ShippingRateFilters } from '../../controllers/admin/courier.controller'
-import { ADMIN_SUPPORTED_COURIER_PROVIDERS } from '../../constants/courierProviders'
+import {
+  ADMIN_SUPPORTED_COURIER_PROVIDERS,
+  KNOWN_COURIER_PROVIDERS,
+} from '../../constants/courierProviders'
 import { db } from '../client'
 import { couriers } from '../schema/couriers'
 import { courierSummary } from '../schema/courierSummary'
@@ -46,8 +49,10 @@ export interface CourierFilters {
   serviceProviders?: string[]
 }
 
+const knownCourierProviders = [...KNOWN_COURIER_PROVIDERS]
+
 export const buildCourierWhereClause = (filters: CourierFilters = {}) => {
-  const conditions = []
+  const conditions = [inArray(sql`LOWER(${couriers.serviceProvider})`, knownCourierProviders)]
 
   if (filters.name) {
     conditions.push(ilike(couriers.name, `%${filters.name}%`))
@@ -116,7 +121,15 @@ export const getCourierCount = async (filters: CourierFilters = {}) => {
 // 🔍 Get Courier by ID
 // =========================
 export const getCourierById = async (id: number) => {
-  const [courier] = await db.select().from(couriers).where(eq(couriers.id, id))
+  const [courier] = await db
+    .select()
+    .from(couriers)
+    .where(
+      and(
+        eq(couriers.id, id),
+        inArray(sql`LOWER(${couriers.serviceProvider})`, knownCourierProviders),
+      ),
+    )
 
   return courier
 }
@@ -131,7 +144,12 @@ export const getCourierSummary = async () => {
 }
 
 export const getShippingRates = async (filters: ShippingRateFilters = {}) => {
-  const conditions: any[] = []
+  const conditions: any[] = [
+    or(
+      sql`${shippingRates.service_provider} is null`,
+      inArray(sql`LOWER(${shippingRates.service_provider})`, knownCourierProviders),
+    )!,
+  ]
   const normalizedModeFilter = normalizeB2CShippingMode(filters.mode)
 
   if (filters.courier_name?.length) {

@@ -205,7 +205,6 @@ const normalizeIntegrationTypeAlias = (value?: string | null) => {
     .toLowerCase()
   if (!normalized) return ''
   if (normalized === 'icaarry') return 'icarry'
-  if (normalized === 'juxcargo') return 'truxcargo'
   return normalized
 }
 
@@ -3869,7 +3868,7 @@ export const createB2CShipmentService = async (
           console.log(
             `Ã¢Å“â€¦ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,
           )
-        } else if (serviceProvider === 'truxcargo' || serviceProvider === 'juxcargo') {
+        } else if (serviceProvider === 'truxcargo') {
           params.integration_type = 'truxcargo'
           console.log(
             `✅ Derived integration_type: ${params.integration_type} from courier_id: ${params.courier_id} (courier: ${matchedCourier.name})`,

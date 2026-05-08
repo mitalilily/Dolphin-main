@@ -49,16 +49,6 @@ export type ShiprocketConfig = {
   defaultChannelId?: string
 }
 
-export type JuxcargoConfig = {
-  apiBase?: string
-  apiBaseB2C?: string
-  apiBaseB2B?: string
-  username?: string
-  password?: string
-  apiKey?: string
-  clientId?: string
-}
-
 export type IcarryConfig = {
   apiBase?: string
   username?: string
@@ -99,7 +89,6 @@ export type CourierConfig =
   | EkartConfig
   | ShipmozoConfig
   | ShiprocketConfig
-  | JuxcargoConfig
   | IcarryConfig
   | TruxcargoConfig
 
@@ -170,17 +159,6 @@ const hasEnvForProviderAndType = (provider: ServiceProviderId, _type: BusinessTy
       process.env.SHIPROCKET_EMAIL ||
       process.env.SHIPROCKET_PASSWORD ||
       process.env.SHIPROCKET_AUTH_TOKEN
-    )
-  }
-  if (provider === 'juxcargo') {
-    return !!(
-      process.env.JUXCARGO_API_BASE ||
-      process.env.JUXCARGO_API_BASE_B2C ||
-      process.env.JUXCARGO_API_BASE_B2B ||
-      process.env.JUXCARGO_USERNAME ||
-      process.env.JUXCARGO_PASSWORD ||
-      process.env.JUXCARGO_API_KEY ||
-      process.env.JUXCARGO_CLIENT_ID
     )
   }
   if (provider === 'icarry') {
@@ -265,17 +243,6 @@ const buildConfigFromRow = (provider: ServiceProviderId, row: typeof courierCred
       apiKey: normalize(row.apiKey),
       defaultPickupLocation: normalize(row.clientName),
       defaultChannelId: normalize(row.clientId),
-    }
-    return cfg
-  }
-
-  if (provider === 'juxcargo') {
-    const cfg: JuxcargoConfig = {
-      apiBase: normalize(row.apiBase),
-      username: normalize(row.username),
-      password: normalize(row.password),
-      apiKey: normalize(row.apiKey),
-      clientId: normalize(row.clientId),
     }
     return cfg
   }

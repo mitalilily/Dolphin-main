@@ -6,7 +6,6 @@ import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { SHIPMOZO_COURIER_SEEDS } from '../../constants/shipmozoCouriers'
 import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
 import { ICARRY_COURIER_SEEDS } from '../../constants/icarryCouriers'
-import { JUXCARGO_COURIER_SEEDS } from '../../constants/juxcargoCouriers'
 import { db } from '../../models/client'
 import {
   deleteCourierService,
@@ -141,9 +140,6 @@ const ensureProviderSeedRows = async (provider: string) => {
   if (normalized === 'icarry') {
     return upsertStaticProviderCouriers('icarry', ICARRY_COURIER_SEEDS)
   }
-  if (normalized === 'juxcargo') {
-    return upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
-  }
 
   return 0
 }
@@ -238,6 +234,9 @@ export const getAllCouriersController = async (req: Request, res: Response) => {
         createdAt: couriers.createdAt,
       })
       .from(couriers)
+      .where(
+        inArray(sql`lower(${couriers.serviceProvider})`, [...ADMIN_SUPPORTED_COURIER_PROVIDERS]),
+      )
       .orderBy(desc(couriers.createdAt))
 
     res.json({ success: true, data: courierList })
@@ -317,7 +316,6 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
         },
       })
 
-    await upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
     await upsertStaticProviderCouriers('icarry', ICARRY_COURIER_SEEDS)
 
     const shouldSyncIcarry =
@@ -354,7 +352,9 @@ export const getAllCouriersListController = async (req: Request, res: Response) 
 
     const { search, serviceProvider, businessType } = req.query
 
-    const whereClauses = []
+    const whereClauses = [
+      inArray(sql`lower(${couriers.serviceProvider})`, [...ADMIN_SUPPORTED_COURIER_PROVIDERS]),
+    ]
 
     // Filter by search (name or id)
     if (search && typeof search === 'string' && search.trim()) {
@@ -633,15 +633,6 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
         defaultPickupLocation: '',
         defaultChannelId: '',
       },
-      juxcargo: {
-        provider: 'juxcargo',
-        apiBase: '',
-        username: '',
-        hasPassword: false,
-        hasApiKey: false,
-        apiKeyMasked: '',
-        clientId: '',
-      },
       truxcargo: {
         provider: 'truxcargo',
         apiBase: 'https://b2b.truxcargo.com',
@@ -729,20 +720,6 @@ export const getCourierCredentialsController = async (req: Request, res: Respons
           hasPassword,
           defaultPickupLocation: row.clientName || '',
           defaultChannelId: row.clientId || '',
-        }
-      } else if (provider === 'juxcargo') {
-        const apiKey = row.apiKey || ''
-        const hasPassword = Boolean((row.password || '').trim())
-        acc.juxcargo = {
-          provider: 'juxcargo',
-          apiBase: row.apiBase || '',
-          username: row.username || '',
-          hasPassword,
-          hasApiKey: Boolean(apiKey.trim()),
-          apiKeyMasked: apiKey
-            ? `${apiKey.slice(0, 4)}${'*'.repeat(Math.max(apiKey.length - 8, 0))}${apiKey.slice(-4)}`
-            : '',
-          clientId: row.clientId || '',
         }
       } else if (provider === 'truxcargo') {
         const apiKey = row.apiKey || ''
@@ -1101,15 +1078,6 @@ export const syncServiceProviderCouriersController = async (req: Request, res: R
     } catch (error: any) {
       providerErrors.push({
         provider: 'truxcargo',
-        message: String(error?.message || 'Sync failed'),
-      })
-    }
-
-    try {
-      await upsertStaticProviderCouriers('juxcargo', JUXCARGO_COURIER_SEEDS)
-    } catch (error: any) {
-      providerErrors.push({
-        provider: 'juxcargo',
         message: String(error?.message || 'Sync failed'),
       })
     }

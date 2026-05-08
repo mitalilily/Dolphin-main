@@ -27,7 +27,6 @@ const DEFAULT_ADMIN_PROVIDERS = [
   'shiprocket',
   'truxcargo',
   'icarry',
-  'juxcargo',
 ]
 
 const toProviderLabel = (value = '') =>

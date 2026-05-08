@@ -331,7 +331,6 @@ const Couriers = () => {
             <option value="shiprocket">Shiprocket</option>
             <option value="truxcargo">Truxcargo</option>
             <option value="icarry">iCarry</option>
-            <option value="juxcargo">Juxcargo</option>
           </Select>
           {(filters.search || filters.serviceProvider) && (
             <Button
@@ -590,7 +589,6 @@ const Couriers = () => {
             <option value="shiprocket">Shiprocket</option>
             <option value="truxcargo">Truxcargo</option>
             <option value="icarry">iCarry</option>
-            <option value="juxcargo">Juxcargo</option>
           </Select>
 
           <FormControl>
