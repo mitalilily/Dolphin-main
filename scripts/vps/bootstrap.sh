@@ -188,16 +188,26 @@ server {
         add_header Cache-Control "public, max-age=2592000, immutable";
     }
 
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location = /admin/ {
+        root /var/www/dolphin/apps/admin/build;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files /index.html =404;
+    }
+
     location ^~ /admin/ {
         alias /var/www/dolphin/apps/admin/build/;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri $uri/ /admin/index.html;
+        try_files $uri /admin/index.html;
     }
 
     location ^~ /auth/ {
         alias /var/www/dolphin/apps/admin/build/;
         add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri $uri/ /admin/index.html;
+        try_files $uri /admin/index.html;
     }
 
     root /var/www/dolphin/apps/client/dist;

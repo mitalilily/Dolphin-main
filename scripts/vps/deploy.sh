@@ -88,6 +88,20 @@ if [ -f "$NGINX_SITE" ]; then
   if grep -q 'server_name _;' "$NGINX_SITE"; then
     sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
   fi
+  if ! grep -q 'location = /admin {' "$NGINX_SITE"; then
+    sed -i '/location \^~ \/admin\/static\/ {/i\
+    location = /admin {\
+        return 301 /admin/;\
+    }\
+\
+    location = /admin/ {\
+        root /var/www/dolphin/apps/admin/build;\
+        add_header Cache-Control "no-cache, no-store, must-revalidate";\
+        try_files /index.html =404;\
+    }\
+' "$NGINX_SITE"
+  fi
+  sed -i 's#try_files \$uri \$uri/ /admin/index.html;#try_files $uri /admin/index.html;#g' "$NGINX_SITE"
   if ! grep -q 'gzip on;' "$NGINX_SITE"; then
     sed -i '/client_max_body_size 50m;/a\
     sendfile on;\
