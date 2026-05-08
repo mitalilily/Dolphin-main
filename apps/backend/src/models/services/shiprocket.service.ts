@@ -991,6 +991,7 @@ interface NimbusServiceabilityParams {
   // Hint that this call is coming from a rate calculator UI (we can skip heavy live checks)
   isCalculator?: boolean
   service_providers?: string[]
+  courier_id?: number | string
 }
 
 // Delhivery-only serviceability.
@@ -1013,6 +1014,27 @@ const normalizeTags = (raw: string[] | string | null | undefined): string[] => {
     .split(/[;,]/)
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean)
+}
+
+const toDateOnly = (value: unknown, fallback: unknown = new Date()): string => {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10)
+
+  const candidate =
+    value instanceof Date
+      ? value
+      : raw
+        ? new Date(raw)
+        : fallback instanceof Date
+          ? fallback
+          : new Date(fallback as any)
+
+  if (!Number.isNaN(candidate.getTime())) return candidate.toISOString().slice(0, 10)
+
+  const fallbackRaw = typeof fallback === 'string' ? fallback.trim() : ''
+  if (/^\d{4}-\d{2}-\d{2}/.test(fallbackRaw)) return fallbackRaw.slice(0, 10)
+
+  return new Date().toISOString().slice(0, 10)
 }
 
 const fetchLocationByPincode = async (pincode: string): Promise<LocRow | null> => {
@@ -2256,7 +2278,17 @@ export const fetchAvailableCouriersWithRates = async (
 
       if (originPincode && destinationPincode && weightKg > 0) {
         try {
+          const truxPaymentMode = params.payment_type === 'cod' ? 'COD' : 'PREPAID'
+          const truxPartner = String(
+            params.courier_id || TRUXCARGO_COURIER_SEEDS[0]?.id || '701',
+          ).trim()
           truxcargoResp = await truxcargo.checkPincodeServiceability({
+            partner: truxPartner,
+            origin: originPincode,
+            destination: destinationPincode,
+            mode: truxPaymentMode,
+            invoice_value: orderAmountValue > 0 ? orderAmountValue : undefined,
+            cod_amount: params.payment_type === 'cod' ? orderAmountValue : 0,
             pickup_pincode: originPincode,
             delivery_pincode: destinationPincode,
             payment_type: params.payment_type === 'cod' ? 'cod' : 'prepaid',
@@ -3600,7 +3632,7 @@ export async function createB2COrder({
         // Order info
         order_number: normalizedOrderNumber,
         order_id: shipmentData?.data?.order_id ?? shipmentData?.order_id ?? null,
-        order_date: params.order_date ?? new Date().toISOString().slice(0, 10), // 'YYYY-MM-DD'
+        order_date: toDateOnly(params.order_date), // 'YYYY-MM-DD'
         order_amount: orderAmount,
         cod_charges: storedCodCharges,
         integration_type: params?.integration_type,
@@ -4716,8 +4748,7 @@ export const createB2CShipmentService = async (
         const shipmozo = new ShipmozoService()
         shipmentData = await shipmozo.pushReturnOrder({
           order_id: params.order_number,
-          order_date:
-            params.invoice_date || new Date(params.order_date || new Date()).toISOString().slice(0, 10),
+          order_date: toDateOnly(params.invoice_date || params.order_date),
           order_type: 'ESSENTIALS',
           pickup_name: params.pickup?.name || params.pickup?.warehouse_name,
           pickup_phone: Number(params.pickup?.phone || 0),
@@ -5795,21 +5826,57 @@ export const createB2CShipmentService = async (
       throw new HttpError(400, 'Courier ID is required to compute freight')
     }
 
-    const slabbedFreight = await computeB2CFreightForOrder({
-      userId,
-      courierId: courierIdForRate,
-      serviceProvider: params.integration_type ?? null,
-      mode: selectedDelhiveryShippingMode ?? null,
-      selectedMaxSlabWeight,
-      zoneIdOverride: params.zone_id ?? null,
-      originPincode: String(pickupPincode),
-      destinationPincode: String(destinationPincode),
-      weightG: normalizeServiceabilityWeightToGrams(params.package_weight ?? params.weight ?? 0),
-      lengthCm: Number(params.package_length ?? params.length ?? 0),
-      breadthCm: Number(params.package_breadth ?? params.breadth ?? 0),
-      heightCm: Number(params.package_height ?? params.height ?? 0),
-      isReverse: params.isReverse === true || params.payment_type === 'reverse',
-    })
+    let slabbedFreight: {
+      freight: number
+      volumetric_weight: number | null
+      chargeable_weight: number | null
+      slabs: number | null
+    } = {
+      freight: Number(params?.freight_charges ?? params?.shipping_charges ?? 0),
+      volumetric_weight: null,
+      chargeable_weight: null,
+      slabs: null,
+    }
+
+    try {
+      slabbedFreight = await computeB2CFreightForOrder({
+        userId,
+        courierId: courierIdForRate,
+        serviceProvider: params.integration_type ?? null,
+        mode: selectedDelhiveryShippingMode ?? null,
+        selectedMaxSlabWeight,
+        zoneIdOverride: params.zone_id ?? null,
+        originPincode: String(pickupPincode),
+        destinationPincode: String(destinationPincode),
+        weightG: normalizeServiceabilityWeightToGrams(params.package_weight ?? params.weight ?? 0),
+        lengthCm: Number(params.package_length ?? params.length ?? 0),
+        breadthCm: Number(params.package_breadth ?? params.breadth ?? 0),
+        heightCm: Number(params.package_height ?? params.height ?? 0),
+        isReverse: params.isReverse === true || params.payment_type === 'reverse',
+      })
+    } catch (freightErr: any) {
+      const isRateCardMissing =
+        String(freightErr?.message || '')
+          .toLowerCase()
+          .includes('no rate card found') ||
+        String(freightErr?.message || '')
+          .toLowerCase()
+          .includes('no slab configured')
+      const requestFreight = Number(params?.freight_charges ?? params?.shipping_charges ?? 0)
+      if (!isRateCardMissing || !Number.isFinite(requestFreight) || requestFreight <= 0) {
+        throw freightErr
+      }
+      console.warn('Ã¢Å¡Â Ã¯Â¸Â Falling back to request freight_charges after provider booking', {
+        order_number: params.order_number,
+        fallback_freight: requestFreight,
+      })
+      slabbedFreight = {
+        freight: requestFreight,
+        volumetric_weight: null,
+        chargeable_weight: null,
+        slabs: null,
+      }
+    }
 
     // 2ï¸âƒ£ INSERT LOCAL ORDER + WALLET TRANSACTION
     const result = await db.transaction(async (tx) => {
@@ -7022,10 +7089,7 @@ export const generateManifestService = async (params: {
 
               const pushPayload = {
                 order_id: order.order_number,
-                order_date:
-                  order.invoice_date ||
-                  order.order_date ||
-                  new Date(order.created_at || new Date()).toISOString().slice(0, 10),
+                order_date: toDateOnly(order.invoice_date || order.order_date, order.created_at),
                 order_type: 'ESSENTIALS',
                 consignee_name: order.buyer_name,
                 consignee_phone: Number(primaryConsigneePhone || 0),
@@ -7720,12 +7784,10 @@ export const generateManifestService = async (params: {
               : signedManifestUrl
           } catch (manifestUploadErr: any) {
             const message = String(manifestUploadErr?.message || '')
-            if (!/Storage is not configured/i.test(message)) {
-              throw manifestUploadErr
-            }
             console.warn(
               `⚠️ [Manifest] Storage unavailable; using inline generated manifest PDF for ${integrationType}.`,
             )
+            if (message) console.warn('[Manifest] Storage upload error:', message)
             manifestKey = `data:application/pdf;base64,${pdfBuffer.toString('base64')}`
             manifestDownloadUrl = manifestKey
           }

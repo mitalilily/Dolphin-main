@@ -193,6 +193,16 @@ export class ShiprocketCourierService {
     } catch (err: any) {
       const message = this.extractErrorMessage(err, 'Shiprocket login failed')
       const normalizedMessage = message.toLowerCase()
+      if (!forceRefresh && this.configuredAuthToken) {
+        ShiprocketCourierService.authToken = this.configuredAuthToken
+        ShiprocketCourierService.authTokenExpiresAt = now + 23 * 60 * 60 * 1000
+        this.log('Login failed; falling back to configured auth token', {
+          status: err?.response?.status || null,
+          message,
+        })
+        return this.configuredAuthToken
+      }
+
       throw new HttpError(
         Number(err?.response?.status || 502),
         normalizedMessage.includes('invalid email and password')

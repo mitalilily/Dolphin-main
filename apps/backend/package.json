@@ -42,6 +42,7 @@
     "test:courier-label-invoice": "node -r ts-node/register src/scripts/testCourierLabelInvoiceApis.ts",
     "test:courier-docs-production": "node -r ts-node/register src/scripts/testProductionCourierDocuments.ts",
     "test:all-couriers-awb-tracking-docs": "node -r ts-node/register src/scripts/testAllCourierAwbTrackingAndDocs.ts",
+    "qa:production-couriers": "node -r ts-node/register src/qa/productionCourierFlow.ts",
     "test:razorpay-payments": "node -r ts-node/register src/scripts/testRazorpayPayments.ts",
     "cleanup:shipmozo-test-orders": "node -r ts-node/register src/scripts/cleanupShipmozoTestOrders.ts",
     "seed:shipmozo-couriers": "node -r ts-node/register src/scripts/seedShipmozoCouriersFromApi.ts",

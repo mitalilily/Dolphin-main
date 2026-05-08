@@ -153,15 +153,26 @@ export class TruxcargoService {
             url: `/${path.replace(/^\/+/, '')}`,
             data: method === 'get' ? undefined : payload,
             params,
-          }),
+        }),
         { attempts: 3, baseDelayMs: 250, maxDelayMs: 1500 },
       )
+      let responseData: any = response.data
+      if (typeof responseData === 'string') {
+        const jsonMatch = responseData.match(/\{[\s\S]*\}\s*$/)
+        if (jsonMatch) {
+          try {
+            responseData = JSON.parse(jsonMatch[0])
+          } catch {
+            // Keep the original provider response if it cannot be parsed safely.
+          }
+        }
+      }
       this.log('API response', {
         method,
         url: `${this.baseApi}/${path.replace(/^\/+/, '')}`,
-        response: this.sanitizeForLogs(response.data),
+        response: this.sanitizeForLogs(responseData),
       })
-      return response.data
+      return responseData
     } catch (err: any) {
       this.log('API request failed', {
         method,

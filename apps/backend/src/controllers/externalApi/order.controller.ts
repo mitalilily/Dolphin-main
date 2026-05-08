@@ -7,6 +7,7 @@ import { ShiprocketCourierService } from '../../models/services/couriers/shiproc
 import { ShipmozoService } from '../../models/services/couriers/shipmozo.service'
 import { TruxcargoService } from '../../models/services/couriers/truxcargo.service'
 import { XpressbeesService } from '../../models/services/couriers/xpressbees.service'
+import { IcarryService } from '../../models/services/couriers/icarry.service'
 import {
   createB2CShipmentService,
   getB2COrdersByUserService,
@@ -331,11 +332,11 @@ export const cancelOrderController = async (req: any, res: Response) => {
 
     let cancellationResult: any = null
     const provider = String(order.integration_type || '').toLowerCase()
-    if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo'].includes(provider)) {
+    if (!['delhivery', 'ekart', 'xpressbees', 'shipmozo', 'shiprocket', 'truxcargo', 'icarry'].includes(provider)) {
       return res.status(400).json({
         success: false,
         error: 'Unsupported provider',
-        message: `Only Delhivery, Ekart, Xpressbees, Shipmozo, Shiprocket and Truxcargo are supported for cancellation. Found: ${order.integration_type}`,
+        message: `Only Delhivery, Ekart, Xpressbees, Shipmozo, Shiprocket, Truxcargo and iCarry are supported for cancellation. Found: ${order.integration_type}`,
       })
     }
 
@@ -366,6 +367,17 @@ export const cancelOrderController = async (req: any, res: Response) => {
       } else if (provider === 'truxcargo') {
         const truxcargo = new TruxcargoService()
         cancellationResult = await truxcargo.cancelOrder({ waybill: order.awb_number })
+      } else if (provider === 'icarry') {
+        const shipmentId = Number(order.shipment_id || order.awb_number || 0)
+        if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
+          return res.status(400).json({
+            success: false,
+            error: 'Missing shipment id',
+            message: 'iCarry cancellation requires a numeric shipment_id',
+          })
+        }
+        const icarry = new IcarryService()
+        cancellationResult = await icarry.cancelShipment({ shipment_id: shipmentId })
       } else {
         const xpressbees = new XpressbeesService()
         cancellationResult = await xpressbees.cancelShipment(order.awb_number)
@@ -381,8 +393,11 @@ export const cancelOrderController = async (req: any, res: Response) => {
 
     const providerCancelAccepted =
       cancellationResult?.success === true ||
+      cancellationResult?.success === 1 ||
+      cancellationResult?.Success === 1 ||
       cancellationResult?.Success === true ||
       cancellationResult?.status === true ||
+      cancellationResult?.status === 1 ||
       cancellationResult?.status === 'Success' ||
       cancellationResult?.status === 'success' ||
       cancellationResult?.response?.status === true ||
