@@ -8296,7 +8296,10 @@ export const generateManifestService = async (params: {
           }
 
           const providerManifestIds =
-            integrationType === 'ekart' || integrationType === 'shiprocket' || integrationType === 'icarry'
+            integrationType === 'ekart' ||
+            integrationType === 'shiprocket' ||
+            integrationType === 'truxcargo' ||
+            integrationType === 'icarry'
               ? fetchedOrders
                   .map((order) =>
                     String(order.shipment_id || order.awb_number || order.order_number || '').trim(),
