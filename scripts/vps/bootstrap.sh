@@ -82,6 +82,7 @@ module.exports = {
       name: 'dolphin-api',
       cwd: '${APP_DIR}/apps/backend',
       script: 'dist/index.js',
+      restart_delay: 30000,
       env: {
         NODE_ENV: 'production',
         PORT: '${API_PORT}'
