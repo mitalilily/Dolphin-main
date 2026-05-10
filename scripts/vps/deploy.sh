@@ -17,6 +17,8 @@ LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
 LOCAL_POSTGRES_USER="${LOCAL_POSTGRES_USER:-dolphin}"
 LOCAL_POSTGRES_PASSWORD="${LOCAL_POSTGRES_PASSWORD:-DolphinLocalPostgres_2026_Strong}"
 LOCAL_POSTGRES_DATA="${LOCAL_POSTGRES_DATA:-/opt/dolphin-postgres/data}"
+BACKUP_DATABASE_BEFORE_PATCHES="${BACKUP_DATABASE_BEFORE_PATCHES:-true}"
+DB_BACKUP_DIR="${DB_BACKUP_DIR:-/var/backups/dolphin}"
 
 build_cors_origins() {
   local origins="${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin"
@@ -104,6 +106,30 @@ require_database_url() {
     echo "Refusing to deploy against an empty database config. Restore BACKEND_ENV or set USE_LOCAL_POSTGRES=true intentionally." >&2
     exit 1
   fi
+}
+
+backup_database() {
+  if [ "$BACKUP_DATABASE_BEFORE_PATCHES" != "true" ]; then
+    return
+  fi
+
+  if ! command -v pg_dump >/dev/null 2>&1; then
+    echo "pg_dump is not installed; skipping database backup." >&2
+    return
+  fi
+
+  local database_url
+  local backup_file
+  database_url="$(grep -E '^DATABASE_URL=' "$BACKEND_ENV_SOURCE" | tail -n 1 | cut -d= -f2-)"
+  backup_file="${DB_BACKUP_DIR}/dolphin-$(date -u +%Y%m%dT%H%M%SZ).sql"
+
+  mkdir -p "$DB_BACKUP_DIR"
+  chmod 700 "$DB_BACKUP_DIR"
+
+  echo "Backing up database before schema patches..."
+  pg_dump --no-owner --no-acl "$database_url" > "$backup_file"
+  chmod 600 "$backup_file"
+  echo "Database backup written to ${backup_file}."
 }
 
 write_nginx_config() {
@@ -364,6 +390,7 @@ npm --prefix apps/backend ci
 echo "Building backend..."
 npm --prefix apps/backend run build
 echo "Applying database schema and seed data..."
+backup_database
 (
   cd apps/backend
   NODE_ENV=production npx drizzle-kit push --force

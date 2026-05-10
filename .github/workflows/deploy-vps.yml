@@ -29,6 +29,7 @@ jobs:
       DOMAIN_NAMES: ${{ secrets.DOMAIN_NAMES || 'shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in' }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
       USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'false' }}
+      BACKUP_DATABASE_BEFORE_PATCHES: ${{ secrets.BACKUP_DATABASE_BEFORE_PATCHES || 'true' }}
       RUN_INVOICE_DATA_BACKFILLS: ${{ inputs.run_invoice_data_backfills || secrets.RUN_INVOICE_DATA_BACKFILLS || 'false' }}
       APP_DIR: /var/www/dolphin
     steps:
@@ -133,4 +134,4 @@ jobs:
             --exclude='apps/admin/build/' \
             ./ "$ssh_target:${APP_DIR}/"
 
-          retry "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' RUN_INVOICE_DATA_BACKFILLS='${RUN_INVOICE_DATA_BACKFILLS}' SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash scripts/vps/deploy.sh"
+          retry "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' BACKUP_DATABASE_BEFORE_PATCHES='${BACKUP_DATABASE_BEFORE_PATCHES}' RUN_INVOICE_DATA_BACKFILLS='${RUN_INVOICE_DATA_BACKFILLS}' SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash scripts/vps/deploy.sh"
