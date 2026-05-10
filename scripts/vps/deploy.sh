@@ -2,16 +2,25 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
+REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
 DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 
+mkdir -p "$APP_DIR"
 cd "$APP_DIR"
+
+if [ ! -d .git ]; then
+  echo "Git metadata missing in $APP_DIR; restoring checkout."
+  git init
+  git remote add origin "$REPO_URL"
+fi
 
 if [ -d .git ]; then
   echo "Syncing repository with origin/main..."
+  git remote set-url origin "$REPO_URL"
   git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
   git reset --hard origin/main
   git show -s --oneline --decorate HEAD
