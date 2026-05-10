@@ -40,6 +40,18 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Validate production backend env
+        env:
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
+        run: |
+          set -euo pipefail
+
+          if [ "$REQUIRE_BACKEND_ENV" = "true" ] && [ -z "${BACKEND_ENV:-}" ] && [ -z "${BACKEND_ENV_B64:-}" ]; then
+            echo "::error::Set the BACKEND_ENV repository secret, or set BACKEND_ENV_B64 to base64-encoded backend env content. Refusing to deploy because the VPS may use the wrong/empty database."
+            exit 1
+          fi
+
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
