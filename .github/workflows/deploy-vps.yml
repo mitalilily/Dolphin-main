@@ -52,6 +52,7 @@ jobs:
           repo_url="https://github.com/mitalilily/Dolphin-main.git"
           mkdir -p "$app_dir"
           cd "$app_dir"
+          git config --global --add safe.directory "$app_dir" >/dev/null 2>&1 || true
           if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
             echo "Git checkout missing or invalid in $app_dir; restoring checkout."
             rm -rf .git

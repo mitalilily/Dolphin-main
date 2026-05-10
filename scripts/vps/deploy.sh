@@ -11,6 +11,7 @@ API_PORT="${API_PORT:-5002}"
 
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
+git config --global --add safe.directory "$APP_DIR" >/dev/null 2>&1 || true
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "Git checkout missing or invalid in $APP_DIR; restoring checkout."
