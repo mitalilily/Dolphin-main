@@ -14,9 +14,15 @@ if (!process.env.DATABASE_URL) {
 }
 
 const databaseUrl = process.env.DATABASE_URL as string
+const sslMode = `${process.env.PGSSLMODE || process.env.DATABASE_SSL || process.env.DB_SSL || ''}`
+  .trim()
+  .toLowerCase()
 const shouldUseSsl =
-  process.env.PGSSLMODE === 'require' ||
-  env === 'production' ||
+  ['require', 'true', '1', 'yes'].includes(sslMode) ||
+  (
+    !['disable', 'false', '0', 'no'].includes(sslMode) &&
+    /sslmode=require/i.test(databaseUrl)
+  ) ||
   /render\.com|railway\.app|supabase\.co/i.test(databaseUrl)
 
 export const pool = new Pool({

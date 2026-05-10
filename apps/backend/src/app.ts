@@ -101,6 +101,11 @@ const localOrigins = [
   'https://app.dolphinenterprises.in',
   'https://dolphinenterprises.in',
   'https://www.dolphinenterprises.in',
+  'https://admin.shopnship.in',
+  'https://api.shopnship.in',
+  'https://app.shopnship.in',
+  'https://shopnship.in',
+  'https://www.shopnship.in',
 ]
 const configuredAllowedOrigins = `${process.env.CORS_ALLOWED_ORIGINS || ''},${process.env.CORS_ORIGINS || ''}`
   .split(',')
@@ -117,7 +122,7 @@ const isAllowedOrigin = (origin: string) => {
     return true
   }
 
-  return /^https:\/\/([a-z0-9-]+\.)*dolphinenterprises\.in$/.test(normalizedOrigin)
+  return /^https:\/\/([a-z0-9-]+\.)*(dolphinenterprises|shopnship)\.in$/.test(normalizedOrigin)
 }
 
 app.use(
