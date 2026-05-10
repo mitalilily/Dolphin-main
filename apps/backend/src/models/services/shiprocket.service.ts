@@ -777,7 +777,26 @@ const extractIcarryShipmentIdentifiers = (source: any) => {
     'cn_number',
   ])
   const label =
-    firstByKeys(['label', 'label_url', 'label_link', 'barcode_img', 'barcode_url']) || undefined
+    firstByKeys([
+      'label',
+      'label_url',
+      'label_link',
+      'label_pdf',
+      'label_pdf_url',
+      'label_data',
+      'label_base64',
+      'pdf',
+      'pdf_url',
+      'shipping_label',
+      'shipping_label_url',
+      'awb_label',
+      'awb_label_url',
+      'file',
+      'file_url',
+      'url',
+      'barcode_img',
+      'barcode_url',
+    ]) || undefined
   const manifest =
     firstByKeys(['manifest', 'manifest_url', 'manifest_link', 'packing_slip']) || undefined
   const courierName = firstByKeys(['courier_name', 'courier', 'courier_partner', 'partner_name'])
@@ -8296,6 +8315,57 @@ export const generateManifestService = async (params: {
             { label?: string | null; invoice?: string | null; manifest?: string | null }
           >()
 
+          const inferProviderDocumentContentType = (buffer: Buffer, fallback: string) => {
+            if (buffer.subarray(0, 4).equals(Buffer.from('%PDF'))) return 'application/pdf'
+            if (
+              buffer.length >= 8 &&
+              buffer[0] === 0x89 &&
+              buffer[1] === 0x50 &&
+              buffer[2] === 0x4e &&
+              buffer[3] === 0x47
+            ) {
+              return 'image/png'
+            }
+            if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+              return 'image/jpeg'
+            }
+            return fallback
+          }
+
+          const decodeBase64ProviderDocument = (value: string, fallbackContentType: string) => {
+            const compact = value.replace(/\s+/g, '')
+            if (compact.length < 80 || !/^[A-Za-z0-9+/]+={0,2}$/.test(compact)) return null
+
+            try {
+              const buffer = Buffer.from(compact, 'base64')
+              if (!buffer.length) return null
+              const contentType = inferProviderDocumentContentType(buffer, '')
+              if (!contentType) return null
+              return {
+                buffer,
+                contentType: contentType || fallbackContentType,
+              }
+            } catch {
+              return null
+            }
+          }
+
+          const getPdfDocumentReference = (value: unknown) => {
+            if (typeof value !== 'string') return null
+            const source = value.trim()
+            if (!source) return null
+            if (/^data:application\/pdf;base64,/i.test(source)) return source
+
+            if (/^https?:\/\//i.test(source)) {
+              const isR2Url =
+                source.includes('.r2.cloudflarestorage.com') ||
+                (process.env.R2_ENDPOINT ? source.startsWith(process.env.R2_ENDPOINT) : false)
+              if (!isR2Url) return null
+            }
+
+            return /\.pdf(?:$|\?)/i.test(source) ? source : null
+          }
+
           const persistProviderDocument = async (
             rawValue: unknown,
             order: any,
@@ -8309,7 +8379,12 @@ export const generateManifestService = async (params: {
             const source = rawValue.trim()
             if (!source) return null
 
-            if (!/^data:/i.test(source) && !/^https?:\/\//i.test(source)) {
+            const base64Document = decodeBase64ProviderDocument(
+              source,
+              opts.fallbackContentType || 'application/pdf',
+            )
+
+            if (!/^data:/i.test(source) && !/^https?:\/\//i.test(source) && !base64Document) {
               return source
             }
 
@@ -8317,13 +8392,17 @@ export const generateManifestService = async (params: {
               let documentBuffer: Buffer | null = null
               let contentType = opts.fallbackContentType || 'application/pdf'
 
-              if (/^data:/i.test(source)) {
+              if (base64Document) {
+                documentBuffer = base64Document.buffer
+                contentType = base64Document.contentType
+              } else if (/^data:/i.test(source)) {
                 const match = source.match(/^data:([^;,]+)?(;base64)?,([\s\S]*)$/i)
                 if (!match) return null
                 contentType = match[1] || contentType
                 documentBuffer = match[2]
                   ? Buffer.from(match[3], 'base64')
                   : Buffer.from(decodeURIComponent(match[3]), 'utf8')
+                contentType = inferProviderDocumentContentType(documentBuffer, contentType)
               } else {
                 const docResponse = await axios.get(source, {
                   responseType: 'arraybuffer',
@@ -8332,6 +8411,7 @@ export const generateManifestService = async (params: {
                 documentBuffer = Buffer.from(docResponse.data)
                 const responseContentType = String(docResponse.headers?.['content-type'] || '').trim()
                 if (responseContentType) contentType = responseContentType
+                contentType = inferProviderDocumentContentType(documentBuffer, contentType)
               }
 
               if (!documentBuffer?.length) return null
@@ -8794,6 +8874,7 @@ export const generateManifestService = async (params: {
                     ? 'image/png'
                     : 'application/pdf',
                 })
+                const persistedPdfLabel = getPdfDocumentReference(persistedLabel)
                 const courierName =
                   trackIdentifiers.courierName ||
                   labelIdentifiers.courierName ||
@@ -8817,7 +8898,7 @@ export const generateManifestService = async (params: {
                   manifest_error: null,
                   updated_at: new Date(),
                 }
-                if (persistedLabel) updatePayload.label = persistedLabel
+                if (persistedPdfLabel) updatePayload.label = persistedPdfLabel
                 if (sortCode) updatePayload.sort_code = String(sortCode)
                 if (courierCost) updatePayload.courier_cost = courierCost
 
@@ -8826,11 +8907,11 @@ export const generateManifestService = async (params: {
                 order.shipment_id = String(pendingIcarryShipmentId)
                 order.awb_number = awbNumber
                 order.courier_partner = courierName
-                if (persistedLabel) order.label = persistedLabel
+                if (persistedPdfLabel) order.label = persistedPdfLabel
                 if (sortCode) order.sort_code = String(sortCode)
 
                 providerDocumentByOrderId.set(String(order.id), {
-                  label: persistedLabel,
+                  label: persistedPdfLabel,
                   invoice: null,
                   manifest: createIdentifiers.manifest || labelIdentifiers.manifest || null,
                 })
@@ -8847,11 +8928,19 @@ export const generateManifestService = async (params: {
                 const trackResp = await icarry.trackShipment({ shipment_id: shipmentId })
                 const labelResp = await icarry.printShipmentLabel({ shipment_id: shipmentId })
                 const labelData = labelResp?.data ?? labelResp
+                const labelIdentifiers = extractIcarryShipmentIdentifiers(labelResp)
                 const rawLabel =
-                  labelData?.label ??
-                  labelData?.label_url ??
-                  labelData?.label_link ??
-                  labelData?.barcode_img ??
+                  labelIdentifiers.label ||
+                  labelData?.label ||
+                  labelData?.label_url ||
+                  labelData?.label_link ||
+                  labelData?.label_pdf ||
+                  labelData?.label_pdf_url ||
+                  labelData?.pdf ||
+                  labelData?.pdf_url ||
+                  labelData?.shipping_label ||
+                  labelData?.shipping_label_url ||
+                  labelData?.barcode_img ||
                   null
 
                 const persistedLabel = await persistProviderDocument(rawLabel, order, {
@@ -8861,10 +8950,10 @@ export const generateManifestService = async (params: {
                     ? 'image/png'
                     : 'application/pdf',
                 })
+                const persistedPdfLabel = getPdfDocumentReference(persistedLabel)
 
                 const trackData = trackResp?.data ?? trackResp
                 const trackIdentifiers = extractIcarryShipmentIdentifiers(trackResp)
-                const labelIdentifiers = extractIcarryShipmentIdentifiers(labelResp)
                 if (trackData?.courier_name && !order.courier_partner) {
                   order.courier_partner = String(trackData.courier_name)
                 }
@@ -8888,7 +8977,7 @@ export const generateManifestService = async (params: {
                 }
 
                 providerDocumentByOrderId.set(String(order.id), {
-                  label: persistedLabel,
+                  label: persistedPdfLabel,
                   invoice: null,
                   manifest: null,
                 })
@@ -9113,10 +9202,11 @@ export const generateManifestService = async (params: {
               return
             }
 
-            let nextLabel = freshOrder.label
+            let nextLabel = getPdfDocumentReference(freshOrder.label)
             const providerDocuments = providerDocumentByOrderId.get(String(freshOrder.id))
-            if (!nextLabel && providerDocuments?.label) {
-              nextLabel = providerDocuments.label
+            const providerPdfLabel = getPdfDocumentReference(providerDocuments?.label)
+            if (!nextLabel && providerPdfLabel) {
+              nextLabel = providerPdfLabel
             }
             if (!nextLabel && freshOrder.awb_number) {
               try {
