@@ -47,6 +47,23 @@ const maskEmailForLog = (email: string) => {
   return `${visibleLocal}@${domain}`
 }
 
+const sanitizeAuthUser = (user: any) => {
+  if (!user) return user
+
+  return {
+    id: user.id,
+    email: user.email,
+    phone: user.phone,
+    emailVerified: user.emailVerified,
+    phoneVerified: user.phoneVerified,
+    accountVerified: user.accountVerified,
+    role: user.role,
+    profilePicture: user.profilePicture,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  }
+}
+
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000
 const allowInlineOtp = parseBooleanEnv(process.env.ALLOW_INLINE_OTP, false)
 const showDemoOtpOnScreen = parseBooleanEnv(process.env.SHOW_DEMO_OTP_ON_SCREEN, true)
@@ -383,6 +400,7 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
 
       result.data.token = accessToken
       result.data.refreshToken = refreshToken
+      result.data.user = sanitizeAuthUser(user)
     }
 
     return res.status(result.status).json(result.data)
