@@ -12,6 +12,7 @@ async function main() {
   const summary: Array<{ provider: string; seeded: boolean; reason: string }> = []
   const shipmozoHasAuth = (val('SHIPMOZO_PUBLIC_KEY') && val('SHIPMOZO_PRIVATE_KEY')) || (val('SHIPMOZO_USERNAME') && val('SHIPMOZO_PASSWORD'))
   const shiprocketHasAuth = val('SHIPROCKET_EMAIL') && val('SHIPROCKET_PASSWORD')
+  const icarryHasAuth = val('ICARRY_USERNAME') && val('ICARRY_API_KEY')
 
   if (shipmozoHasAuth) {
     await upsertCourierCredentials({
@@ -55,6 +56,28 @@ async function main() {
       provider: 'shiprocket',
       seeded: false,
       reason: 'Missing SHIPROCKET_EMAIL or SHIPROCKET_PASSWORD in env',
+    })
+  }
+
+  if (icarryHasAuth) {
+    await upsertCourierCredentials({
+      serviceProvider: 'icarry',
+      b2c: {
+        config: {
+          apiBase: val('ICARRY_API_BASE'),
+          username: val('ICARRY_USERNAME'),
+          apiKey: val('ICARRY_API_KEY'),
+          password: val('ICARRY_PASSWORD'),
+          clientId: val('ICARRY_PICKUP_ADDRESS_ID') || val('ICARRY_CLIENT_ID'),
+        },
+      },
+    })
+    summary.push({ provider: 'icarry', seeded: true, reason: 'Upserted from env' })
+  } else {
+    summary.push({
+      provider: 'icarry',
+      seeded: false,
+      reason: 'Missing ICARRY_USERNAME or ICARRY_API_KEY in env',
     })
   }
 

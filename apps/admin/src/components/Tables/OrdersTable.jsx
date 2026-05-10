@@ -41,12 +41,29 @@ const OrdersTable = ({
   } = useRegenerateOrderDocumentsMutation()
 
   const cancellableStatuses = useMemo(
-    () => new Set(['pending', 'shipment_created', 'in_transit', 'pickup_initiated', 'booked']),
+    () =>
+      new Set([
+        'pending',
+        'shipment_created',
+        'in_transit',
+        'pickup_initiated',
+        'booked',
+        'manifest_failed',
+      ]),
     [],
   )
 
   const supportedCancellationProviders = useMemo(
-    () => new Set(['delhivery', 'shipmozo']),
+    () =>
+      new Set([
+        'delhivery',
+        'ekart',
+        'xpressbees',
+        'shipmozo',
+        'shiprocket',
+        'truxcargo',
+        'icarry',
+      ]),
     [],
   )
 
@@ -114,9 +131,16 @@ const OrdersTable = ({
     }
   }
 
+  const getTrackReference = (order) => {
+    if (!order) return ''
+    const provider = String(order.integration_type || order.courier_partner || '').toLowerCase()
+    return order.awb_number || (provider.includes('icarry') ? order.shipment_id : '')
+  }
+
   const handleTrackShipment = (order) => {
-    if (!order?.awb_number) return
-    history.push(`/admin/order-tracking?awb=${encodeURIComponent(order.awb_number)}`)
+    const trackRef = getTrackReference(order)
+    if (!trackRef) return
+    history.push(`/admin/order-tracking?awb=${encodeURIComponent(trackRef)}`)
   }
 
   const canCancelShipment = (order) => {
@@ -328,7 +352,7 @@ const OrdersTable = ({
           >
             Regenerate Label & Invoice
           </MenuItem>
-          {order.awb_number && (
+          {getTrackReference(order) && (
             <MenuItem icon={<FiTruck />} onClick={() => handleTrackShipment(order)}>
               Track Shipment
             </MenuItem>

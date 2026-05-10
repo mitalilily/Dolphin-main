@@ -10,6 +10,7 @@ export type BulkOrderDocumentShape = {
   order_status?: string | null
   integration_type?: string | null
   courier_partner?: string | null
+  shipment_id?: string | null
   label?: string | null
   label_key?: string | null
   label_url?: string | null
@@ -169,6 +170,8 @@ export const getB2CCancelDisabledReason = (order: BulkOrderDocumentShape) => {
   const status = getNormalizedOrderStatus(order)
   const provider = getB2CCancelProvider(order)
   const hasAwb = Boolean(String(order.awb_number || '').trim())
+  const hasIcarryShipmentId =
+    provider === 'icarry' && Boolean(String(order.shipment_id || '').trim())
 
   if (status === 'cancelled') return 'Order is already cancelled.'
   if (status === 'cancellation_requested') return 'Cancellation has already been requested.'
@@ -177,7 +180,7 @@ export const getB2CCancelDisabledReason = (order: BulkOrderDocumentShape) => {
   if (provider && !B2C_CANCEL_PROVIDERS.has(provider)) {
     return `Cancellation is not supported for ${provider}.`
   }
-  if (!hasAwb && !B2C_LOCAL_CANCEL_STATUSES.has(status)) {
+  if (!hasAwb && !hasIcarryShipmentId && !B2C_LOCAL_CANCEL_STATUSES.has(status)) {
     return 'Courier cancellation needs an AWB after pickup starts.'
   }
 

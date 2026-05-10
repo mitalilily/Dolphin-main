@@ -27,6 +27,7 @@ import { db } from '../client'
 import { b2b_orders } from '../schema/b2bOrders'
 import { b2c_orders } from '../schema/b2cOrders'
 import { invoicePreferences } from '../schema/invoicePreferences'
+import { tracking_events } from '../schema/trackingEvents'
 // import { shippingRate, shippingRateCard } from '../schema/shippingRateCard'
 import { sendWebhookEvent } from '../../services/webhookDelivery.service'
 import { users } from '../schema/users'
@@ -67,7 +68,10 @@ import { DelhiveryService } from './couriers/delhivery.service'
 import { EkartService } from './couriers/ekart.service'
 import { IcarryService } from './couriers/icarry.service'
 import { ShiprocketCourierService } from './couriers/shiprocket.service'
-import { ShipmozoService } from './couriers/shipmozo.service'
+import {
+  ShipmozoPushOrderRequest,
+  ShipmozoService,
+} from './couriers/shipmozo.service'
 import { TruxcargoService } from './couriers/truxcargo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { calculateOrderWeights } from './courierWeightCalculation.service'
@@ -84,6 +88,13 @@ import { SHIPROCKET_COURIER_SEEDS } from '../../constants/shiprocketCouriers'
 import { TRUXCARGO_COURIER_SEEDS } from '../../constants/truxcargoCouriers'
 import { ICARRY_COURIER_SEEDS } from '../../constants/icarryCouriers'
 import { getEffectiveCourierConfig, IcarryConfig } from './courierCredentials.service'
+import {
+  normalizeAwb,
+  normalizeOrderNumber,
+  normalizePhoneDigits,
+  normalizeTrackingStatusCode,
+  resolveTrackingProviderKey,
+} from '../../utils/tracking'
 
 // Load correct .env based on NODE_ENV
 const env = process.env.NODE_ENV || 'development'
@@ -291,6 +302,297 @@ const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCo
   },
 })
 
+const normalizeShipmozoText = (value: unknown) => String(value ?? '').trim()
+
+const normalizeShipmozoWarehouseText = (value: unknown) =>
+  normalizeShipmozoText(value).toLowerCase()
+
+const isShipmozoInvalidWarehouseError = (message: unknown) =>
+  typeof message === 'string' &&
+  /selected\s+warehouse\s+id\s+is\s+invalid|warehouse\s+id\s+is\s+invalid/i.test(message)
+
+const isShipmozoDuplicateOrderError = (message: unknown) =>
+  typeof message === 'string' &&
+  /already\s+exist|already\s+exists|duplicate\s+order|order\s+id.*exist/i.test(message)
+
+const extractShipmozoOrderId = (response: any, fallbackOrderId?: string | null) =>
+  normalizeShipmozoText(
+    response?.data?.order_id ??
+      response?.data?.reference_id ??
+      response?.data?.refrence_id ??
+      response?.order_id ??
+      response?.reference_id ??
+      response?.refrence_id ??
+      fallbackOrderId,
+  )
+
+const normalizeShipmozoPositiveNumber = (value: unknown, fallback = 1) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const buildShipmozoProductDetail = (items: any[], fallbackAmount: unknown) => {
+  const products = (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const name = normalizeShipmozoText(item?.name || item?.productName || item?.title)
+      const unitPrice = normalizeShipmozoPositiveNumber(item?.price || item?.unit_price, 1)
+      return {
+        name: name || 'Item',
+        sku_number: normalizeShipmozoText(item?.sku || item?.sku_number),
+        quantity: normalizeShipmozoPositiveNumber(item?.qty || item?.quantity, 1),
+        discount: normalizeShipmozoText(item?.discount ?? ''),
+        hsn: normalizeShipmozoText(item?.hsn || item?.hsnCode),
+        unit_price: unitPrice,
+        product_category: normalizeShipmozoText(item?.product_category) || 'Other',
+      }
+    })
+    .filter((item) => item.name)
+
+  if (products.length) return products
+
+  return [
+    {
+      name: 'Item',
+      sku_number: '',
+      quantity: 1,
+      discount: '',
+      hsn: '',
+      unit_price: normalizeShipmozoPositiveNumber(fallbackAmount, 1),
+      product_category: 'Other',
+    },
+  ]
+}
+
+const findShipmozoWarehouseId = async ({
+  shipmozo,
+  pickup,
+  explicitWarehouseId,
+  excludeWarehouseId,
+}: {
+  shipmozo: ShipmozoService
+  pickup?: any
+  explicitWarehouseId?: string | number | null
+  excludeWarehouseId?: string | number | null
+}) => {
+  const configuredDefaultWarehouseId = normalizeShipmozoText(
+    await shipmozo.getDefaultWarehouseId(),
+  )
+  const explicitId = normalizeShipmozoText(explicitWarehouseId || pickup?.warehouse_id)
+  const excludedId = normalizeShipmozoText(excludeWarehouseId)
+  const pickupWarehouseName = normalizeShipmozoWarehouseText(
+    pickup?.warehouse_name || pickup?.address_title || pickup?.name,
+  )
+  const pickupPincode = normalizeShipmozoText(pickup?.pincode)
+  const pickupPhone = normalizePhoneDigits(pickup?.phone)
+
+  let warehouses: any[] = []
+  try {
+    const response = await shipmozo.getWarehouses()
+    warehouses = Array.isArray(response?.data) ? response.data : []
+  } catch (warehouseErr: any) {
+    console.warn(
+      '⚠️ [Shipmozo] Failed to fetch warehouses while resolving warehouse_id:',
+      warehouseErr?.message || warehouseErr,
+    )
+  }
+
+  const usableWarehouses = warehouses.filter((warehouse) => {
+    const id = normalizeShipmozoText(warehouse?.id)
+    if (!id || id === excludedId) return false
+    const status = normalizeShipmozoWarehouseText(warehouse?.status)
+    return !status || status === 'active' || status === '1' || status === 'true'
+  })
+
+  const warehouseById = new Map(
+    usableWarehouses.map((warehouse) => [normalizeShipmozoText(warehouse?.id), warehouse] as const),
+  )
+
+  if (explicitId && (warehouseById.has(explicitId) || warehouses.length === 0)) {
+    return explicitId
+  }
+
+  if (pickupWarehouseName) {
+    const matchedByName = usableWarehouses.find((warehouse) => {
+      const name = normalizeShipmozoWarehouseText(warehouse?.name)
+      const title = normalizeShipmozoWarehouseText(warehouse?.address_title)
+      return (name && name === pickupWarehouseName) || (title && title === pickupWarehouseName)
+    })
+    const matchedByNameId = normalizeShipmozoText(matchedByName?.id)
+    if (matchedByNameId) return matchedByNameId
+  }
+
+  if (pickupPincode) {
+    const matchedByPincodeAndPhone = usableWarehouses.find((warehouse) => {
+      const warehousePincode = normalizeShipmozoText(warehouse?.pincode)
+      const warehousePhone = normalizePhoneDigits(warehouse?.phone)
+      return warehousePincode === pickupPincode && (!pickupPhone || warehousePhone === pickupPhone)
+    })
+    const matchedByPincodeAndPhoneId = normalizeShipmozoText(matchedByPincodeAndPhone?.id)
+    if (matchedByPincodeAndPhoneId) return matchedByPincodeAndPhoneId
+
+    const matchedByPincode = usableWarehouses.find(
+      (warehouse) => normalizeShipmozoText(warehouse?.pincode) === pickupPincode,
+    )
+    const matchedByPincodeId = normalizeShipmozoText(matchedByPincode?.id)
+    if (matchedByPincodeId) return matchedByPincodeId
+  }
+
+  if (configuredDefaultWarehouseId && warehouseById.has(configuredDefaultWarehouseId)) {
+    return configuredDefaultWarehouseId
+  }
+
+  const defaultWarehouse = usableWarehouses.find((warehouse) => {
+    const normalizedDefault = normalizeShipmozoWarehouseText(warehouse?.default)
+    return normalizedDefault === 'yes' || normalizedDefault === '1' || normalizedDefault === 'true'
+  })
+  const defaultWarehouseId = normalizeShipmozoText(defaultWarehouse?.id)
+  if (defaultWarehouseId) return defaultWarehouseId
+
+  const activeWarehouseId = normalizeShipmozoText(usableWarehouses[0]?.id)
+  if (activeWarehouseId) return activeWarehouseId
+
+  if (configuredDefaultWarehouseId && configuredDefaultWarehouseId !== excludedId) {
+    return configuredDefaultWarehouseId
+  }
+
+  return ''
+}
+
+const buildShipmozoForwardOrderPayload = async (
+  shipmozo: ShipmozoService,
+  params: ShipmentParams,
+  warehouseIdOverride?: string | number | null,
+): Promise<ShipmozoPushOrderRequest> => {
+  const pickup = params.pickup || ({} as ShipmentParams['pickup'])
+  const consignee = params.consignee || ({} as ShipmentParams['consignee'])
+  const paymentType = String(params.payment_type || '').toLowerCase() === 'cod' ? 'COD' : 'PREPAID'
+  const orderAmount = normalizeShipmozoPositiveNumber(params.order_amount, 1)
+  const warehouseId =
+    normalizeShipmozoText(warehouseIdOverride) ||
+    (await findShipmozoWarehouseId({
+      shipmozo,
+      pickup,
+      explicitWarehouseId: params.pickup_location_id || (pickup as any)?.warehouse_id,
+    }))
+
+  if (!warehouseId) {
+    throw new HttpError(
+      400,
+      `Shipmozo order creation failed for order ${params.order_number}: pickup warehouse is missing.`,
+    )
+  }
+
+  return {
+    order_id: normalizeShipmozoText(params.order_number),
+    order_date: toDateOnly(params.invoice_date || params.order_date),
+    order_type: 'ESSENTIALS',
+    consignee_name: normalizeShipmozoText(consignee.name),
+    consignee_phone: normalizePhoneDigits(consignee.phone),
+    consignee_alternate_phone: normalizePhoneDigits((consignee as any).alternate_phone),
+    consignee_email: normalizeShipmozoText(consignee.email),
+    consignee_address_line_one: normalizeShipmozoText(consignee.address),
+    consignee_address_line_two: normalizeShipmozoText(consignee.address_2),
+    consignee_pin_code: normalizeShipmozoText(consignee.pincode),
+    consignee_city: normalizeShipmozoText(consignee.city),
+    consignee_state: normalizeShipmozoText(consignee.state),
+    product_detail: buildShipmozoProductDetail(params.order_items || [], params.order_amount),
+    payment_type: paymentType,
+    cod_amount: paymentType === 'COD' ? String(orderAmount) : '',
+    weight: normalizeShipmozoPositiveNumber(params.package_weight ?? params.weight, 1),
+    length: normalizeShipmozoPositiveNumber(params.package_length ?? params.length, 1),
+    width: normalizeShipmozoPositiveNumber(params.package_breadth ?? params.breadth, 1),
+    height: normalizeShipmozoPositiveNumber(params.package_height ?? params.height, 1),
+    warehouse_id: warehouseId,
+    gst_ewaybill_number: normalizeShipmozoText((params as any).gst_ewaybill_number),
+    gstin_number: normalizeShipmozoText(params.company?.gst || pickup.gst_number),
+  }
+}
+
+const pushShipmozoForwardOrder = async (
+  shipmozo: ShipmozoService,
+  payload: ShipmozoPushOrderRequest,
+  pickup?: any,
+) => {
+  try {
+    return await shipmozo.pushOrder(payload)
+  } catch (error: any) {
+    const message = String(error?.message || '')
+
+    if (isShipmozoDuplicateOrderError(message)) {
+      console.warn('[Shipmozo] push-order reported an existing order; reusing order id', {
+        order_id: payload.order_id,
+        message,
+      })
+      return {
+        result: '1',
+        message,
+        data: { order_id: payload.order_id },
+      }
+    }
+
+    if (!isShipmozoInvalidWarehouseError(message)) {
+      throw error
+    }
+
+    const retryWarehouseId = await findShipmozoWarehouseId({
+      shipmozo,
+      pickup,
+      explicitWarehouseId: '',
+      excludeWarehouseId: payload.warehouse_id,
+    })
+    if (!retryWarehouseId || retryWarehouseId === normalizeShipmozoText(payload.warehouse_id)) {
+      throw new HttpError(
+        400,
+        `Shipmozo order creation failed for order ${payload.order_id}: invalid warehouse_id and no alternate active warehouse found.`,
+      )
+    }
+
+    return shipmozo.pushOrder({
+      ...payload,
+      warehouse_id: retryWarehouseId,
+    })
+  }
+}
+
+const buildIcarryDeferredManifestPayload = (params: ShipmentParams, providerCourierCost: number | null) => ({
+  shipmentData: {
+    provider: 'icarry',
+    deferred_manifest: true,
+    booking_state: 'pending_manifest',
+  },
+  shipmentMeta: {
+    shipment_id: undefined as string | undefined,
+    awb_number: undefined as string | undefined,
+    courier_name: params.courier_partner || 'iCarry (Pending Manifest)',
+    courier_id: params.courier_id ? Number(params.courier_id) : null,
+    label: undefined as string | undefined,
+    manifest: undefined as string | undefined,
+    courier_cost: providerCourierCost,
+    sort_code: null as string | null,
+  },
+})
+
+const buildTruxcargoDeferredManifestPayload = (
+  params: ShipmentParams,
+  providerCourierCost: number | null,
+) => ({
+  shipmentData: {
+    provider: 'truxcargo',
+    deferred_manifest: true,
+    booking_state: 'pending_manifest',
+  },
+  shipmentMeta: {
+    shipment_id: undefined as string | undefined,
+    awb_number: undefined as string | undefined,
+    courier_name: params.courier_partner || 'Truxcargo (Pending Manifest)',
+    courier_id: params.courier_id ? Number(params.courier_id) : null,
+    label: undefined as string | undefined,
+    manifest: undefined as string | undefined,
+    courier_cost: providerCourierCost,
+    sort_code: null as string | null,
+  },
+})
+
 const isTruxcargoDuplicateOrderError = (value: unknown) =>
   /duplicate\s*order|order\s*id.*duplicate|duplicate\s*order\s*id/i.test(String(value || ''))
 
@@ -408,6 +710,99 @@ const findTruxcargoOrderInResponse = (response: any, orderNumber: string) => {
 
     return ids.includes(normalizedOrderNumber)
   })
+}
+
+const getFirstIcarryValue = (source: any, keys: string[]): any => {
+  if (!source || typeof source !== 'object') return undefined
+  for (const key of keys) {
+    const direct = source[key]
+    if (direct !== undefined && direct !== null && String(direct).trim() !== '') return direct
+  }
+
+  const loweredKeys = new Set(keys.map((key) => key.toLowerCase()))
+  for (const [key, value] of Object.entries(source)) {
+    if (loweredKeys.has(key.toLowerCase()) && value !== undefined && value !== null) {
+      const trimmed = String(value).trim()
+      if (trimmed) return value
+    }
+  }
+
+  return undefined
+}
+
+const flattenIcarryObjects = (value: any, depth = 0): any[] => {
+  if (!value || depth > 6) return []
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => flattenIcarryObjects(item, depth + 1))
+  }
+  if (typeof value !== 'object') return []
+
+  const nested = Object.values(value).flatMap((item) => flattenIcarryObjects(item, depth + 1))
+  return [value, ...nested]
+}
+
+const extractIcarryShipmentIdentifiers = (source: any) => {
+  const objects = flattenIcarryObjects(source)
+  const firstByKeys = (keys: string[]) => {
+    for (const row of objects) {
+      const value = getFirstIcarryValue(row, keys)
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        return String(value).trim()
+      }
+    }
+    return ''
+  }
+
+  const shipmentId = firstByKeys([
+    'shipment_id',
+    'shipmentId',
+    'shipment_no',
+    'shipmentNo',
+    'shipment_number',
+    'id',
+  ])
+  const awb = firstByKeys([
+    'awb_number',
+    'awb',
+    'awb_code',
+    'waybill',
+    'waybill_number',
+    'tracking_id',
+    'tracking_number',
+    'tracking_no',
+    'airway_bill_number',
+    'airwaybill',
+    'consignment_no',
+    'docket_number',
+    'cn_number',
+  ])
+  const label =
+    firstByKeys(['label', 'label_url', 'label_link', 'barcode_img', 'barcode_url']) || undefined
+  const manifest =
+    firstByKeys(['manifest', 'manifest_url', 'manifest_link', 'packing_slip']) || undefined
+  const courierName = firstByKeys(['courier_name', 'courier', 'courier_partner', 'partner_name'])
+  const sortCode = firstByKeys(['sort_code', 'sortCode', 'destination_code'])
+  const courierCost = Number(
+    firstByKeys([
+      'rate',
+      'courier_charges',
+      'shipping_charges',
+      'freight_charges',
+      'total_charges',
+      'amount',
+      'cost_estimate',
+    ]) || 0,
+  )
+
+  return {
+    shipmentId,
+    awb,
+    label,
+    manifest,
+    courierName: courierName || 'iCarry',
+    sortCode: sortCode || null,
+    courierCost: Number.isFinite(courierCost) && courierCost > 0 ? courierCost : null,
+  }
 }
 
 const buildTruxcargoRemoteOrderId = (orderNumber: unknown, forceUnique = false) => {
@@ -776,7 +1171,12 @@ const resolveIcarryDefaultPickupAddressId = async (): Promise<number | null> => 
     return cachedIcarryDefaultPickupAddressId
   }
 
-  const envCandidate = toPositiveIntegerOrNull(process.env.ICARRY_PICKUP_ADDRESS_ID)
+  const envCandidate = toPositiveIntegerOrNull(
+    process.env.ICARRY_PICKUP_ADDRESS_ID ||
+      (process.env.NODE_ENV === 'production'
+        ? undefined
+        : process.env.ICARRY_TEST_PICKUP_ADDRESS_ID || process.env.ICARRY_TEST_PICKUP_WAREHOUSE_ID),
+  )
   if (envCandidate) {
     cachedIcarryDefaultPickupAddressId = envCandidate
     return envCandidate
@@ -791,6 +1191,89 @@ const resolveIcarryDefaultPickupAddressId = async (): Promise<number | null> => 
     cachedIcarryDefaultPickupAddressId = null
     return null
   }
+}
+
+const getIcarryPickupZoneId = () =>
+  toPositiveIntegerOrNull(process.env.ICARRY_PICKUP_ZONE_ID || process.env.ICARRY_TEST_PICKUP_ZONE_ID) ||
+  1489
+
+const extractIcarryPickupWarehouseId = (response: any) =>
+  toPositiveIntegerOrNull(
+    response?.warehouse_id ??
+      response?.data?.warehouse_id ??
+      response?.id ??
+      response?.data?.id ??
+      response?.data?.data?.warehouse_id,
+  )
+
+const toIcarryNickname = (value: unknown) => {
+  const source = String(value || Date.now())
+    .trim()
+    .slice(0, 40)
+  const nickname = source
+    .split('')
+    .map((char) => {
+      if (/[A-Za-z]/.test(char)) return char
+      if (/[0-9]/.test(char)) return String.fromCharCode(65 + Number(char))
+      return ''
+    })
+    .join('')
+    .slice(0, 24)
+
+  return nickname || 'PickupAddress'
+}
+
+const resolveOrCreateIcarryPickupAddressId = async ({
+  explicitCandidate,
+  pickupDetails,
+  orderRef,
+}: {
+  explicitCandidate?: unknown
+  pickupDetails?: Record<string, any> | null
+  orderRef?: string | number | null
+}): Promise<number | null> => {
+  const explicit =
+    toPositiveIntegerOrNull(explicitCandidate) ||
+    toPositiveIntegerOrNull(pickupDetails?.icarry_pickup_address_id) ||
+    toPositiveIntegerOrNull(pickupDetails?.pickup_address_id) ||
+    toPositiveIntegerOrNull(pickupDetails?.pickupAddressId)
+  if (explicit) return explicit
+
+  const configuredDefault = await resolveIcarryDefaultPickupAddressId()
+  if (configuredDefault) return configuredDefault
+
+  const pickup = pickupDetails || {}
+  const phone = String(pickup.phone || pickup.contactPhone || '')
+    .replace(/\D/g, '')
+    .slice(-10)
+  const street1 = String(pickup.address || pickup.addressLine1 || '').trim()
+  const city = String(pickup.city || '').trim()
+  const pincode = String(pickup.pincode || '').trim()
+
+  if (!street1 || !city || !pincode || !phone) {
+    return null
+  }
+
+  const warehouseName =
+    String(pickup.warehouse_name || pickup.addressNickname || pickup.name || pickup.contactName || '').trim() ||
+    `Pickup ${orderRef || Date.now()}`
+  const icarry = new IcarryService()
+  const response = await icarry.addPickupAddress({
+    nickname: toIcarryNickname(`${warehouseName}${orderRef || ''}`),
+    name: String(pickup.name || pickup.contactName || warehouseName).trim() || warehouseName,
+    email: String(pickup.email || pickup.contactEmail || 'warehouse@example.com').trim(),
+    phone,
+    alt_phone: '',
+    street1,
+    street2: String(pickup.address_2 || pickup.addressLine2 || '').trim(),
+    locality: String(pickup.landmark || pickup.locality || city).trim(),
+    city,
+    pincode,
+    zone_id: getIcarryPickupZoneId(),
+    country_id: '99',
+  })
+
+  return extractIcarryPickupWarehouseId(response)
 }
 
 async function fetchPickupWarehouseRecord(
@@ -1385,6 +1868,398 @@ const normalizeWeightToKg = (value: unknown) => {
   const grams = normalizeServiceabilityWeightToGrams(value)
   if (!grams) return 0
   return Number((grams / 1000).toFixed(3))
+}
+
+const normalizeTruxcargoPaymentMode = (value: unknown) => {
+  const normalized = String(value || '').trim().toLowerCase()
+  if (normalized === 'cod') return 'COD'
+  if (['prepaid', 'pre-paid', 'paid', 'ppd'].includes(normalized)) return 'PREPAID'
+  return normalized.toUpperCase()
+}
+
+const getTruxcargoRows = (response: any) => {
+  if (Array.isArray(response?.data?.info)) return response.data.info
+  if (Array.isArray(response?.data?.records)) return response.data.records
+  if (Array.isArray(response?.data)) return response.data
+  if (Array.isArray(response?.info)) return response.info
+  if (Array.isArray(response?.records)) return response.records
+  return []
+}
+
+const isTruxcargoRejectedResponse = (response: any) => {
+  const payload = response?.data ?? response
+  return (
+    response?.status === false ||
+    response?.success === false ||
+    response?.status === 'false' ||
+    response?.success === 'false' ||
+    payload?.status === false ||
+    payload?.success === false ||
+    payload?.status === 'false' ||
+    payload?.success === 'false'
+  )
+}
+
+const getTruxcargoRejectionMessage = (response: any, fallback: string) => {
+  const payload = response?.data ?? response
+  return String(
+    response?.message ||
+      payload?.message ||
+      response?.error ||
+      payload?.error ||
+      fallback,
+  )
+}
+
+const resolveTruxcargoWarehouseForPayload = async (
+  truxcargo: TruxcargoService,
+  input: {
+    orderNumber?: string | null
+    pickup?: Record<string, any> | null
+    pickupLocationId?: string | null
+  },
+) => {
+  const pickup = input.pickup || {}
+  let fallbackWarehouse = String(
+    pickup?.truxcargo_warehouse ||
+      pickup?.warehouse ||
+      pickup?.warehouse_name ||
+      pickup?.name ||
+      input.pickupLocationId ||
+      '',
+  ).trim()
+  let truxProviderWarehouse: any = null
+
+  try {
+    const warehouseResp = await truxcargo.getWarehousePoints({})
+    const warehouseRows = getTruxcargoRows(warehouseResp)
+    const normalizedWarehouse = fallbackWarehouse.toLowerCase()
+    const pickupPincode = String(pickup?.pincode || '').trim()
+    truxProviderWarehouse =
+      warehouseRows.find((row: any) =>
+        [row?.warehouse, row?.name, row?.warehouse_name, row?.id, row?.warehouse_id]
+          .map((value) => String(value || '').trim().toLowerCase())
+          .filter(Boolean)
+          .includes(normalizedWarehouse),
+      ) ||
+      warehouseRows.find((row: any) => String(row?.pincode || '').trim() === pickupPincode) ||
+      warehouseRows[0] ||
+      null
+
+    const providerWarehouseName = String(
+      truxProviderWarehouse?.warehouse ||
+        truxProviderWarehouse?.warehouse_name ||
+        truxProviderWarehouse?.name ||
+        '',
+    ).trim()
+    if (providerWarehouseName) {
+      fallbackWarehouse = providerWarehouseName
+    }
+  } catch (warehouseErr: any) {
+    console.warn(
+      `[Truxcargo] Unable to fetch warehouse points for order ${input.orderNumber || 'unknown'}:`,
+      warehouseErr?.message || warehouseErr,
+    )
+  }
+
+  return { warehouse: fallbackWarehouse, providerWarehouse: truxProviderWarehouse }
+}
+
+const buildTruxcargoOrderPayload = async (
+  truxcargo: TruxcargoService,
+  input: {
+    orderNumber: string
+    remoteOrderId?: string
+    courierId?: string | number | null
+    pickup?: Record<string, any> | null
+    pickupLocationId?: string | null
+    consignee: {
+      name?: string | null
+      phone?: string | null
+      address?: string | null
+      city?: string | null
+      state?: string | null
+      pincode?: string | number | null
+    }
+    paymentType?: string | null
+    orderAmount?: string | number | null
+    isInsurance?: boolean | number | null
+    orderItems?: any[]
+    packageWeight?: string | number | null
+    packageLength?: string | number | null
+    packageBreadth?: string | number | null
+    packageHeight?: string | number | null
+    company?: Record<string, any> | null
+  },
+) => {
+  const truxPaymentMode = normalizeTruxcargoPaymentMode(input.paymentType)
+  if (!truxPaymentMode) {
+    throw new HttpError(400, 'Payment mode is required for Truxcargo order creation.')
+  }
+
+  const { warehouse, providerWarehouse } = await resolveTruxcargoWarehouseForPayload(truxcargo, {
+    orderNumber: input.orderNumber,
+    pickup: input.pickup,
+    pickupLocationId: input.pickupLocationId,
+  })
+
+  const truxItems = Array.isArray(input.orderItems) && input.orderItems.length ? input.orderItems : [{}]
+  const itemNames = truxItems
+    .map((item: any) =>
+      String(item?.name || item?.productName || item?.description || '').trim(),
+    )
+    .filter(Boolean)
+  const truxProductDescription = itemNames.join(', ').slice(0, 250) || 'Product'
+  const quantities = truxItems.map((item: any) => Number(item?.qty ?? item?.quantity ?? 1) || 1)
+  const prices = truxItems.map(
+    (item: any) => Number(item?.price ?? item?.selling_price ?? input.orderAmount ?? 0) || 0,
+  )
+  const skus = truxItems.map((item: any, index: number) =>
+    String(item?.sku || `${input.orderNumber}-${index + 1}`).trim(),
+  )
+  const hsnCodes = truxItems.map((item: any) =>
+    String(item?.hsn || item?.hsnCode || '6201').trim() || '6201',
+  )
+  const firstQuantity = quantities[0] || 1
+  const totalQuantity = quantities.reduce((sum, qty) => sum + qty, 0) || firstQuantity
+  const firstUnitPrice = prices[0] || Number(input.orderAmount ?? 0) || 1
+  const truxOrderAmount = Number(input.orderAmount ?? firstUnitPrice) || firstUnitPrice || 1
+  const truxCodAmount = truxPaymentMode === 'COD' ? Number(input.orderAmount ?? 0) || 0 : 0
+  const truxWeightKg = normalizeWeightToKg(input.packageWeight ?? 0)
+  const truxLength = Number(input.packageLength ?? 1) || 1
+  const truxBreadth = Number(input.packageBreadth ?? 1) || 1
+  const truxHeight = Number(input.packageHeight ?? 1) || 1
+  const truxConsigneeName = String(input.consignee?.name || 'Customer').trim() || 'Customer'
+  const truxConsigneePhone = String(input.consignee?.phone || '').replace(/\D/g, '')
+  const truxConsigneePincode = String(input.consignee?.pincode || '').trim()
+  const truxMerchantOrderNumber = String(input.orderNumber || '').trim()
+  const truxRemoteOrderId =
+    input.remoteOrderId || buildTruxcargoRemoteOrderId(truxMerchantOrderNumber)
+  const truxProviderInvoiceNumber = truxRemoteOrderId
+  const truxSellerName =
+    String(
+      providerWarehouse?.name ||
+        input.pickup?.name ||
+        input.pickup?.warehouse_name ||
+        input.company?.name ||
+        input.company?.brandName ||
+        warehouse ||
+        'Seller',
+    ).trim() || 'Seller'
+
+  return {
+    order_id: truxRemoteOrderId,
+    order_number: truxRemoteOrderId,
+    client_order_id: truxMerchantOrderNumber,
+    reference_id: truxMerchantOrderNumber,
+    seller_order_id: truxMerchantOrderNumber,
+    merchant_order_id: truxMerchantOrderNumber,
+    courier_id: input.courierId,
+    warehouse,
+    payment_type: truxPaymentMode,
+    payment_mode: truxPaymentMode,
+    paymentmode: truxPaymentMode,
+    paymentMode: truxPaymentMode,
+    paymentModeType: truxPaymentMode,
+    payment_method: truxPaymentMode,
+    paymentMethod: truxPaymentMode,
+    mode: truxPaymentMode,
+    order_type: truxPaymentMode,
+    total_amount: truxOrderAmount,
+    cod_amount: truxCodAmount,
+    collectable_amount: truxCodAmount,
+    invoice_value: truxOrderAmount,
+    insurance: input.isInsurance ? 'YES' : 'NO',
+    product_description: truxProductDescription,
+    productDescription: truxProductDescription,
+    product_desc: truxProductDescription,
+    description: truxProductDescription,
+    item_description: truxProductDescription,
+    quantity: quantities,
+    count: quantities,
+    qty: firstQuantity,
+    product_quantity: totalQuantity,
+    product_price: prices,
+    sku: skus,
+    hsn: hsnCodes[0],
+    hsn_code: hsnCodes,
+    hsnCode: hsnCodes[0],
+    product_hsn: hsnCodes[0],
+    weight: truxWeightKg,
+    length: [truxLength],
+    breadth: [truxBreadth],
+    width: [truxBreadth],
+    height: [truxHeight],
+    name: truxConsigneeName,
+    phone: truxConsigneePhone,
+    address: input.consignee?.address || '',
+    city: input.consignee?.city || '',
+    state: input.consignee?.state || '',
+    pincode: truxConsigneePincode,
+    pin: truxConsigneePincode,
+    pin_code: truxConsigneePincode,
+    consignee_pincode: [truxConsigneePincode],
+    seller_name: truxSellerName,
+    seller_invoice_no: truxProviderInvoiceNumber,
+    seller_invoiceno: truxProviderInvoiceNumber,
+    sellerinvoiceno: truxProviderInvoiceNumber,
+    seller_invoiceNo: truxProviderInvoiceNumber,
+    sellerInvoiceNo: truxProviderInvoiceNumber,
+    seller_invoice_number: truxProviderInvoiceNumber,
+    sellerInvoiceNumber: truxProviderInvoiceNumber,
+    seller_invoice: truxProviderInvoiceNumber,
+    sellerInvoice: truxProviderInvoiceNumber,
+    seller_inv_no: truxProviderInvoiceNumber,
+    seller_inv: truxProviderInvoiceNumber,
+    seller_invno: truxProviderInvoiceNumber,
+    sellerInvNo: truxProviderInvoiceNumber,
+    seller_inv_number: truxProviderInvoiceNumber,
+    sellerInvNumber: truxProviderInvoiceNumber,
+    seller_bill_no: truxProviderInvoiceNumber,
+    seller_bill_number: truxProviderInvoiceNumber,
+    sellerBillNo: truxProviderInvoiceNumber,
+    invoice: truxProviderInvoiceNumber,
+    invoice_no: truxProviderInvoiceNumber,
+    invoiceNo: truxProviderInvoiceNumber,
+    inv_no: truxProviderInvoiceNumber,
+    invNo: truxProviderInvoiceNumber,
+    invno: truxProviderInvoiceNumber,
+    bill_no: truxProviderInvoiceNumber,
+    billNo: truxProviderInvoiceNumber,
+    bill_number: truxProviderInvoiceNumber,
+  }
+}
+
+const createTruxcargoOrderWithRecovery = async ({
+  truxcargo,
+  payload,
+  remoteOrderId,
+  merchantOrderNumber,
+  courierId,
+}: {
+  truxcargo: TruxcargoService
+  payload: Record<string, any>
+  remoteOrderId: string
+  merchantOrderNumber: string
+  courierId?: string | number | null
+}): Promise<{ response: any; expectedOrderIds: string[] }> => {
+  let activeRemoteOrderId = remoteOrderId
+  const getExpectedOrderIds = () =>
+    Array.from(
+      new Set([activeRemoteOrderId, remoteOrderId, merchantOrderNumber].filter(Boolean)),
+    )
+
+  const recoverExistingTruxcargoOrder = async (reason: unknown) => {
+    if (!isTruxcargoDuplicateOrderError(reason)) return null
+
+    console.warn('[Truxcargo] Duplicate order detected, attempting remote recovery', {
+      order_number: merchantOrderNumber,
+      courier_id: courierId,
+      reason: String(reason || '').slice(0, 300),
+    })
+
+    const lookupIds = getExpectedOrderIds()
+    const lookupAttempts = lookupIds.flatMap((lookupOrderId) => [
+      () =>
+        truxcargo.trackShipment({
+          order_id: lookupOrderId,
+        }),
+      () =>
+        truxcargo.fetchAllWaybills({
+          order_id: lookupOrderId,
+          order_number: lookupOrderId,
+        }),
+      () =>
+        truxcargo.fetchAllWaybills({
+          search: lookupOrderId,
+        }),
+    ])
+
+    for (const lookup of lookupAttempts) {
+      try {
+        const lookupResp = await lookup()
+        const matchedOrder = lookupIds
+          .map((lookupId) => findTruxcargoOrderInResponse(lookupResp, lookupId))
+          .find(Boolean)
+        if (!matchedOrder) {
+          console.warn('[Truxcargo] Duplicate recovery lookup returned no exact order match', {
+            order_number: merchantOrderNumber,
+            lookup_ids: lookupIds,
+          })
+          continue
+        }
+        const identifiers = extractTruxcargoShipmentIdentifiers(matchedOrder)
+        if (identifiers.awb) {
+          console.warn('[Truxcargo] Recovered duplicate remote order', {
+            order_number: merchantOrderNumber,
+            awb_number: identifiers.awb,
+            shipment_id: identifiers.shipmentId,
+          })
+          return {
+            status: true,
+            recovered_duplicate: true,
+            data: {
+              ...identifiers.raw,
+              waybill: identifiers.awb,
+              awb_number: identifiers.awb,
+              shipment_id: identifiers.shipmentId || identifiers.awb,
+              courier_name: identifiers.courierName,
+              label: identifiers.label,
+              manifest: identifiers.manifest,
+              sort_code: identifiers.sortCode,
+              rate: identifiers.courierCost,
+            },
+          }
+        }
+      } catch (lookupErr: any) {
+        console.warn('[Truxcargo] Duplicate recovery lookup failed:', lookupErr?.message || lookupErr)
+      }
+    }
+
+    return null
+  }
+
+  const retryWithFreshOrderId = async () => {
+    activeRemoteOrderId = buildTruxcargoRemoteOrderId(merchantOrderNumber, true)
+    console.warn('[Truxcargo] Retrying with fresh remote order id', {
+      order_number: merchantOrderNumber,
+      previous_remote_order_id: remoteOrderId,
+      retry_remote_order_id: activeRemoteOrderId,
+    })
+    return truxcargo.createOrder(withTruxcargoRemoteIdentity(payload, activeRemoteOrderId))
+  }
+
+  let response: any
+  try {
+    response = await truxcargo.createOrder(payload)
+  } catch (createErr: any) {
+    const recovered = await recoverExistingTruxcargoOrder(createErr?.message || createErr)
+    response = recovered || (isTruxcargoDuplicateOrderError(createErr?.message || createErr)
+      ? await retryWithFreshOrderId()
+      : null)
+    if (!response) throw createErr
+  }
+
+  if (isTruxcargoRejectedResponse(response)) {
+    const rejectionMessage = getTruxcargoRejectionMessage(
+      response,
+      'Truxcargo rejected the order creation request.',
+    )
+    const recovered = await recoverExistingTruxcargoOrder(rejectionMessage)
+    response = recovered || (isTruxcargoDuplicateOrderError(rejectionMessage)
+      ? await retryWithFreshOrderId()
+      : null)
+    if (!response) throw new HttpError(400, rejectionMessage)
+  }
+
+  if (isTruxcargoRejectedResponse(response)) {
+    throw new HttpError(
+      400,
+      getTruxcargoRejectionMessage(response, 'Truxcargo rejected the order creation request.'),
+    )
+  }
+
+  return { response, expectedOrderIds: getExpectedOrderIds() }
 }
 
 //ADMIN CALCULATION
@@ -4789,20 +5664,74 @@ export const createB2CShipmentService = async (
           sort_code: null,
         }
       } else {
-        // Manifest-first flow:
-        // Do NOT create/assign/schedule directly on Shipmozo during order creation.
-        // Booking happens only from manifest action in admin/client manifest endpoint.
+        await ensureUniqueMerchantOrderNumber(db as any, userId, params.order_number)
+
+        // Create the order in Shipmozo now so it is visible in their dashboard, but do not
+        // assign a courier, generate AWB, schedule pickup, or debit wallet until manifest.
         providerCourierCost = Number(params?.courier_cost ?? 0) || null
-        const deferredPayload = buildShipmozoDeferredManifestPayload(params, providerCourierCost)
-        shipmentData = deferredPayload.shipmentData
+        const shipmozo = new ShipmozoService()
+        const pushPayload = await buildShipmozoForwardOrderPayload(shipmozo, params)
+        const pushResp = await pushShipmozoForwardOrder(shipmozo, pushPayload, params.pickup)
+        const shipmozoOrderId = extractShipmozoOrderId(pushResp, params.order_number)
+        if (!shipmozoOrderId) {
+          throw new HttpError(
+            502,
+            `Shipmozo did not return a valid order id for order ${params.order_number}.`,
+          )
+        }
+
+        shipmentData = {
+          provider: 'shipmozo',
+          deferred_manifest: true,
+          booking_state: 'pending_manifest',
+          remote_order_created: true,
+          order_id: shipmozoOrderId,
+          reference_id: pushResp?.data?.reference_id ?? pushResp?.data?.refrence_id ?? null,
+        }
         shipmentSuccessPackage = shipmentData
-        shipmentMeta = deferredPayload.shipmentMeta
+        shipmentMeta = {
+          shipment_id: shipmozoOrderId,
+          awb_number: undefined,
+          courier_name: params.courier_partner || 'Shipmozo (Pending Manifest)',
+          courier_id: params.courier_id ? Number(params.courier_id) : null,
+          label: undefined,
+          manifest: undefined,
+          courier_cost: providerCourierCost,
+          sort_code: null,
+        }
       }
     } else if (integrationType === 'truxcargo') {
       if (isReverseShipment) {
         throw new HttpError(400, 'Truxcargo reverse shipments are not supported in this flow yet')
       }
 
+      const truxPaymentMode = normalizeTruxcargoPaymentMode(params?.payment_type)
+      if (!truxPaymentMode) {
+        throw new HttpError(400, 'Payment mode is required for Truxcargo order creation.')
+      }
+      if (!params.courier_id) {
+        throw new HttpError(
+          400,
+          'Truxcargo booking requires courier_id. Please pass courier_id from serviceability response.',
+        )
+      }
+
+      const deferTruxcargoBookingUntilManifest = true
+      if (deferTruxcargoBookingUntilManifest) {
+        params.pickup = {
+          ...(params.pickup || ({} as ShipmentParams['pickup'])),
+          truxcargo_requested_courier_id: String(params.courier_id),
+          truxcargo_payment_mode: truxPaymentMode,
+          truxcargo_manifest_deferred: true,
+        } as ShipmentParams['pickup'] & Record<string, unknown>
+
+        providerCourierCost = Number(params?.courier_cost ?? 0) || null
+        const deferredPayload = buildTruxcargoDeferredManifestPayload(params, providerCourierCost)
+        shipmentData = deferredPayload.shipmentData
+        shipmentSuccessPackage = shipmentData
+        providerSortCode = null
+        shipmentMeta = deferredPayload.shipmentMeta
+      } else {
       const truxcargo = new TruxcargoService()
       const paymentTypeRaw = String(params?.payment_type || '').trim().toLowerCase()
       const truxPaymentMode =
@@ -5179,29 +6108,23 @@ export const createB2CShipmentService = async (
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
+      }
     } else if (integrationType === 'icarry') {
       if (isReverseShipment) {
         throw new HttpError(400, 'iCarry reverse shipments are not supported in this flow yet')
       }
 
-      const icarry = new IcarryService()
       const pickupAddressIdRaw =
         (params as any)?.pickup_address_id ??
         (params as any)?.pickupAddressId ??
         (params as any)?.pickup_id ??
         (params as any)?.pickupId ??
-        (params as any)?.pickup_location_id ??
         null
-      let pickupAddressId = toPositiveIntegerOrNull(pickupAddressIdRaw)
-      if (!pickupAddressId) {
-        pickupAddressId = await resolveIcarryDefaultPickupAddressId()
-      }
-      if (!pickupAddressId) {
-        throw new HttpError(
-          400,
-          'iCarry booking requires pickup_address_id (or pickup_id) as a positive number. Configure ICARRY_PICKUP_ADDRESS_ID or iCarry clientId in courier credentials for default mapping.',
-        )
-      }
+      const pickupAddressId = await resolveOrCreateIcarryPickupAddressId({
+        explicitCandidate: pickupAddressIdRaw,
+        pickupDetails: params.pickup as any,
+        orderRef: params.order_number,
+      })
 
       const requestedCourierId = String(params.courier_id ?? '').trim()
       if (!requestedCourierId) {
@@ -5211,6 +6134,26 @@ export const createB2CShipmentService = async (
         )
       }
 
+      const deferIcarryBookingUntilManifest = true
+      if (deferIcarryBookingUntilManifest) {
+        params.pickup = {
+          ...(params.pickup || ({} as ShipmentParams['pickup'])),
+          ...(pickupAddressId ? { icarry_pickup_address_id: pickupAddressId } : {}),
+          icarry_requested_courier_id: requestedCourierId,
+          icarry_manifest_endpoint: requestedCourierId === '9102' ? 'air' : 'surface',
+        } as ShipmentParams['pickup'] & Record<string, unknown>
+
+        providerCourierCost = Number(params?.courier_cost ?? 0) || null
+        const deferredPayload = buildIcarryDeferredManifestPayload(params, providerCourierCost)
+        shipmentData = deferredPayload.shipmentData
+        shipmentSuccessPackage = shipmentData
+        providerSortCode = null
+        shipmentMeta = deferredPayload.shipmentMeta
+      } else {
+      const icarry = new IcarryService()
+      if (!pickupAddressId) {
+        throw new HttpError(400, 'iCarry pickup_address_id could not be resolved.')
+      }
       const shipmentWeightKg = normalizeWeightToKg(params.package_weight ?? params.weight ?? 0)
       const firstItem = Array.isArray(params.order_items) && params.order_items.length > 0
         ? params.order_items[0]
@@ -5372,6 +6315,7 @@ export const createB2CShipmentService = async (
         manifest: icarryPayload?.manifest ?? undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
+      }
       }
     } else if (integrationType === 'shiprocket') {
       if (isReverseShipment) {
@@ -6043,12 +6987,14 @@ export const createB2CShipmentService = async (
       const shouldDeferWalletDebit =
         (integrationType === 'delhivery' ||
           integrationType === 'shipmozo' ||
-          integrationType === 'shiprocket') &&
+          integrationType === 'shiprocket' ||
+          integrationType === 'truxcargo' ||
+          integrationType === 'icarry') &&
         !isReverseShipment &&
         shipmentData?.deferred_manifest === true
       const finalWalletDebit = walletDebit ?? 0
       if (shouldDeferWalletDebit) {
-        console.log('â„¹ï¸ Deferring wallet debit until manifest success for Delhivery order', {
+        console.log(`â„¹ï¸ Deferring wallet debit until manifest success for ${providerName} order`, {
           order_number: params.order_number,
           deferred_wallet_debit: finalWalletDebit,
         })
@@ -7041,17 +7987,12 @@ export const generateManifestService = async (params: {
             const shipmozo = new ShipmozoService()
             const isShipmozoWalletError = (message: unknown) =>
               typeof message === 'string' &&
-              /insufficient\\s+wallet\\s+balance|recharge\\s+your\\s+wallet/i.test(message)
+              /insufficient\s+wallet\s+balance|recharge\s+your\s+wallet/i.test(message)
             const configuredDefaultWarehouseId = String(
               (await shipmozo.getDefaultWarehouseId()) || '',
             ).trim()
             let shipmozoWarehouseCache: any[] | null = null
             const normalizeWarehouseText = (value: unknown) => String(value ?? '').trim().toLowerCase()
-            const isShipmozoInvalidWarehouseError = (message: unknown) =>
-              typeof message === 'string' &&
-              /selected\s+warehouse\s+id\s+is\s+invalid|warehouse\s+id\s+is\s+invalid/i.test(
-                message,
-              )
             const getShipmozoWarehouses = async () => {
               if (shipmozoWarehouseCache) return shipmozoWarehouseCache
               try {
@@ -7125,85 +8066,73 @@ export const generateManifestService = async (params: {
 
               const pickup = normalizeDetails(order.pickup_details)
               const products = Array.isArray(order.products) ? order.products : []
-              const primaryConsigneePhone = String(order.buyer_phone ?? '').trim()
-              const warehouseIdRaw = await resolveShipmozoWarehouseId(order, pickup)
+              let shipmozoOrderId = normalizeShipmozoText(order.shipment_id || order.order_number)
 
-              if (!warehouseIdRaw) {
-                throw new HttpError(
-                  400,
-                  `Shipmozo manifest failed for order ${order.order_number}: pickup warehouse is missing.`,
-                )
-              }
-
-              const pushPayload = {
-                order_id: order.order_number,
-                order_date: toDateOnly(order.invoice_date || order.order_date, order.created_at),
-                order_type: 'ESSENTIALS',
-                consignee_name: order.buyer_name,
-                consignee_phone: Number(primaryConsigneePhone || 0),
-                consignee_alternate_phone: '',
-                consignee_email: order.buyer_email || '',
-                consignee_address_line_one: order.address,
-                consignee_address_line_two: '',
-                consignee_pin_code: Number(order.pincode || 0),
-                consignee_city: order.city,
-                consignee_state: order.state,
-                product_detail: products.map((item: any) => ({
-                  name: item?.name || 'Item',
-                  sku_number: item?.sku || '',
-                  quantity: Number(item?.qty || item?.quantity || 1),
-                  discount: String(item?.discount ?? ''),
-                  hsn: item?.hsn || item?.hsnCode || '',
-                  unit_price: Number(item?.price || 0),
-                  product_category: 'Other',
-                })),
-                payment_type: String(order.order_type || '').toLowerCase() === 'cod' ? 'COD' : 'PREPAID',
-                cod_amount:
-                  String(order.order_type || '').toLowerCase() === 'cod'
-                    ? String(order.order_amount ?? 0)
-                    : '',
-                weight: Number(order.weight ?? 0),
-                length: Number(order.length ?? 0),
-                width: Number(order.breadth ?? 0),
-                height: Number(order.height ?? 0),
-                warehouse_id: warehouseIdRaw,
-                gst_ewaybill_number: '',
-                gstin_number: '',
-              }
-
-              let pushResp: any
-              try {
-                pushResp = await shipmozo.pushOrder(pushPayload as any)
-              } catch (pushError: any) {
-                const pushErrorMessage = String(pushError?.message || '')
-                if (!isShipmozoInvalidWarehouseError(pushErrorMessage)) {
-                  throw pushError
+              if (shipmozoOrderId) {
+                try {
+                  await shipmozo.getOrderDetail(shipmozoOrderId)
+                } catch (detailErr: any) {
+                  console.warn('[Shipmozo] Existing local order id was not confirmed before manifest; push-order will be retried.', {
+                    order_number: order.order_number,
+                    shipment_id: order.shipment_id,
+                    message: detailErr?.message || detailErr,
+                  })
+                  shipmozoOrderId = ''
                 }
-
-                // Warehouse list can change; refresh and retry once with latest default/active warehouse.
-                shipmozoWarehouseCache = null
-                const retryWarehouseId = await resolveShipmozoWarehouseId(
-                  { ...order, pickup_location_id: '' },
-                  pickup,
-                )
-                if (!retryWarehouseId || retryWarehouseId === String(pushPayload.warehouse_id || '').trim()) {
-                  throw new HttpError(
-                    400,
-                    `Shipmozo manifest failed for order ${order.order_number}: invalid warehouse_id and no alternate active warehouse found.`,
-                  )
-                }
-                pushResp = await shipmozo.pushOrder({
-                  ...(pushPayload as any),
-                  warehouse_id: retryWarehouseId,
-                })
               }
-              const shipmozoOrderId = String(
-                pushResp?.data?.order_id ??
-                  pushResp?.data?.reference_id ??
-                  pushResp?.order_id ??
-                  pushResp?.reference_id ??
-                  '',
-              ).trim()
+
+              if (!shipmozoOrderId) {
+                const shipmozoParams = {
+                  order_number: order.order_number,
+                  order_date: order.order_date || order.created_at || new Date(),
+                  invoice_date: order.invoice_date || undefined,
+                  payment_type: String(order.order_type || '').toLowerCase() === 'cod' ? 'cod' : 'prepaid',
+                  order_amount: Number(order.order_amount ?? 0),
+                  package_weight: Number(order.weight ?? 0),
+                  package_length: Number(order.length ?? 0),
+                  package_breadth: Number(order.breadth ?? 0),
+                  package_height: Number(order.height ?? 0),
+                  pickup_location_id: order.pickup_location_id || undefined,
+                  pickup: {
+                    warehouse_name: pickup?.warehouse_name || pickup?.address_title || '',
+                    name: pickup?.name || pickup?.warehouse_name || '',
+                    address: pickup?.address || pickup?.address_line_one || '',
+                    address_2: pickup?.address_2 || pickup?.address_line_two || '',
+                    city: pickup?.city || '',
+                    state: pickup?.state || '',
+                    pincode: pickup?.pincode || '',
+                    phone: pickup?.phone || '',
+                    gst_number: pickup?.gst_number || '',
+                  },
+                  consignee: {
+                    name: order.buyer_name,
+                    address: order.address,
+                    address_2: '',
+                    city: order.city,
+                    state: order.state,
+                    pincode: order.pincode,
+                    phone: order.buyer_phone,
+                    email: order.buyer_email || '',
+                  },
+                  order_items: products.map((item: any) => ({
+                    name: item?.name || item?.productName || 'Item',
+                    sku: item?.sku || '',
+                    qty: Number(item?.qty || item?.quantity || 1),
+                    quantity: Number(item?.qty || item?.quantity || 1),
+                    discount: Number(item?.discount ?? 0),
+                    hsn: item?.hsn || item?.hsnCode || '',
+                    hsnCode: item?.hsnCode || item?.hsn || '',
+                    price: Number(item?.price || 1),
+                    tax_rate: Number(item?.tax_rate || item?.taxRate || 0),
+                  })),
+                  company: { gst: pickup?.gst_number || '' },
+                } as ShipmentParams
+
+                const pushPayload = await buildShipmozoForwardOrderPayload(shipmozo, shipmozoParams)
+                const pushResp = await pushShipmozoForwardOrder(shipmozo, pushPayload, pickup)
+                shipmozoOrderId = extractShipmozoOrderId(pushResp, order.order_number)
+              }
+
               if (!shipmozoOrderId) {
                 throw new HttpError(
                   502,
@@ -7538,12 +8467,127 @@ export const generateManifestService = async (params: {
           } else if (integrationType === 'truxcargo') {
             const truxcargo = new TruxcargoService()
             for (const order of fetchedOrders) {
-              if (!String(order.awb_number || '').trim()) {
-                continue
+              let awbNumber = String(order.awb_number || '').trim()
+
+              if (!awbNumber) {
+                const pickup = normalizeDetails(order.pickup_details)
+                const requestedCourierId = String(
+                  pickup?.truxcargo_requested_courier_id || order.courier_id || '',
+                ).trim()
+                if (!requestedCourierId) {
+                  throw new HttpError(
+                    400,
+                    `Truxcargo manifest failed for order ${order.order_number}: courier_id is missing.`,
+                  )
+                }
+
+                const remoteOrderId = buildTruxcargoRemoteOrderId(order.order_number)
+                const createPayload = await buildTruxcargoOrderPayload(truxcargo, {
+                  orderNumber: String(order.order_number || '').trim(),
+                  remoteOrderId,
+                  courierId: requestedCourierId,
+                  pickup,
+                  pickupLocationId: order.pickup_location_id,
+                  consignee: {
+                    name: order.buyer_name,
+                    phone: order.buyer_phone,
+                    address: order.address,
+                    city: order.city,
+                    state: order.state,
+                    pincode: order.pincode,
+                  },
+                  paymentType: order.order_type,
+                  orderAmount: order.order_amount,
+                  isInsurance: order.is_insurance,
+                  orderItems: Array.isArray(order.products) ? order.products : [],
+                  packageWeight: order.weight,
+                  packageLength: order.length,
+                  packageBreadth: order.breadth,
+                  packageHeight: order.height,
+                })
+
+                const { response: createOrderResp, expectedOrderIds } =
+                  await createTruxcargoOrderWithRecovery({
+                    truxcargo,
+                    payload: createPayload,
+                    remoteOrderId,
+                    merchantOrderNumber: String(order.order_number || '').trim(),
+                    courierId: requestedCourierId,
+                  })
+
+                const finalTruxPayload = resolveTruxcargoCreatedShipment(
+                  createOrderResp,
+                  expectedOrderIds,
+                )
+                if (!finalTruxPayload) {
+                  throw new HttpError(
+                    502,
+                    `Truxcargo did not return an AWB tied to order ${order.order_number}.`,
+                  )
+                }
+
+                const identifiers = extractTruxcargoShipmentIdentifiers(finalTruxPayload)
+                awbNumber = identifiers.awb
+                if (!awbNumber) {
+                  throw new HttpError(
+                    502,
+                    `Truxcargo did not return a waybill/AWB for order ${order.order_number}.`,
+                  )
+                }
+
+                const updatePayload: Record<string, any> = {
+                  shipment_id: identifiers.shipmentId || awbNumber,
+                  awb_number: awbNumber,
+                  courier_partner: identifiers.courierName || order.courier_partner || 'Truxcargo',
+                  manifest_error: null,
+                  updated_at: new Date(),
+                }
+                if (identifiers.sortCode) updatePayload.sort_code = identifiers.sortCode
+                if (identifiers.courierCost) updatePayload.courier_cost = identifiers.courierCost
+
+                const persistedCreateLabel = await persistProviderDocument(identifiers.label, order, {
+                  folderKey: 'labels',
+                  filenamePrefix: 'label',
+                  fallbackContentType: /^data:image\//i.test(String(identifiers.label || ''))
+                    ? 'image/png'
+                    : 'application/pdf',
+                })
+                const persistedCreateManifest = await persistProviderDocument(
+                  identifiers.manifest,
+                  order,
+                  {
+                    folderKey: 'manifests',
+                    filenamePrefix: 'manifest',
+                    fallbackContentType: /^data:image\//i.test(String(identifiers.manifest || ''))
+                      ? 'image/png'
+                      : 'application/pdf',
+                  },
+                )
+                if (persistedCreateLabel) updatePayload.label = persistedCreateLabel
+                if (persistedCreateManifest) updatePayload.manifest = persistedCreateManifest
+
+                await tx.update(b2c_orders).set(updatePayload).where(eq(b2c_orders.id, order.id))
+
+                order.shipment_id = updatePayload.shipment_id
+                order.awb_number = awbNumber
+                order.courier_partner = updatePayload.courier_partner
+                if (identifiers.sortCode) order.sort_code = identifiers.sortCode
+                if (identifiers.courierCost) order.courier_cost = identifiers.courierCost
+                if (persistedCreateLabel) order.label = persistedCreateLabel
+                if (persistedCreateManifest) order.manifest = persistedCreateManifest
+
+                if (persistedCreateLabel || persistedCreateManifest) {
+                  providerDocumentByOrderId.set(String(order.id), {
+                    label: persistedCreateLabel,
+                    invoice: null,
+                    manifest: persistedCreateManifest,
+                  })
+                }
               }
+
               try {
                 const packagingResp = await truxcargo.createPackagingSlip({
-                  waybill: String(order.awb_number).trim(),
+                  waybill: awbNumber,
                   order_id: String(order.shipment_id || order.order_number || '').trim(),
                 })
                 const packagingData = packagingResp?.data ?? packagingResp
@@ -7583,10 +8627,11 @@ export const generateManifestService = async (params: {
                   if (!existingManifestValue && persistedManifest) {
                     order.manifest = persistedManifest
                   }
+                  const existingDocs = providerDocumentByOrderId.get(String(order.id)) || {}
                   providerDocumentByOrderId.set(String(order.id), {
-                    label: persistedLabel,
-                    invoice: persistedInvoice,
-                    manifest: persistedManifest,
+                    label: persistedLabel || existingDocs.label || null,
+                    invoice: persistedInvoice || existingDocs.invoice || null,
+                    manifest: persistedManifest || existingDocs.manifest || null,
                   })
                 }
               } catch (truxManifestErr: any) {
@@ -7599,6 +8644,199 @@ export const generateManifestService = async (params: {
           } else if (integrationType === 'icarry') {
             const icarry = new IcarryService()
             for (const order of fetchedOrders) {
+              let pendingIcarryShipmentId = toPositiveIntegerOrNull(order.shipment_id)
+              if (!pendingIcarryShipmentId) {
+                const pickup = normalizeDetails(order.pickup_details)
+                const requestedCourierId = String(
+                  pickup?.icarry_requested_courier_id || order.courier_id || '',
+                ).trim()
+                const pickupAddressId = await resolveOrCreateIcarryPickupAddressId({
+                  explicitCandidate: null,
+                  pickupDetails: pickup,
+                  orderRef: order.order_number,
+                })
+
+                if (!pickupAddressId) {
+                  throw new HttpError(
+                    400,
+                    `iCarry manifest failed for order ${order.order_number}: pickup_address_id is missing.`,
+                  )
+                }
+                if (!requestedCourierId) {
+                  throw new HttpError(
+                    400,
+                    `iCarry manifest failed for order ${order.order_number}: courier_id is missing.`,
+                  )
+                }
+
+                const products = Array.isArray(order.products) ? order.products : []
+                const firstItem = products[0] || {}
+                const itemDescription =
+                  String(firstItem?.name || firstItem?.productName || 'Parcel').trim() || 'Parcel'
+                const orderValue = Number(order.order_amount ?? 0) > 0 ? Number(order.order_amount) : 1
+                const shipmentWeightKg = normalizeWeightToKg(order.weight ?? 0)
+                const packageDimensions = {
+                  length: Number(order.length ?? 1) || 1,
+                  breadth: Number(order.breadth ?? 1) || 1,
+                  height: Number(order.height ?? 1) || 1,
+                  unit: 'cm' as const,
+                }
+                const packageWeight = {
+                  weight: Math.max(1, Math.round(shipmentWeightKg * 1000)),
+                  unit: 'gm' as const,
+                }
+                const consigneePhone = String(order.buyer_phone || '').replace(/\D/g, '')
+                const destinationCountryCode = normalizeCountryIso2(order.country)
+                const parcelType =
+                  String(order.order_type || '').toLowerCase() === 'cod' ? 'COD' : 'Prepaid'
+                const isInternalIcarryCourierSeed =
+                  requestedCourierId === '9101' || requestedCourierId === '9102'
+
+                let createOrderResp: any
+                if (destinationCountryCode === 'IN') {
+                  createOrderResp = await icarry.bookDomesticShipment({
+                    endpoint:
+                      String(pickup?.icarry_manifest_endpoint || '').toLowerCase() === 'air' ||
+                      requestedCourierId === '9102'
+                        ? 'air'
+                        : 'surface',
+                    pickup_address_id: pickupAddressId,
+                    courier_id: isInternalIcarryCourierSeed ? undefined : requestedCourierId,
+                    client_order_id: order.order_number,
+                    parcel: {
+                      type: parcelType,
+                      value: orderValue,
+                      contents: itemDescription,
+                      dimensions: packageDimensions,
+                      weight: packageWeight,
+                    },
+                    consignee: {
+                      name: order.buyer_name || 'Customer',
+                      mobile: consigneePhone,
+                      address: order.address || '',
+                      city: order.city || '',
+                      pincode: order.pincode || '',
+                      state: resolveIndianStateCode(order.state),
+                      country: 'IN',
+                    },
+                  })
+                } else {
+                  if (String(order.order_type || '').toLowerCase() === 'cod') {
+                    throw new HttpError(
+                      400,
+                      `iCarry manifest failed for order ${order.order_number}: international COD is not supported.`,
+                    )
+                  }
+                  createOrderResp = await icarry.bookInternationalShipment({
+                    pickup_address_id: pickupAddressId,
+                    courier_id: requestedCourierId,
+                    client_order_id: order.order_number,
+                    parcel: {
+                      type: 'Prepaid' as const,
+                      value: orderValue,
+                      currency: 'INR' as const,
+                      contents: itemDescription,
+                      dimensions: packageDimensions,
+                      weight: packageWeight,
+                    },
+                    consignee: {
+                      name: order.buyer_name || 'Customer',
+                      mobile: consigneePhone,
+                      address: order.address || '',
+                      city: order.city || '',
+                      pincode: order.pincode || '',
+                      state: order.state || '',
+                      country_code: destinationCountryCode,
+                    },
+                  } as any)
+                }
+
+                const createIdentifiers = extractIcarryShipmentIdentifiers(createOrderResp)
+                pendingIcarryShipmentId = toPositiveIntegerOrNull(createIdentifiers.shipmentId)
+                if (!pendingIcarryShipmentId) {
+                  throw new HttpError(
+                    502,
+                    `iCarry did not return a numeric shipment_id for order ${order.order_number}.`,
+                  )
+                }
+
+                let trackResp: any = null
+                let labelResp: any = null
+                try {
+                  trackResp = await icarry.trackShipment({ shipment_id: pendingIcarryShipmentId })
+                } catch (trackErr: any) {
+                  console.warn(
+                    `âš ï¸ [iCarry] Tracking sync failed for order ${order.order_number}:`,
+                    trackErr?.message || trackErr,
+                  )
+                }
+                try {
+                  labelResp = await icarry.printShipmentLabel({ shipment_id: pendingIcarryShipmentId })
+                } catch (labelErr: any) {
+                  console.warn(
+                    `âš ï¸ [iCarry] Label generation failed for order ${order.order_number}:`,
+                    labelErr?.message || labelErr,
+                  )
+                }
+
+                const trackIdentifiers = extractIcarryShipmentIdentifiers(trackResp)
+                const labelIdentifiers = extractIcarryShipmentIdentifiers(labelResp)
+                const awbNumber =
+                  trackIdentifiers.awb ||
+                  labelIdentifiers.awb ||
+                  createIdentifiers.awb ||
+                  String(pendingIcarryShipmentId)
+                const rawLabel = labelIdentifiers.label || createIdentifiers.label
+                const persistedLabel = await persistProviderDocument(rawLabel, order, {
+                  folderKey: 'labels',
+                  filenamePrefix: 'label',
+                  fallbackContentType: /^https?:\/\/.*\.(png|jpe?g)(?:\?|$)/i.test(String(rawLabel || ''))
+                    ? 'image/png'
+                    : 'application/pdf',
+                })
+                const courierName =
+                  trackIdentifiers.courierName ||
+                  labelIdentifiers.courierName ||
+                  createIdentifiers.courierName ||
+                  order.courier_partner ||
+                  'iCarry'
+                const sortCode =
+                  labelIdentifiers.sortCode || trackIdentifiers.sortCode || createIdentifiers.sortCode || null
+                const courierCost =
+                  createIdentifiers.courierCost || trackIdentifiers.courierCost || labelIdentifiers.courierCost
+
+                const updatePayload: Record<string, any> = {
+                  shipment_id: String(pendingIcarryShipmentId),
+                  awb_number: awbNumber,
+                  courier_partner: courierName,
+                  pickup_details: {
+                    ...pickup,
+                    ...(pickupAddressId ? { icarry_pickup_address_id: pickupAddressId } : {}),
+                    ...(requestedCourierId ? { icarry_requested_courier_id: requestedCourierId } : {}),
+                  },
+                  manifest_error: null,
+                  updated_at: new Date(),
+                }
+                if (persistedLabel) updatePayload.label = persistedLabel
+                if (sortCode) updatePayload.sort_code = String(sortCode)
+                if (courierCost) updatePayload.courier_cost = courierCost
+
+                await tx.update(b2c_orders).set(updatePayload).where(eq(b2c_orders.id, order.id))
+
+                order.shipment_id = String(pendingIcarryShipmentId)
+                order.awb_number = awbNumber
+                order.courier_partner = courierName
+                if (persistedLabel) order.label = persistedLabel
+                if (sortCode) order.sort_code = String(sortCode)
+
+                providerDocumentByOrderId.set(String(order.id), {
+                  label: persistedLabel,
+                  invoice: null,
+                  manifest: createIdentifiers.manifest || labelIdentifiers.manifest || null,
+                })
+                continue
+              }
+
               const shipmentId = String(order.shipment_id || '').trim()
               if (!shipmentId) {
                 console.warn(`⚠️ [iCarry] Missing shipment_id for order ${order.order_number}; skipping provider docs.`)
@@ -7625,16 +8863,28 @@ export const generateManifestService = async (params: {
                 })
 
                 const trackData = trackResp?.data ?? trackResp
+                const trackIdentifiers = extractIcarryShipmentIdentifiers(trackResp)
+                const labelIdentifiers = extractIcarryShipmentIdentifiers(labelResp)
                 if (trackData?.courier_name && !order.courier_partner) {
                   order.courier_partner = String(trackData.courier_name)
                 }
+                const nextAwb =
+                  trackIdentifiers.awb ||
+                  labelIdentifiers.awb ||
+                  String(order.awb_number || '').trim() ||
+                  shipmentId
                 const sortCode = labelData?.sort_code ?? null
-                if (sortCode) {
+                if (sortCode || nextAwb !== String(order.awb_number || '').trim()) {
                   await tx
                     .update(b2c_orders)
-                    .set({ sort_code: String(sortCode), updated_at: new Date() })
+                    .set({
+                      ...(sortCode ? { sort_code: String(sortCode) } : {}),
+                      ...(nextAwb ? { awb_number: nextAwb } : {}),
+                      updated_at: new Date(),
+                    })
                     .where(eq(b2c_orders.id, order.id))
-                  order.sort_code = String(sortCode)
+                  if (sortCode) order.sort_code = String(sortCode)
+                  if (nextAwb) order.awb_number = nextAwb
                 }
 
                 providerDocumentByOrderId.set(String(order.id), {
@@ -9475,16 +10725,23 @@ interface TrackingServiceResponse {
   order_number: string
   awb_number: string
   courier_name: string
+  provider: string
   status: string
+  status_code: string
   edd: string | null
   history: TrackingHistoryItem[]
   payment_type: string
   shipment_info: string | null
+  source: 'courier_api' | 'local_cache'
+  stale: boolean
+  warning?: string
+  last_updated_at: string | null
 }
 
 type ProviderNormalizedTracking = {
   history: TrackingHistoryItem[]
   status?: string
+  status_code?: string
   edd?: string | null
   courier_name?: string | null
   shipment_info?: string | null
@@ -9532,7 +10789,7 @@ const pushHistoryEvent = (
   const statusCodeCandidate = sanitizeString(params.statusCode)
   const messageCandidate = sanitizeString(params.message)
   const message = messageCandidate || statusCodeCandidate || 'Status Update'
-  const statusCode = statusCodeCandidate || message
+  const statusCode = normalizeTrackingStatusCode(statusCodeCandidate || message)
   history.push({
     status_code: statusCode,
     location: sanitizeString(params.location),
@@ -9686,41 +10943,163 @@ const mapShiprocketTracking = (raw: any, order: OrderSummary): ProviderNormalize
 
 const mapTruxcargoTracking = (raw: any, order: OrderSummary): ProviderNormalizedTracking => {
   const history: TrackingHistoryItem[] = []
-  const shipment = raw?.data?.ShipmentData?.[0]?.Shipment || raw?.data?.shipment || raw?.data || {}
+  const flattened = flattenTruxcargoObjects(raw)
+  const shipment =
+    raw?.data?.ShipmentData?.[0]?.Shipment ||
+    raw?.data?.shipment ||
+    raw?.data?.info?.[0] ||
+    raw?.info?.[0] ||
+    raw?.data?.records?.[0] ||
+    raw?.records?.[0] ||
+    flattened.find((row) =>
+      getFirstTruxcargoValue(row, [
+        'current_status',
+        'shipment_status',
+        'status',
+        'Status',
+        'tracking_status',
+      ]),
+    ) ||
+    raw?.data ||
+    {}
   const statusObj = shipment?.Status || {}
-  const statusText = sanitizeString(statusObj?.Status || shipment?.status || order.order_status)
-  const location = sanitizeString(statusObj?.StatusLocation || shipment?.current_location || shipment?.location)
-  const eventAt = statusObj?.StatusDateTime || shipment?.last_update || shipment?.updated_at || null
+  const statusText = sanitizeString(
+    statusObj?.Status ||
+      getFirstTruxcargoValue(shipment, [
+        'current_status',
+        'shipment_status',
+        'status',
+        'Status',
+        'tracking_status',
+        'remark',
+      ]) ||
+      order.order_status,
+  )
+  const location = sanitizeString(
+    statusObj?.StatusLocation ||
+      getFirstTruxcargoValue(shipment, [
+        'current_location',
+        'location',
+        'city',
+        'StatusLocation',
+        'scanned_location',
+      ]),
+  )
+  const eventAt =
+    statusObj?.StatusDateTime ||
+    getFirstTruxcargoValue(shipment, [
+      'last_update',
+      'updated_at',
+      'event_time',
+      'date',
+      'datetime',
+      'StatusDateTime',
+    ]) ||
+    null
   const scans = Array.isArray(shipment?.Scans)
     ? shipment.Scans
     : Array.isArray(shipment?.scaninfo)
       ? shipment.scaninfo
-      : []
+      : Array.isArray(shipment?.tracking)
+        ? shipment.tracking
+        : Array.isArray(raw?.data?.tracking)
+          ? raw.data.tracking
+          : []
   if (Array.isArray(scans) && scans.length) {
     scans.forEach((scan: any) => {
       const detail = scan?.ScanDetail || scan || {}
       pushHistoryEvent(history, {
-        statusCode: detail?.StatusCode || detail?.ScanType || detail?.Scan || detail?.status,
-        message: detail?.Instructions || detail?.Status || detail?.Scan || detail?.remark || detail?.status,
-        location: detail?.ScannedLocation || detail?.location || location,
-        time: detail?.StatusDateTime || detail?.ScanDateTime || detail?.date || eventAt,
+        statusCode:
+          detail?.StatusCode ||
+          detail?.ScanType ||
+          detail?.Scan ||
+          detail?.status_code ||
+          detail?.status,
+        message:
+          detail?.Instructions ||
+          detail?.Status ||
+          detail?.Scan ||
+          detail?.remark ||
+          detail?.status_text ||
+          detail?.status,
+        location: detail?.ScannedLocation || detail?.location || detail?.city || location,
+        time:
+          detail?.StatusDateTime ||
+          detail?.ScanDateTime ||
+          detail?.event_time ||
+          detail?.updated_at ||
+          detail?.date ||
+          eventAt,
       })
     })
   } else {
-    pushHistoryEvent(history, {
-      statusCode: statusText || shipment?.status,
-      message: statusText || shipment?.status,
-      location,
-      time: eventAt,
-    })
+    const eventRows = flattened
+      .map((row) => ({
+        status:
+          getFirstTruxcargoValue(row, [
+            'current_status',
+            'shipment_status',
+            'status',
+            'Status',
+            'tracking_status',
+            'remark',
+          ]) || statusText,
+        location:
+          getFirstTruxcargoValue(row, [
+            'current_location',
+            'location',
+            'city',
+            'StatusLocation',
+            'scanned_location',
+          ]) || location,
+        time:
+          getFirstTruxcargoValue(row, [
+            'last_update',
+            'updated_at',
+            'event_time',
+            'date',
+            'datetime',
+            'StatusDateTime',
+          ]) || eventAt,
+      }))
+      .filter((row) => String(row.status || '').trim() || String(row.time || '').trim())
+
+    if (eventRows.length) {
+      eventRows.slice(0, 25).forEach((event) => {
+        pushHistoryEvent(history, {
+          statusCode: event.status,
+          message: event.status,
+          location: event.location,
+          time: event.time,
+        })
+      })
+    } else {
+      pushHistoryEvent(history, {
+        statusCode: statusText || shipment?.status,
+        message: statusText || shipment?.status,
+        location,
+        time: eventAt,
+      })
+    }
   }
   sortHistoryDescending(history)
   return {
     history,
     status: statusText || sanitizeString(order.order_status),
     courier_name: sanitizeString(order.courier_partner || 'Truxcargo'),
-    edd: sanitizeString(shipment?.ExpectedDeliveryDate || order.edd || ''),
-    shipment_info: sanitizeString(shipment?.Instructions || ''),
+    edd: sanitizeString(
+      getFirstTruxcargoValue(shipment, [
+        'ExpectedDeliveryDate',
+        'expected_delivery_date',
+        'edd',
+        'estimated_delivery_date',
+      ]) ||
+        order.edd ||
+        '',
+    ),
+    shipment_info: sanitizeString(
+      getFirstTruxcargoValue(shipment, ['Instructions', 'remark', 'remarks', 'message']) || '',
+    ),
   }
 }
 
@@ -9790,6 +11169,12 @@ const mapIcarryTracking = (raw: any, order: OrderSummary): ProviderNormalizedTra
 const buildTrackingResponse = (
   order: OrderSummary,
   providerData: ProviderNormalizedTracking,
+  options: {
+    provider: string
+    source?: 'courier_api' | 'local_cache'
+    stale?: boolean
+    warning?: string
+  },
 ): TrackingServiceResponse => {
   const history = [...(providerData.history || [])]
   const fallbackTime = toIsoString(order.updated_at ?? order.created_at ?? new Date())
@@ -9813,6 +11198,7 @@ const buildTrackingResponse = (
     providerData.status ?? history[0]?.message ?? order.order_status,
     'In Transit',
   )
+  const statusCode = normalizeTrackingStatusCode(providerData.status_code ?? history[0]?.status_code ?? status)
 
   const courierName = sanitizeString(
     providerData.courier_name ?? order.courier_partner ?? order.integration_type ?? 'Courier',
@@ -9829,15 +11215,29 @@ const buildTrackingResponse = (
     order_number: order.order_number,
     awb_number: order.awb_number,
     courier_name: courierName,
+    provider: options.provider,
     status,
+    status_code: statusCode,
     edd: eddValue || null,
     history,
     payment_type: sanitizeString(order.order_type ?? 'prepaid', 'prepaid').toUpperCase(),
     shipment_info: shipmentInfoValue,
+    source: options.source ?? 'courier_api',
+    stale: options.stale ?? false,
+    warning: options.warning,
+    last_updated_at: history[0]?.event_time ?? (order.updated_at ? toIsoString(order.updated_at) : null),
   }
 }
 
+const awbMatches = (column: any, awb: string) =>
+  or(
+    eq(column, awb),
+    sql`upper(regexp_replace(coalesce(${column}, ''), '[[:space:]]+', '', 'g')) = ${awb}`,
+  )
+
 const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
+  const normalizedAwb = normalizeAwb(awb)
+
   const [b2c] = await db
     .select({
       id: b2c_orders.id,
@@ -9856,7 +11256,7 @@ const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
       updated_at: b2c_orders.updated_at,
     })
     .from(b2c_orders)
-    .where(eq(b2c_orders.awb_number, awb))
+    .where(or(awbMatches(b2c_orders.awb_number, normalizedAwb), awbMatches(b2c_orders.shipment_id, normalizedAwb)))
     .limit(1)
 
   if (b2c) {
@@ -9864,10 +11264,10 @@ const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
       id: b2c.id,
       order_id: b2c.order_id,
       order_number: b2c.order_number,
-      integration_type: b2c.integration_type ?? 'delhivery',
+      integration_type: b2c.integration_type ?? null,
       courier_partner: b2c.courier_partner,
       courier_id: b2c.courier_id ? Number(b2c.courier_id) : null,
-      awb_number: b2c.awb_number ?? awb,
+      awb_number: b2c.awb_number ?? b2c.shipment_id ?? normalizedAwb,
       order_status: b2c.order_status,
       edd: b2c.edd,
       order_type: b2c.order_type,
@@ -9894,7 +11294,7 @@ const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
       updated_at: b2b_orders.updated_at,
     })
     .from(b2b_orders)
-    .where(eq(b2b_orders.awb_number, awb))
+    .where(awbMatches(b2b_orders.awb_number, normalizedAwb))
     .limit(1)
 
   if (b2b) {
@@ -9902,10 +11302,10 @@ const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
       id: b2b.id,
       order_id: b2b.order_id,
       order_number: b2b.order_number,
-      integration_type: 'delhivery',
+      integration_type: resolveTrackingProviderKey(null, b2b.courier_partner),
       courier_partner: b2b.courier_partner,
       courier_id: b2b.courier_id ? Number(b2b.courier_id) : null,
-      awb_number: b2b.awb_number ?? awb,
+      awb_number: b2b.awb_number ?? normalizedAwb,
       order_status: b2b.order_status,
       edd: null,
       order_type: b2b.order_type,
@@ -9919,61 +11319,98 @@ const findOrderByAwb = async (awb: string): Promise<OrderSummary | null> => {
   return null
 }
 
+const getLocalTrackingEvents = async (order: OrderSummary): Promise<TrackingHistoryItem[]> => {
+  const normalizedAwb = normalizeAwb(order.awb_number)
+  if (!normalizedAwb) return []
+
+  const events = await db
+    .select({
+      status_code: tracking_events.status_code,
+      status_text: tracking_events.status_text,
+      location: tracking_events.location,
+      created_at: tracking_events.created_at,
+    })
+    .from(tracking_events)
+    .where(awbMatches(tracking_events.awb_number, normalizedAwb))
+    .orderBy(desc(tracking_events.created_at))
+    .limit(50)
+
+  return events.map((event) => ({
+    status_code: normalizeTrackingStatusCode(event.status_code ?? event.status_text),
+    location: sanitizeString(event.location),
+    event_time: toIsoString(event.created_at, toIsoString(order.updated_at ?? order.created_at ?? new Date())),
+    message: sanitizeString(event.status_text ?? event.status_code, 'Status Update'),
+  }))
+}
+
+const buildLocalTrackingResponse = async (
+  order: OrderSummary,
+  providerKey: string,
+  warning?: string,
+): Promise<TrackingServiceResponse> => {
+  const localHistory = await getLocalTrackingEvents(order)
+
+  return buildTrackingResponse(
+    order,
+    {
+      history: localHistory,
+      status: localHistory[0]?.message ?? order.order_status ?? 'Status Update',
+      status_code: localHistory[0]?.status_code ?? order.order_status ?? 'PP',
+      courier_name: order.courier_partner ?? order.integration_type ?? 'Courier',
+      edd: order.edd,
+      shipment_info: order.delivery_message,
+    },
+    {
+      provider: providerKey,
+      source: 'local_cache',
+      stale: true,
+      warning:
+        warning ||
+        'Live courier tracking is temporarily unavailable. Showing the latest saved order status.',
+    },
+  )
+}
+
 export const trackByAwbService = async (awb: string): Promise<TrackingServiceResponse> => {
-  if (!awb) throw new HttpError(400, 'AWB number is required')
+  const normalizedAwb = normalizeAwb(awb)
+  if (!normalizedAwb) throw new HttpError(400, 'AWB number is required')
 
-  const order = await findOrderByAwb(awb)
+  const order = await findOrderByAwb(normalizedAwb)
   if (!order) {
-    throw new HttpError(404, `No order found for AWB: ${awb}`)
+    throw new HttpError(404, `No order found for AWB: ${normalizedAwb}`)
   }
 
-  let providerKey = sanitizeString(order.integration_type ?? 'delhivery').toLowerCase()
-
-  if (
-    !['delhivery', 'shipmozo', 'shiprocket', 'truxcargo', 'ekart', 'xpressbees', 'icarry'].includes(
-      providerKey,
-    ) &&
-    order.courier_partner
-  ) {
-    const partner = order.courier_partner.toLowerCase()
-    if (partner.includes('delhivery')) providerKey = 'delhivery'
-    if (partner.includes('shipmozo')) providerKey = 'shipmozo'
-    if (partner.includes('shiprocket')) providerKey = 'shiprocket'
-    if (partner.includes('truxcargo')) providerKey = 'truxcargo'
-    if (partner.includes('ekart')) providerKey = 'ekart'
-    if (partner.includes('xpress')) providerKey = 'xpressbees'
-    if (partner.includes('icarry')) providerKey = 'icarry'
-  }
+  const providerKey = resolveTrackingProviderKey(order.integration_type, order.courier_partner)
 
   let providerData: ProviderNormalizedTracking
 
   try {
     if (providerKey === 'delhivery') {
       const delhiveryService = new DelhiveryService()
-      const raw = await delhiveryService.trackShipment(awb)
+      const raw = await delhiveryService.trackShipment(normalizedAwb)
       providerData = mapDelhiveryTracking(raw, order)
     } else if (providerKey === 'shipmozo') {
       const shipmozoService = new ShipmozoService()
-      const raw = await shipmozoService.trackOrder(awb)
+      const raw = await shipmozoService.trackOrder(normalizedAwb)
       providerData = mapShipmozoTracking(raw, order)
     } else if (providerKey === 'shiprocket') {
       const shiprocketService = new ShiprocketCourierService()
-      const raw = await shiprocketService.trackByAwb(awb)
+      const raw = await shiprocketService.trackByAwb(normalizedAwb)
       providerData = mapShiprocketTracking(raw, order)
     } else if (providerKey === 'truxcargo') {
       const truxcargoService = new TruxcargoService()
-      const raw = await truxcargoService.trackShipment({ waybill: awb })
+      const raw = await truxcargoService.trackShipment({ waybill: normalizedAwb })
       providerData = mapTruxcargoTracking(raw, order)
     } else if (providerKey === 'ekart') {
       const ekartService = new EkartService()
-      const raw = await ekartService.trackWbn(awb)
+      const raw = await ekartService.trackWbn(normalizedAwb)
       providerData = mapEkartTracking(raw, order)
     } else if (providerKey === 'xpressbees') {
       const xpressbeesService = new XpressbeesService()
-      const raw = await xpressbeesService.trackShipment(awb)
+      const raw = await xpressbeesService.trackShipment(normalizedAwb)
       providerData = mapXpressbeesTracking(raw, order)
     } else if (providerKey === 'icarry') {
-      const shipmentId = Number(order.shipment_id || 0)
+      const shipmentId = Number(order.shipment_id || normalizedAwb || 0)
       if (!Number.isFinite(shipmentId) || shipmentId <= 0) {
         throw new HttpError(
           400,
@@ -9987,15 +11424,19 @@ export const trackByAwbService = async (awb: string): Promise<TrackingServiceRes
       throw new HttpError(400, 'Unsupported integration_type for tracking')
     }
   } catch (err: any) {
-    if (err instanceof HttpError) throw err
     const status = err?.status ?? err?.response?.status ?? 500
     const message =
       err?.response?.data?.message ?? err?.message ?? 'Failed to fetch tracking information'
-    throw new HttpError(status, message)
+    if (status >= 500 || err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT') {
+      return buildLocalTrackingResponse(order, providerKey)
+    }
+
+    return buildLocalTrackingResponse(order, providerKey, message)
   }
 
-  return buildTrackingResponse(order, providerData)
+  return buildTrackingResponse(order, providerData, { provider: providerKey })
 }
+
 
 export const trackByOrderService = async ({
   orderNumber,
@@ -10006,26 +11447,130 @@ export const trackByOrderService = async ({
   email?: string
   phone?: string
 }) => {
-  if (!orderNumber || (!email && !phone)) {
-    throw new Error('Order number and either email or phone are required')
+  const normalizedOrderNumber = normalizeOrderNumber(orderNumber)
+  const normalizedEmail = email ? email.trim().toLowerCase() : undefined
+  const normalizedPhone = phone ? normalizePhoneDigits(phone) : undefined
+
+  if (!normalizedOrderNumber || (!normalizedEmail && !normalizedPhone)) {
+    throw new HttpError(400, 'Order number and either email or phone are required')
   }
 
-  // 1ï¸âƒ£ Find user
-  const user = await db
-    .select()
-    .from(users)
-    .where(
-      or(email ? eq(users.email, email) : undefined, phone ? eq(users.phone, phone) : undefined),
+  const emailMatches = (column: any, value: string) =>
+    sql`lower(coalesce(${column}, '')) = ${value}`
+
+  const phoneMatches = (column: any, value: string) => {
+    const tail = value.length > 10 ? value.slice(-10) : value
+    return sql`right(regexp_replace(coalesce(${column}, ''), '[^0-9]', '', 'g'), ${tail.length}) = ${tail}`
+  }
+
+  const orderMatches = (orderColumn: any, idColumn: any) => {
+    const value = normalizedOrderNumber.toLowerCase()
+    return or(
+      sql`lower(trim(coalesce(${orderColumn}, ''))) = ${value}`,
+      sql`lower(trim(coalesce(${idColumn}, ''))) = ${value}`,
     )
+  }
+
+  const userConditions: SQL[] = []
+  if (normalizedEmail) userConditions.push(emailMatches(users.email, normalizedEmail))
+  if (normalizedPhone) userConditions.push(phoneMatches(users.phone, normalizedPhone))
+
+  const matchedUsers = userConditions.length
+    ? await db
+        .select({ id: users.id })
+        .from(users)
+        .where(or(...userConditions))
+        .limit(10)
+    : []
+  const userIds = matchedUsers.map((user) => user.id)
+
+  const b2cContactConditions: SQL[] = []
+  if (normalizedEmail) b2cContactConditions.push(emailMatches(b2c_orders.buyer_email, normalizedEmail))
+  if (normalizedPhone) b2cContactConditions.push(phoneMatches(b2c_orders.buyer_phone, normalizedPhone))
+  if (userIds.length) b2cContactConditions.push(inArray(b2c_orders.user_id, userIds))
+
+  const [b2c] = await db
+    .select({
+      id: b2c_orders.id,
+      order_id: b2c_orders.order_id,
+      order_number: b2c_orders.order_number,
+      integration_type: b2c_orders.integration_type,
+      courier_partner: b2c_orders.courier_partner,
+      courier_id: b2c_orders.courier_id,
+      awb_number: b2c_orders.awb_number,
+      order_status: b2c_orders.order_status,
+      edd: b2c_orders.edd,
+      order_type: b2c_orders.order_type,
+      shipment_id: b2c_orders.shipment_id,
+      delivery_message: b2c_orders.delivery_message,
+      created_at: b2c_orders.created_at,
+      updated_at: b2c_orders.updated_at,
+    })
+    .from(b2c_orders)
+    .where(and(orderMatches(b2c_orders.order_number, b2c_orders.order_id), or(...b2cContactConditions)))
     .limit(1)
 
-  if (!user[0]) throw new Error('User not found with provided contact details')
+  if (b2c) {
+    return {
+      id: b2c.id,
+      order_id: b2c.order_id,
+      order_number: b2c.order_number,
+      integration_type: b2c.integration_type ?? null,
+      courier_partner: b2c.courier_partner,
+      courier_id: b2c.courier_id ? Number(b2c.courier_id) : null,
+      awb_number: b2c.awb_number ?? '',
+      order_status: b2c.order_status,
+      edd: b2c.edd,
+      order_type: b2c.order_type,
+      shipment_id: b2c.shipment_id,
+      delivery_message: b2c.delivery_message,
+      created_at: b2c.created_at,
+      updated_at: b2c.updated_at,
+    }
+  }
 
-  // 2ï¸âƒ£ Fetch orders for user
-  const orders = await getAllOrdersService(user[0].id, { filters: { search: orderNumber } })
+  const b2bContactConditions: SQL[] = []
+  if (normalizedEmail) b2bContactConditions.push(emailMatches(b2b_orders.buyer_email, normalizedEmail))
+  if (normalizedPhone) b2bContactConditions.push(phoneMatches(b2b_orders.buyer_phone, normalizedPhone))
+  if (userIds.length) b2bContactConditions.push(inArray(b2b_orders.user_id, userIds))
 
-  if (orders.totalCount === 0) throw new Error(`No order found with order number: ${orderNumber}`)
+  const [b2b] = await db
+    .select({
+      id: b2b_orders.id,
+      order_id: b2b_orders.order_id,
+      order_number: b2b_orders.order_number,
+      courier_partner: b2b_orders.courier_partner,
+      courier_id: b2b_orders.courier_id,
+      awb_number: b2b_orders.awb_number,
+      order_status: b2b_orders.order_status,
+      order_type: b2b_orders.order_type,
+      shipment_id: b2b_orders.shipment_id,
+      delivery_message: b2b_orders.delivery_message,
+      created_at: b2b_orders.created_at,
+      updated_at: b2b_orders.updated_at,
+    })
+    .from(b2b_orders)
+    .where(and(orderMatches(b2b_orders.order_number, b2b_orders.order_id), or(...b2bContactConditions)))
+    .limit(1)
 
-  // 3ï¸âƒ£ Return the first matching order with tracking info
-  return orders.orders[0]
+  if (b2b) {
+    return {
+      id: b2b.id,
+      order_id: b2b.order_id,
+      order_number: b2b.order_number,
+      integration_type: resolveTrackingProviderKey(null, b2b.courier_partner),
+      courier_partner: b2b.courier_partner,
+      courier_id: b2b.courier_id ? Number(b2b.courier_id) : null,
+      awb_number: b2b.awb_number ?? '',
+      order_status: b2b.order_status,
+      edd: null,
+      order_type: b2b.order_type,
+      shipment_id: b2b.shipment_id,
+      delivery_message: b2b.delivery_message,
+      created_at: b2b.created_at,
+      updated_at: b2b.updated_at,
+    }
+  }
+
+  throw new HttpError(404, `No order found with order number: ${normalizedOrderNumber}`)
 }

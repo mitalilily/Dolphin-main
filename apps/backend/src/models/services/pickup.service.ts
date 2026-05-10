@@ -106,7 +106,7 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
   } else if (integration === 'shipmozo') {
     const svc = new ShipmozoService()
     cancellationResult = await svc.cancelOrder({
-      order_id: order.order_number || order.id,
+      order_id: order.shipment_id || order.order_number || order.id,
       awb_number: awbNumber,
     })
   } else if (integration === 'shiprocket') {
@@ -131,8 +131,15 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
   // Check for various success indicators: boolean status, string status, success flags, or cancellation remark
   const isSuccess =
     cancellationResult?.success === true ||
+    cancellationResult?.success === 1 ||
+    cancellationResult?.success === '1' ||
+    cancellationResult?.success === 'true' ||
     cancellationResult?.Success === true ||
+    cancellationResult?.Success === 1 ||
+    cancellationResult?.Success === '1' ||
     cancellationResult?.status === true || // Boolean true (most common)
+    cancellationResult?.status === 1 ||
+    cancellationResult?.status === '1' ||
     cancellationResult?.status === 'Success' ||
     cancellationResult?.status === 'success' ||
     cancellationResult?.response?.status === true ||
