@@ -52,6 +52,25 @@ const allowInlineOtp = parseBooleanEnv(process.env.ALLOW_INLINE_OTP, false)
 const showDemoOtpOnScreen = parseBooleanEnv(process.env.SHOW_DEMO_OTP_ON_SCREEN, true)
 const exposeAuthCodes = parseBooleanEnv(process.env.EXPOSE_AUTH_CODES, env !== 'production') || allowInlineOtp
 
+const sanitizeAuthUser = (user: unknown) => {
+  if (!user || typeof user !== 'object') return user
+
+  const {
+    passwordHash: _passwordHash,
+    refreshToken: _refreshToken,
+    refreshTokenExpiresAt: _refreshTokenExpiresAt,
+    previousRefreshToken: _previousRefreshToken,
+    previousRefreshTokenExpiresAt: _previousRefreshTokenExpiresAt,
+    otp: _otp,
+    otpExpiresAt: _otpExpiresAt,
+    emailVerificationToken: _emailVerificationToken,
+    emailVerificationTokenExpiresAt: _emailVerificationTokenExpiresAt,
+    ...safeUser
+  } = user as Record<string, unknown>
+
+  return safeUser
+}
+
 export const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString()
 
 const sendSmsViaTwilio = async (phone: string, message: string) => {
@@ -381,6 +400,7 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
       // Save refresh token to DB
       await saveRefreshToken(user.id, refreshToken, ONE_WEEK_MS)
 
+      result.data.user = sanitizeAuthUser(user)
       result.data.token = accessToken
       result.data.refreshToken = refreshToken
     }

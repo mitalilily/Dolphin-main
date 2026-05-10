@@ -13,6 +13,11 @@ PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 ENABLE_SSL="${ENABLE_SSL:-true}"
 SSL_EMAIL="${SSL_EMAIL:-admin@$PRIMARY_DOMAIN}"
+USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-true}"
+LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
+LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
+LOCAL_POSTGRES_USER="${LOCAL_POSTGRES_USER:-dolphin}"
+LOCAL_POSTGRES_PASSWORD="${LOCAL_POSTGRES_PASSWORD:-DolphinLocalPostgres_2026_Strong}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this script as root." >&2
@@ -41,7 +46,7 @@ if ! command -v docker >/dev/null 2>&1; then
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 
-mkdir -p /var/www /etc/dolphin /opt/pgadmin
+mkdir -p /var/www /etc/dolphin /opt/pgadmin /opt/dolphin-postgres/data
 
 if [ ! -d "$APP_DIR/.git" ]; then
   rm -rf "$APP_DIR"
@@ -58,16 +63,15 @@ if [ ! -f "$BACKEND_ENV_SOURCE" ]; then
   cat > "$BACKEND_ENV_SOURCE" <<EOF
 NODE_ENV=production
 PORT=${API_PORT}
-DATABASE_URL=
-PGSSLMODE=require
+DATABASE_URL=postgresql://${LOCAL_POSTGRES_USER}:${LOCAL_POSTGRES_PASSWORD}@127.0.0.1:5432/${LOCAL_POSTGRES_DB}
+PGSSLMODE=disable
 CORS_ALLOWED_ORIGINS=${CORS_ORIGIN_LIST}
 CORS_ORIGINS=${CORS_ORIGIN_LIST}
 FRONTEND_URL=${PUBLIC_ORIGIN}
 API_URL=${API_ORIGIN}
 EOF
   chmod 600 "$BACKEND_ENV_SOURCE"
-  echo "Created ${BACKEND_ENV_SOURCE}. Fill it with backend secrets, then rerun bootstrap." >&2
-  exit 1
+  echo "Created ${BACKEND_ENV_SOURCE} with the local Postgres connection."
 fi
 
 cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env.production"
@@ -96,13 +100,13 @@ cat > /opt/pgadmin/servers.json <<'EOF'
 {
   "Servers": {
     "1": {
-      "Name": "Dolphin Railway Postgres",
+      "Name": "Dolphin Local Postgres",
       "Group": "Servers",
-      "Host": "switchback.proxy.rlwy.net",
-      "Port": 56485,
-      "MaintenanceDB": "railway",
-      "Username": "postgres",
-      "SSLMode": "require"
+      "Host": "host.docker.internal",
+      "Port": 5432,
+      "MaintenanceDB": "dolphin",
+      "Username": "dolphin",
+      "SSLMode": "disable"
     }
   }
 }
@@ -113,6 +117,7 @@ docker run -d \
   --name dolphin-pgadmin \
   --restart unless-stopped \
   -p 127.0.0.1:5050:80 \
+  --add-host host.docker.internal:host-gateway \
   -e PGADMIN_DEFAULT_EMAIL="$PGADMIN_EMAIL" \
   -e PGADMIN_DEFAULT_PASSWORD="$PGADMIN_PASSWORD" \
   -e PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=False \
@@ -264,7 +269,14 @@ if [ "$ENABLE_SSL" = "true" ]; then
   fi
 fi
 
-PUBLIC_ORIGIN="$PUBLIC_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
+PUBLIC_ORIGIN="$PUBLIC_ORIGIN" \
+API_ORIGIN="$API_ORIGIN" \
+USE_LOCAL_POSTGRES="$USE_LOCAL_POSTGRES" \
+LOCAL_POSTGRES_CONTAINER="$LOCAL_POSTGRES_CONTAINER" \
+LOCAL_POSTGRES_DB="$LOCAL_POSTGRES_DB" \
+LOCAL_POSTGRES_USER="$LOCAL_POSTGRES_USER" \
+LOCAL_POSTGRES_PASSWORD="$LOCAL_POSTGRES_PASSWORD" \
+bash "$APP_DIR/scripts/vps/deploy.sh"
 pm2 startup systemd -u root --hp /root || true
 
 echo "Bootstrap complete."

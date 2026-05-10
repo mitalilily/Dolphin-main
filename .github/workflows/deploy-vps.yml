@@ -19,6 +19,7 @@ jobs:
       PRIMARY_DOMAIN: ${{ secrets.PRIMARY_DOMAIN || 'shopnship.in' }}
       DOMAIN_NAMES: ${{ secrets.DOMAIN_NAMES || 'shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in' }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
+      USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'true' }}
       APP_DIR: /var/www/dolphin
     steps:
       - name: Deploy on VPS
@@ -57,4 +58,4 @@ jobs:
           bash scripts/vps/deploy.sh
           REMOTE
 
-          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh
+          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' bash -s" < /tmp/dolphin-deploy.sh

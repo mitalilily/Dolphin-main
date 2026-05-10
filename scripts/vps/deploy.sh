@@ -8,6 +8,306 @@ PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
+USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-true}"
+LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
+LOCAL_POSTGRES_IMAGE="${LOCAL_POSTGRES_IMAGE:-postgres:16-alpine}"
+LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
+LOCAL_POSTGRES_USER="${LOCAL_POSTGRES_USER:-dolphin}"
+LOCAL_POSTGRES_PASSWORD="${LOCAL_POSTGRES_PASSWORD:-DolphinLocalPostgres_2026_Strong}"
+LOCAL_POSTGRES_DATA="${LOCAL_POSTGRES_DATA:-/opt/dolphin-postgres/data}"
+
+build_cors_origins() {
+  local origins="${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin"
+  for domain in $DOMAIN_NAMES; do
+    origins="${origins},https://${domain},http://${domain}"
+  done
+  printf '%s' "$origins"
+}
+
+set_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local escaped_value
+
+  touch "$file"
+  escaped_value="${value//&/\\&}"
+  if grep -q "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${escaped_value}|" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+ensure_local_postgres() {
+  if [ "$USE_LOCAL_POSTGRES" != "true" ]; then
+    return
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Docker is required when USE_LOCAL_POSTGRES=true." >&2
+    exit 1
+  fi
+
+  mkdir -p "$LOCAL_POSTGRES_DATA"
+
+  if docker inspect "$LOCAL_POSTGRES_CONTAINER" >/dev/null 2>&1; then
+    docker start "$LOCAL_POSTGRES_CONTAINER" >/dev/null
+  else
+    docker run -d \
+      --name "$LOCAL_POSTGRES_CONTAINER" \
+      --restart unless-stopped \
+      -p 127.0.0.1:5432:5432 \
+      -e POSTGRES_DB="$LOCAL_POSTGRES_DB" \
+      -e POSTGRES_USER="$LOCAL_POSTGRES_USER" \
+      -e POSTGRES_PASSWORD="$LOCAL_POSTGRES_PASSWORD" \
+      -v "$LOCAL_POSTGRES_DATA:/var/lib/postgresql/data" \
+      "$LOCAL_POSTGRES_IMAGE" >/dev/null
+  fi
+
+  for attempt in $(seq 1 30); do
+    if docker exec "$LOCAL_POSTGRES_CONTAINER" pg_isready -U "$LOCAL_POSTGRES_USER" -d "$LOCAL_POSTGRES_DB" >/dev/null 2>&1; then
+      return
+    fi
+    sleep 2
+  done
+
+  echo "Postgres did not become ready in time." >&2
+  exit 1
+}
+
+ensure_backend_env() {
+  local cors_origins
+  cors_origins="$(build_cors_origins)"
+
+  touch "$BACKEND_ENV_SOURCE"
+  chmod 600 "$BACKEND_ENV_SOURCE"
+
+  set_env_value "$BACKEND_ENV_SOURCE" NODE_ENV production
+  set_env_value "$BACKEND_ENV_SOURCE" PORT "$API_PORT"
+  set_env_value "$BACKEND_ENV_SOURCE" CORS_ALLOWED_ORIGINS "$cors_origins"
+  set_env_value "$BACKEND_ENV_SOURCE" CORS_ORIGINS "$cors_origins"
+  set_env_value "$BACKEND_ENV_SOURCE" FRONTEND_URL "$PUBLIC_ORIGIN"
+  set_env_value "$BACKEND_ENV_SOURCE" API_URL "$API_ORIGIN"
+
+  if [ "$USE_LOCAL_POSTGRES" = "true" ]; then
+    set_env_value "$BACKEND_ENV_SOURCE" DATABASE_URL "postgresql://${LOCAL_POSTGRES_USER}:${LOCAL_POSTGRES_PASSWORD}@127.0.0.1:5432/${LOCAL_POSTGRES_DB}"
+    set_env_value "$BACKEND_ENV_SOURCE" PGSSLMODE disable
+  fi
+}
+
+write_nginx_config() {
+  local nginx_site="$1"
+  local cert_path="/etc/letsencrypt/live/${PRIMARY_DOMAIN}/fullchain.pem"
+  local key_path="/etc/letsencrypt/live/${PRIMARY_DOMAIN}/privkey.pem"
+
+  if [ -f "$cert_path" ] && [ -f "$key_path" ]; then
+    cat > "$nginx_site" <<EOF
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _ ${DOMAIN_NAMES};
+    return 301 https://${PRIMARY_DOMAIN}\$request_uri;
+}
+
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name _ ${DOMAIN_NAMES};
+
+    ssl_certificate ${cert_path};
+    ssl_certificate_key ${key_path};
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+
+    client_max_body_size 50m;
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    gzip_comp_level 6;
+    gzip_min_length 1024;
+    gzip_types
+        text/plain
+        text/css
+        text/xml
+        application/json
+        application/javascript
+        application/xml
+        application/xml+rss
+        image/svg+xml
+        font/ttf
+        font/otf
+        font/woff
+        font/woff2;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:${API_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:${API_PORT}/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /pgadmin/ {
+        proxy_pass http://127.0.0.1:5050/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Script-Name /pgadmin;
+        proxy_set_header X-Scheme \$scheme;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_redirect off;
+    }
+
+    location ^~ /admin/static/ {
+        alias ${APP_DIR}/apps/admin/build/static/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location = /admin/ {
+        root ${APP_DIR}/apps/admin/build;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files /index.html =404;
+    }
+
+    location ^~ /admin/ {
+        alias ${APP_DIR}/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri /admin/index.html;
+    }
+
+    location ^~ /auth/ {
+        alias ${APP_DIR}/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri /admin/index.html;
+    }
+
+    root ${APP_DIR}/apps/client/dist;
+    index index.html;
+
+    location /assets/ {
+        try_files \$uri =404;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+EOF
+  else
+    cat > "$nginx_site" <<EOF
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _ ${DOMAIN_NAMES};
+
+    client_max_body_size 50m;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:${API_PORT}/api/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:${API_PORT}/socket.io/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location /pgadmin/ {
+        proxy_pass http://127.0.0.1:5050/;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Script-Name /pgadmin;
+        proxy_set_header X-Scheme \$scheme;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_redirect off;
+    }
+
+    location ^~ /admin/static/ {
+        alias ${APP_DIR}/apps/admin/build/static/;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    location = /admin/ {
+        root ${APP_DIR}/apps/admin/build;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files /index.html =404;
+    }
+
+    location ^~ /admin/ {
+        alias ${APP_DIR}/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri /admin/index.html;
+    }
+
+    location ^~ /auth/ {
+        alias ${APP_DIR}/apps/admin/build/;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri /admin/index.html;
+    }
+
+    root ${APP_DIR}/apps/client/dist;
+    index index.html;
+
+    location /assets/ {
+        try_files \$uri =404;
+        access_log off;
+        expires 30d;
+        add_header Cache-Control "public, max-age=2592000, immutable";
+    }
+
+    location / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files \$uri \$uri/ /index.html;
+    }
+}
+EOF
+  fi
+}
 
 cd "$APP_DIR"
 
@@ -17,6 +317,9 @@ if [ -d .git ]; then
   git reset --hard origin/main
   git show -s --oneline --decorate HEAD
 fi
+
+ensure_local_postgres
+ensure_backend_env
 
 cat > apps/client/.env.production <<EOF
 VITE_API_URL=${API_ORIGIN}/api
@@ -42,6 +345,14 @@ echo "Installing backend dependencies..."
 npm --prefix apps/backend ci
 echo "Building backend..."
 npm --prefix apps/backend run build
+echo "Applying database schema and seed data..."
+(
+  cd apps/backend
+  NODE_ENV=production npx drizzle-kit push --force
+  NODE_ENV=production npx ts-node src/scripts/seedBasicPlan.ts
+  NODE_ENV=production npx ts-node src/scripts/assignBasicPlans.ts
+  NODE_ENV=production npx ts-node src/scripts/ensureDolphinAdmin.ts
+)
 
 echo "Installing client dependencies..."
 npm --prefix apps/client ci
@@ -93,59 +404,8 @@ pm2 save
 
 echo "Reloading Nginx..."
 NGINX_SITE="/etc/nginx/sites-available/dolphin"
-if [ -f "$NGINX_SITE" ]; then
-  if grep -q 'server_name ' "$NGINX_SITE"; then
-    sed -i "s/server_name .*/server_name ${DOMAIN_NAMES};/g" "$NGINX_SITE"
-  fi
-  if ! grep -q 'location = /admin {' "$NGINX_SITE"; then
-    sed -i '/location \^~ \/admin\/static\/ {/i\
-    location = /admin {\
-        return 301 /admin/;\
-    }\
-\
-    location = /admin/ {\
-        root /var/www/dolphin/apps/admin/build;\
-        add_header Cache-Control "no-cache, no-store, must-revalidate";\
-        try_files /index.html =404;\
-    }\
-' "$NGINX_SITE"
-  fi
-  sed -i 's#try_files \$uri \$uri/ /admin/index.html;#try_files $uri /admin/index.html;#g' "$NGINX_SITE"
-  if ! grep -q 'gzip on;' "$NGINX_SITE"; then
-    sed -i '/client_max_body_size 50m;/a\
-    sendfile on;\
-    tcp_nopush on;\
-    tcp_nodelay on;\
-    keepalive_timeout 65;\
-\
-    gzip on;\
-    gzip_vary on;\
-    gzip_proxied any;\
-    gzip_comp_level 6;\
-    gzip_min_length 1024;\
-    gzip_types\
-        text/plain\
-        text/css\
-        text/xml\
-        application/json\
-        application/javascript\
-        application/xml\
-        application/xml+rss\
-        image/svg+xml\
-        font/ttf\
-        font/otf\
-        font/woff\
-        font/woff2;' "$NGINX_SITE"
-  fi
-  if ! grep -q 'max-age=2592000, immutable' "$NGINX_SITE"; then
-    sed -i '/expires 30d;/a\        add_header Cache-Control "public, max-age=2592000, immutable";' "$NGINX_SITE"
-  fi
-  if ! grep -q 'no-cache, no-store, must-revalidate' "$NGINX_SITE"; then
-    sed -i '/location \^~ \/admin\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-    sed -i '/location \^~ \/auth\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-    sed -i '/location \/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-  fi
-fi
+mkdir -p "$(dirname "$NGINX_SITE")"
+write_nginx_config "$NGINX_SITE"
 nginx -t
 systemctl reload nginx
 
