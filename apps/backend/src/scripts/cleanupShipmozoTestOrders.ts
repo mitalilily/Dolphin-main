@@ -129,7 +129,7 @@ export const runCleanup = async (config: CleanupConfig) => {
   console.log(`[Shipmozo Cleanup] Executing cancellations for ${candidates.length} orders...`)
 
   for (const candidate of candidates) {
-    const orderId = String(candidate.order_number || candidate.shipment_id || '').trim()
+    const orderId = String(candidate.shipment_id || candidate.order_number || '').trim()
     const awbNumber = String(candidate.awb_number || '').trim()
 
     if (!orderId || !awbNumber) {
@@ -170,4 +170,3 @@ if (require.main === module) {
       process.exit(1)
     })
 }
-

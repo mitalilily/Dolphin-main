@@ -14,7 +14,10 @@ const logResult = (label: string, payload: any) => {
   console.log(
     JSON.stringify(
       payload,
-      (_key, value) => {
+      (key, value) => {
+        if (['public_key', 'private_key', 'password', 'token', 'authorization'].includes(key.toLowerCase())) {
+          return value ? '[redacted]' : value
+        }
         if (typeof value === 'string' && value.length > 400) {
           return `${value.slice(0, 400)}...<trimmed>`
         }
@@ -33,6 +36,8 @@ async function main() {
   const testCourierId = safeString(process.env.SHIPMOZO_TEST_COURIER_ID)
   const testWarehouseId = safeString(process.env.SHIPMOZO_TEST_WAREHOUSE_ID)
   const runMutations = safeString(process.env.SHIPMOZO_RUN_MUTATIONS).toLowerCase() === 'true'
+  const runCreateOrder =
+    safeString(process.env.SHIPMOZO_RUN_CREATE_ORDER).toLowerCase() === 'true'
   const runCancel = safeString(process.env.SHIPMOZO_RUN_CANCEL).toLowerCase() === 'true'
   const runWarehouseCreate =
     safeString(process.env.SHIPMOZO_RUN_CREATE_WAREHOUSE).toLowerCase() === 'true'
@@ -75,6 +80,64 @@ async function main() {
     checks.push({
       name: 'get-order-detail',
       run: () => shipmozo.getOrderDetail(testOrderId),
+    })
+  }
+
+  if (runMutations && runCreateOrder) {
+    checks.push({
+      name: 'push-order',
+      run: async () => {
+        const warehouseId =
+          testWarehouseId ||
+          safeString(process.env.SHIPMOZO_DEFAULT_WAREHOUSE_ID) ||
+          safeString((await shipmozo.getWarehouses())?.data?.find((row: any) => {
+            const status = safeString(row?.status).toLowerCase()
+            return !status || status === 'active'
+          })?.id)
+
+        if (!warehouseId) {
+          throw new Error('SHIPMOZO_TEST_WAREHOUSE_ID or an active Shipmozo warehouse is required')
+        }
+
+        const orderId =
+          safeString(process.env.SHIPMOZO_CREATE_ORDER_ID) ||
+          `DOLPHIN-CODEX-${Date.now()}`
+
+        return shipmozo.pushOrder({
+          order_id: orderId,
+          order_date: new Date().toISOString().slice(0, 10),
+          order_type: 'ESSENTIALS',
+          consignee_name: 'Dolphin Test Customer',
+          consignee_phone: '9876543210',
+          consignee_alternate_phone: '',
+          consignee_email: 'qa.customer@example.com',
+          consignee_address_line_one: 'Connaught Place',
+          consignee_address_line_two: '',
+          consignee_pin_code: 110001,
+          consignee_city: 'Delhi',
+          consignee_state: 'Delhi',
+          product_detail: [
+            {
+              name: 'Test Item',
+              sku_number: 'TEST-SKU',
+              quantity: 1,
+              discount: '',
+              hsn: '',
+              unit_price: 100,
+              product_category: 'Other',
+            },
+          ],
+          payment_type: 'PREPAID',
+          cod_amount: '',
+          weight: 500,
+          length: 22,
+          width: 10,
+          height: 10,
+          warehouse_id: warehouseId,
+          gst_ewaybill_number: '',
+          gstin_number: '',
+        })
+      },
     })
   }
 

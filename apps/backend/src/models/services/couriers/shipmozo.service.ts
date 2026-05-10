@@ -201,6 +201,7 @@ export type ShipmozoPushOrderResponse = {
   Info?: string
   order_id?: string
   reference_id?: string
+  refrence_id?: string
 }
 
 export type ShipmozoAssignCourierRequest = {
@@ -356,11 +357,18 @@ export class ShipmozoService {
   private extractErrorMessage(err: any, fallback: string) {
     const candidates = [
       err?.response?.data?.message,
+      err?.response?.data?.error,
       err?.response?.data?.data?.error,
+      err?.response?.data?.errors,
       err?.message,
     ]
     for (const candidate of candidates) {
       if (typeof candidate === 'string' && candidate.trim()) return candidate.trim()
+      if (Array.isArray(candidate) && candidate.length) return candidate.join(', ')
+      if (candidate && typeof candidate === 'object') {
+        const values = Object.values(candidate).flat().filter(Boolean)
+        if (values.length) return values.map((value) => String(value)).join(', ')
+      }
     }
     return fallback
   }
@@ -448,6 +456,10 @@ export class ShipmozoService {
 
       return response.data
     } catch (err: any) {
+      if (err instanceof HttpError) {
+        throw err
+      }
+
       this.log('API request failed', {
         method,
         url: `${this.baseApi}/${path.replace(/^\/+/, '')}`,

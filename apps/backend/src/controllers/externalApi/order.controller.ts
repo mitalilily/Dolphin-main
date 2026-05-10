@@ -390,7 +390,7 @@ export const cancelOrderController = async (req: any, res: Response) => {
       } else if (provider === 'shipmozo') {
         const shipmozo = new ShipmozoService()
         cancellationResult = await shipmozo.cancelOrder({
-          order_id: order.order_number || order.id,
+          order_id: order.shipment_id || order.order_number || order.id,
           awb_number: order.awb_number,
         })
       } else if (provider === 'shiprocket') {
