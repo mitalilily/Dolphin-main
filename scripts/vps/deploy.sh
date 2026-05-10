@@ -15,7 +15,7 @@ purge_stale_frontend_assets() {
 
   while IFS= read -r -d '' asset; do
     if grep -Iq . "$asset" && grep -Eq \
-      'dolphinenterprises\.in/api|dolphin-backend-production|Start backend or set VITE_API_URL|Existing token storage|backend exposes' \
+      'dolphinenterprises\.in/api|dolphin-backend-production|Start backend or set VITE_API_URL|Existing token storage|backend exposes|Save Delhivery Credentials|Save Ekart Credentials|Save Xpressbees Credentials|Ekart Logistics' \
       "$asset"; then
       rm -f "$asset"
     fi
