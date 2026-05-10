@@ -31,6 +31,7 @@ const stages = [
 ]
 
 const statusLabels = {
+  BK: 'Booked',
   PP: 'Pending Pickup',
   IT: 'In Transit',
   OFD: 'Out for Delivery',
@@ -42,11 +43,38 @@ const statusLabels = {
   EX: 'Exception',
 }
 
+const getStatusCode = (value) => {
+  const raw = String(value || '').trim()
+  const compact = raw.toUpperCase().replace(/\s+/g, '-')
+  if (statusLabels[compact]) return compact
+
+  const text = raw.toLowerCase()
+  if (text.includes('cancel')) return 'CAN'
+  if (text.includes('rto') && text.includes('deliver')) return 'RT-DL'
+  if (text.includes('rto')) return 'RT'
+  if (text.includes('deliver')) return 'DL'
+  if (text.includes('out for delivery')) return 'OFD'
+  if (text.includes('transit') || text.includes('shipped') || text.includes('dispatch')) return 'IT'
+  if (text.includes('pickup')) return 'PP'
+  if (text.includes('book') || text.includes('created') || text.includes('manifest')) return 'BK'
+  return compact || 'BK'
+}
+
+const getStageIndex = (value) => {
+  const code = getStatusCode(value)
+  if (code === 'DL') return 4
+  if (code === 'OFD') return 3
+  if (code === 'IT') return 2
+  if (code === 'PP') return 1
+  return 0
+}
+
 export default function TrackingDetails({ data, isLoading, error }) {
   const cardBg = useColorModeValue('white', 'gray.800')
   const detailItemBg = useColorModeValue('gray.50', 'gray.700')
   const historyBorderColor = useColorModeValue('gray.200', 'gray.600')
-  console.log(data)
+  const history = Array.isArray(data?.history) ? data.history : []
+
   if (isLoading) {
     return (
       <Flex direction="column" align="center" justify="center" py={12}>
@@ -72,10 +100,7 @@ export default function TrackingDetails({ data, isLoading, error }) {
     )
   }
 
-  const currentStage =
-    data?.history?.findIndex(
-      (h) => statusLabels[h.status_code]?.toLowerCase() === data.status?.toLowerCase(),
-    ) ?? 0
+  const currentStage = getStageIndex(data?.status_code || history[0]?.status_code || data?.status)
 
   return (
     <Container maxW="6xl" py={8}>
@@ -88,6 +113,7 @@ export default function TrackingDetails({ data, isLoading, error }) {
           <VStack spacing={3} align="stretch">
             {[
               { label: 'Courier', value: data.courier_name },
+              { label: 'Provider', value: data.provider },
               { label: 'AWB No', value: data.awb_number },
               { label: 'Order Number', value: data.order_number },
               { label: 'Payment Type', value: data.payment_type },
@@ -147,45 +173,63 @@ export default function TrackingDetails({ data, isLoading, error }) {
             <Text fontSize="lg" fontWeight="bold" mb={4}>
               Tracking History
             </Text>
+            {data.warning && (
+              <Box rounded="md" border="1px" borderColor="orange.200" bg="orange.50" p={3} mb={4}>
+                <Text color="orange.700" fontSize="sm">
+                  {data.warning}
+                </Text>
+              </Box>
+            )}
             <VStack spacing={4} align="stretch">
-              {data.history.map((h, idx) => (
-                <Box
-                  key={idx}
-                  p={4}
-                  border="1px"
-                  borderColor={historyBorderColor}
-                  rounded="md"
-                >
-                  <Badge
-                    colorScheme={
-                      h.status_code === 'CAN' ? 'red' : h.status_code === 'DL' ? 'green' : 'blue'
-                    }
-                    mb={2}
-                  >
-                    {statusLabels[h.status_code] || h.status_code}
-                  </Badge>
-                  {h.location && (
+              {history.length === 0 ? (
+                <Text color="gray.500" fontSize="sm">
+                  No tracking events available yet.
+                </Text>
+              ) : (
+                history.map((h, idx) => {
+                  const eventCode = getStatusCode(h.status_code || h.message)
+                  return (
+                    <Box
+                      key={`${h.event_time}-${idx}`}
+                      p={4}
+                      border="1px"
+                      borderColor={historyBorderColor}
+                      rounded="md"
+                    >
+                      <Badge
+                        colorScheme={
+                          eventCode === 'CAN' ? 'red' : eventCode === 'DL' ? 'green' : 'blue'
+                        }
+                        mb={2}
+                      >
+                        {statusLabels[eventCode] || h.status_code || 'Status Update'}
+                      </Badge>
+                      {h.location && (
+                        <Text fontSize="sm">
+                          <strong>Location:</strong> {h.location}
+                        </Text>
+                      )}
                     <Text fontSize="sm">
-                      <strong>Location:</strong> {h.location}
+                      <strong>Time:</strong>{' '}
+                      {h.event_time
+                        ? new Date(h.event_time).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'N/A'}
                     </Text>
-                  )}
-                  <Text fontSize="sm">
-                    <strong>Time:</strong>{' '}
-                    {new Date(h.event_time).toLocaleString('en-IN', {
-                      day: '2-digit',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </Text>
-                  {h.message && (
-                    <Text fontSize="sm" mt={1}>
-                      {h.message}
-                    </Text>
-                  )}
-                </Box>
-              ))}
+                      {h.message && (
+                        <Text fontSize="sm" mt={1}>
+                          {h.message}
+                        </Text>
+                      )}
+                    </Box>
+                  )
+                })
+              )}
             </VStack>
           </Box>
         </VStack>

@@ -12,18 +12,34 @@ const MotionDiv = motion.div;
 const MotionForm = motion.form;
 
 function HeroTrackingCard() {
-  const [mode, setMode] = useState("container");
+  const [mode, setMode] = useState("awb");
   const [query, setQuery] = useState("");
+  const [contact, setContact] = useState("");
   const navigate = useNavigate();
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    navigate("/tracking", {
-      state: {
-        query: query || "DLP-2048127",
-        mode,
-      },
-    });
+
+    const params = new URLSearchParams();
+    if (mode === "awb") {
+      const awb = query.trim().replace(/\s+/g, "").toUpperCase();
+      if (!awb) {
+        navigate("/tracking");
+        return;
+      }
+      params.set("awb", awb);
+    } else {
+      const orderNumber = query.trim();
+      const normalizedContact = contact.trim();
+      if (!orderNumber || !normalizedContact) {
+        navigate("/tracking");
+        return;
+      }
+      params.set("orderNumber", orderNumber);
+      params.set("contact", normalizedContact);
+    }
+
+    navigate(`/tracking?${params.toString()}`);
   };
 
   return (
@@ -40,14 +56,14 @@ function HeroTrackingCard() {
         </span>
         <div>
           <p className="text-base font-semibold text-slate-900">Track Shipment</p>
-          <p className="text-sm text-slate-500">Get a quick status view without leaving the page.</p>
+          <p className="text-sm text-slate-500">See the latest courier movement in a few seconds.</p>
         </div>
       </div>
 
       <div className="mt-5 flex gap-5 border-t border-stone-200 pt-4 text-sm">
         {[
-          { id: "container", label: "Container" },
-          { id: "booking", label: "Booking Number" },
+          { id: "awb", label: "AWB" },
+          { id: "order", label: "Order Details" },
         ].map((option) => (
           <label key={option.id} className="flex cursor-pointer items-center gap-2 text-slate-700">
             <input
@@ -66,7 +82,7 @@ function HeroTrackingCard() {
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Enter container/billing number"
+          placeholder={mode === "awb" ? "Enter AWB number" : "Enter order number"}
           className="h-14 rounded-2xl border border-stone-200 bg-[#fcfbf6] px-4 text-sm text-slate-800 outline-none transition focus:border-[#f1d77b] focus:ring-4 focus:ring-[#f8edbf]"
         />
         <button
@@ -77,6 +93,14 @@ function HeroTrackingCard() {
           <Icon name="search" className="h-5 w-5" />
         </button>
       </div>
+      {mode === "order" && (
+        <input
+          value={contact}
+          onChange={(event) => setContact(event.target.value)}
+          placeholder="Email or phone used for the shipment"
+          className="mt-3 h-14 w-full rounded-2xl border border-stone-200 bg-[#fcfbf6] px-4 text-sm text-slate-800 outline-none transition focus:border-[#f1d77b] focus:ring-4 focus:ring-[#f8edbf]"
+        />
+      )}
     </MotionForm>
   );
 }

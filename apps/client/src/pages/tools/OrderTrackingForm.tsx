@@ -29,7 +29,12 @@ import {
   FaSearch,
 } from 'react-icons/fa'
 import { MdLocationOn, MdSchedule } from 'react-icons/md'
-import type { TrackingHistory } from '../../api/tracking.service'
+import {
+  isValidTrackingContact,
+  normalizeAwbParam,
+  normalizeContactParam,
+  type TrackingHistory,
+} from '../../api/tracking.service'
 import PageHeading from '../../components/UI/heading/PageHeading'
 import CustomInput from '../../components/UI/inputs/CustomInput'
 import { SmartTabs } from '../../components/UI/tab/Tabs'
@@ -67,9 +72,8 @@ export default function OrderTrackingForm() {
 
   const formValues = watch()
 
-  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.contact)
-  const isPhone = /^[0-9+\-\s()]{7,}$/.test(formValues.contact)
-  const isContactValid = !formValues.contact || isEmail || isPhone
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formValues.contact.trim())
+  const isContactValid = !formValues.contact || isValidTrackingContact(formValues.contact)
 
   const {
     data: tracking,
@@ -95,7 +99,7 @@ export default function OrderTrackingForm() {
 
   const canSubmit =
     mode === 'awb'
-      ? formValues.awb.trim().length > 3
+      ? normalizeAwbParam(formValues.awb).length > 3
       : formValues.orderNumber.trim().length > 2 &&
         formValues.contact.trim().length > 3 &&
         isContactValid
@@ -105,11 +109,11 @@ export default function OrderTrackingForm() {
     setError('')
 
     if (mode === 'awb') {
-      setQueryParams({ awb: data.awb.trim() })
+      setQueryParams({ awb: normalizeAwbParam(data.awb) })
     } else {
       setQueryParams({
         orderNumber: data.orderNumber.trim(),
-        contact: data.contact.trim(),
+        contact: normalizeContactParam(data.contact),
       })
     }
   }
@@ -322,6 +326,11 @@ export default function OrderTrackingForm() {
                   </Typography>
                   <Typography fontSize={14}>{tracking.shipment_info}</Typography>
                 </Box>
+              )}
+              {tracking.warning && (
+                <Typography color="warning.main" fontSize={14} mt={2}>
+                  {tracking.warning}
+                </Typography>
               )}
             </CardContent>
           </Card>

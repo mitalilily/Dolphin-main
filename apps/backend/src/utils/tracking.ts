@@ -135,3 +135,4 @@ export const getHttpStatusCode = (error: unknown, fallback = 500): number => {
 
   return fallback
 }
+

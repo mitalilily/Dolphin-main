@@ -58,3 +58,4 @@ describe('tracking utilities', () => {
     expect(getHttpStatusCode({ response: { status: 502 } })).toBe(502)
   })
 })
+

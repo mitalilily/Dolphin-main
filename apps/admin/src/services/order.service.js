@@ -1,8 +1,40 @@
 import api from './axios'
 
+export const normalizeAwbParam = (value) => (value || '').trim().replace(/\s+/g, '').toUpperCase()
+
+export const normalizeContactParam = (value) => {
+  const raw = (value || '').trim()
+  if (!raw) return ''
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return raw.toLowerCase()
+
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2)
+  if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1)
+  return digits
+}
+
+export const isValidTrackingContact = (value) => {
+  const raw = (value || '').trim()
+  if (!raw) return false
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) return true
+  const digits = normalizeContactParam(raw)
+  return digits.length >= 7 && digits.length <= 15
+}
+
+export const normalizeTrackingParams = (params = {}) => {
+  const awb = normalizeAwbParam(params.awb)
+  if (awb) return { awb }
+
+  const orderNumber = (params.orderNumber || '').trim()
+  const contact = normalizeContactParam(params.contact)
+  if (orderNumber && contact) return { orderNumber, contact }
+
+  return {}
+}
+
 export async function fetchTracking(params) {
   try {
-    const { data } = await api.get('/orders/track', { params })
+    const { data } = await api.get('/orders/track', { params: normalizeTrackingParams(params) })
 
     if (!data.success || !data.data) {
       throw new Error('No shipment found!')

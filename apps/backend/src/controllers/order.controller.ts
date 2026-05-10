@@ -14,6 +14,7 @@ import {
   trackByOrderService,
 } from '../models/services/shiprocket.service'
 import { regenerateOrderDocumentsServiceAdmin } from '../models/services/adminOrders.service'
+import { getHttpStatusCode, normalizeAwb, parseTrackingQuery } from '../utils/tracking'
 
 export const createB2CShipmentController = async (req: any, res: Response) => {
   try {
@@ -414,51 +415,37 @@ export const regenerateOrderDocumentsController = async (req: any, res: Response
 
 export const trackOrderController = async (req: Request, res: Response) => {
   try {
-    const { awb, orderNumber, contact } = req.query
+    const trackingQuery = parseTrackingQuery(req.query as Record<string, unknown>)
 
-    let awbNumber: string | undefined = awb ? String(awb) : undefined
-
-    if (!awbNumber && orderNumber && contact) {
-      // Determine if contact is email or phone
-      const contactStr = String(contact)
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactStr)
-      const isPhone = /^\d{7,15}$/.test(contactStr)
-
-      if (!isEmail && !isPhone) {
-        return res.status(400).json({
-          success: false,
-          message: 'Contact must be a valid email or phone number',
-        })
-      }
-
-      // Get the order by orderNumber + contact
+    if (trackingQuery.mode === 'order') {
       const orderData = await trackByOrderService({
-        orderNumber: String(orderNumber),
-        email: isEmail ? contactStr : undefined,
-        phone: isPhone ? contactStr : undefined,
+        orderNumber: trackingQuery.orderNumber,
+        email: trackingQuery.email,
+        phone: trackingQuery.phone,
       })
 
-      awbNumber = orderData?.awb_number ?? ''
+      const awbNumber = normalizeAwb(orderData?.awb_number)
       if (!awbNumber) {
-        return res.status(400).json({
+        return res.status(404).json({
           success: false,
           message: 'AWB number not found for this order',
         })
       }
-    }
 
-    if (awbNumber) {
-      // Fetch full tracking info using AWB
       const trackingData = await trackByAwbService(awbNumber)
       return res.json({ success: true, data: trackingData })
     }
 
-    return res.status(400).json({
-      success: false,
-      message: "Provide either 'awb' or ('orderNumber' with 'contact')",
-    })
+    const trackingData = await trackByAwbService(trackingQuery.awb)
+    return res.json({ success: true, data: trackingData })
   } catch (err: any) {
-    console.error(err)
-    return res.status(500).json({ success: false, message: err.message })
+    const statusCode = getHttpStatusCode(err, 500)
+    if (statusCode >= 500) {
+      console.error('Error tracking order:', err)
+    }
+    return res.status(statusCode).json({
+      success: false,
+      message: err?.message || 'Failed to fetch tracking',
+    })
   }
 }

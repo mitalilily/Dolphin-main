@@ -18,6 +18,7 @@ import { useTracking } from 'hooks/useTracking'
 import { useEffect, useState } from 'react'
 import { FaEnvelopeOpenText, FaHashtag, FaPhoneAlt, FaReceipt, FaSearch } from 'react-icons/fa'
 import { useLocation } from 'react-router-dom'
+import { isValidTrackingContact, normalizeAwbParam, normalizeContactParam } from 'services/order.service'
 
 export default function OrderTrackingPage() {
   const location = useLocation()
@@ -26,13 +27,13 @@ export default function OrderTrackingPage() {
   const [error, setError] = useState('')
   const trackingMutation = useTracking()
 
-  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact)
-  const isPhone = /^[0-9+\-\s()]{7,}$/.test(form.contact)
-  const isContactValid = !form.contact || isEmail || isPhone
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.contact.trim())
+  const isPhone = form.contact.trim().length > 0 && normalizeContactParam(form.contact).length >= 7
+  const isContactValid = !form.contact || isValidTrackingContact(form.contact)
 
   const canSubmit =
     mode === 'awb'
-      ? form.awb.trim().length > 3
+      ? normalizeAwbParam(form.awb).length > 3
       : form.orderNumber.trim().length > 2 && form.contact.trim().length > 3 && isContactValid
 
   const handleChange = (field, value) => {
@@ -45,9 +46,9 @@ export default function OrderTrackingPage() {
     setError('')
     try {
       await trackingMutation.mutateAsync({
-        awb: mode === 'awb' ? form.awb.trim() : null,
+        awb: mode === 'awb' ? normalizeAwbParam(form.awb) : null,
         order: mode === 'order' ? form.orderNumber.trim() : null,
-        contact: mode === 'order' ? form.contact.trim() : null,
+        contact: mode === 'order' ? normalizeContactParam(form.contact) : null,
       })
     } catch (err) {
       setError(err.message || 'Something went wrong')
@@ -58,8 +59,10 @@ export default function OrderTrackingPage() {
     const params = new URLSearchParams(location.search)
     const awb = params.get('awb')
     if (awb) {
+      const normalizedAwb = normalizeAwbParam(awb)
       setMode('awb')
-      setForm({ awb, orderNumber: '', contact: '' })
+      setForm({ awb: normalizedAwb, orderNumber: '', contact: '' })
+      trackingMutation.mutate({ awb: normalizedAwb })
     }
   }, [location.search])
 
@@ -214,7 +217,7 @@ export default function OrderTrackingPage() {
         <TrackingDetails
           isLoading={trackingMutation?.isPending}
           data={trackingMutation?.data}
-          error={trackingMutation?.isError}
+          error={trackingMutation?.error}
         />
       )}
     </Flex>

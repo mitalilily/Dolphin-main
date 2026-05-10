@@ -22,6 +22,7 @@ import { applyCancellationRefundOnce } from '../../models/services/webhookProces
 import { b2c_orders } from '../../schema/schema'
 import { sendWebhookEvent } from '../../services/webhookDelivery.service'
 import { getOpaqueProviderCode } from '../../utils/externalApiHelpers'
+import { getHttpStatusCode, normalizeAwb, parseTrackingQuery } from '../../utils/tracking'
 
 /**
  * Create a B2C order via external API
@@ -237,30 +238,16 @@ export const retryFailedManifestController = async (req: any, res: Response) => 
  */
 export const trackOrderController = async (req: any, res: Response) => {
   try {
-    const { awb, orderNumber, contact } = req.query
+    const trackingQuery = parseTrackingQuery(req.query as Record<string, unknown>)
 
-    let awbNumber: string | undefined = awb ? String(awb) : undefined
-
-    if (!awbNumber && orderNumber && contact) {
-      const contactStr = String(contact)
-      const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactStr)
-      const isPhone = /^\d{7,15}$/.test(contactStr)
-
-      if (!isEmail && !isPhone) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid contact',
-          message: 'Contact must be a valid email or phone number',
-        })
-      }
-
+    if (trackingQuery.mode === 'order') {
       const orderData = await trackByOrderService({
-        orderNumber: String(orderNumber),
-        email: isEmail ? contactStr : undefined,
-        phone: isPhone ? contactStr : undefined,
+        orderNumber: trackingQuery.orderNumber,
+        email: trackingQuery.email,
+        phone: trackingQuery.phone,
       })
 
-      awbNumber = orderData?.awb_number ?? ''
+      const awbNumber = normalizeAwb(orderData?.awb_number)
       if (!awbNumber) {
         return res.status(404).json({
           success: false,
@@ -268,9 +255,7 @@ export const trackOrderController = async (req: any, res: Response) => {
           message: 'AWB number not found for this order',
         })
       }
-    }
 
-    if (awbNumber) {
       const trackingData = await trackByAwbService(awbNumber)
       return res.json({
         success: true,
@@ -278,16 +263,19 @@ export const trackOrderController = async (req: any, res: Response) => {
       })
     }
 
-    return res.status(400).json({
-      success: false,
-      error: 'Missing parameters',
-      message: "Provide either 'awb' or ('orderNumber' with 'contact')",
+    const trackingData = await trackByAwbService(trackingQuery.awb)
+    return res.json({
+      success: true,
+      data: trackingData,
     })
   } catch (err: any) {
-    console.error('Error tracking order via API:', err)
-    return res.status(500).json({
+    const statusCode = getHttpStatusCode(err, 500)
+    if (statusCode >= 500) {
+      console.error('Error tracking order via API:', err)
+    }
+    return res.status(statusCode).json({
       success: false,
-      error: 'Failed to track order',
+      error: statusCode === 400 ? 'Invalid tracking request' : 'Failed to track order',
       message: err.message || 'Internal server error',
     })
   }

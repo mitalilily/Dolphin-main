@@ -649,11 +649,11 @@ export function TrackingPanel() {
   const storedTracking = readStoredValue("dolphin-tracking-panel", {
     awb: "DLP-2048127",
     searched: "DLP-2048127",
-    mode: "Container",
+    mode: "AWB",
   });
   const initialQuery = location.state?.query || storedTracking.awb || "DLP-2048127";
   const initialMode =
-    location.state?.mode === "booking" ? "Booking Number" : location.state?.mode ? "Container" : storedTracking.mode;
+    location.state?.mode === "order" ? "Order Details" : location.state?.mode ? "AWB" : storedTracking.mode;
   const [awb, setAwb] = useState(initialQuery);
   const [searched, setSearched] = useState(location.state?.query || storedTracking.searched || initialQuery);
   const [mode, setMode] = useState(initialMode);
@@ -695,12 +695,12 @@ export function TrackingPanel() {
             </span>
             <div>
               <h3 className="font-display text-2xl text-slate-900">Shipment tracking</h3>
-              <p className="mt-1 text-sm text-slate-500">Enter a reference number to preview the tracking experience.</p>
+              <p className="mt-1 text-sm text-slate-500">Enter an AWB or order reference to preview the tracking experience.</p>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-x-5 gap-y-3 text-sm text-slate-700">
-            {["Container", "Booking Number"].map((option) => (
+            {["AWB", "Order Details"].map((option) => (
               <label key={option} className="flex items-center gap-2">
                 <input
                   type="radio"
@@ -720,7 +720,7 @@ export function TrackingPanel() {
               name="awb"
               value={awb}
               onChange={(event) => setAwb(event.target.value)}
-              placeholder="Enter container/billing number"
+              placeholder={mode === "AWB" ? "Enter AWB number" : "Enter order number"}
             />
             <button
               type="submit"

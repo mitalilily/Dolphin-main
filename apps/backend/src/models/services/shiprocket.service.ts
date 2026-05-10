@@ -5686,7 +5686,7 @@ export const createB2CShipmentService = async (
           booking_state: 'pending_manifest',
           remote_order_created: true,
           order_id: shipmozoOrderId,
-          reference_id: pushResp?.data?.reference_id ?? pushResp?.data?.refrence_id ?? null,
+          reference_id: pushResp?.data?.reference_id ?? (pushResp?.data as any)?.refrence_id ?? null,
         }
         shipmentSuccessPackage = shipmentData
         shipmentMeta = {
@@ -11574,3 +11574,4 @@ export const trackByOrderService = async ({
 
   throw new HttpError(404, `No order found with order number: ${normalizedOrderNumber}`)
 }
+
