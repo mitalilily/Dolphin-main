@@ -358,9 +358,23 @@ echo "Applying database schema and seed data..."
 (
   cd apps/backend
   NODE_ENV=production npx drizzle-kit push --force
+
+  NODE_ENV=production npx ts-node src/scripts/patchInvoicePreferencesColumns.ts
+  NODE_ENV=production npx ts-node src/scripts/patchInvoiceSequencesTable.ts
+  NODE_ENV=production npx ts-node src/scripts/patchKycColumns.ts
+  NODE_ENV=production npx ts-node src/scripts/patchCustomerRoles.ts
+  NODE_ENV=production npx ts-node src/scripts/patchOrderLabelColumns.ts
+  NODE_ENV=production npx ts-node src/scripts/patchCourierCredentialsApiKeyType.ts
+
   NODE_ENV=production npx ts-node src/scripts/seedBasicPlan.ts
   NODE_ENV=production npx ts-node src/scripts/assignBasicPlans.ts
   NODE_ENV=production npx ts-node src/scripts/ensureDolphinAdmin.ts
+  NODE_ENV=production npx ts-node src/scripts/seedHolidays.ts
+
+  if [ "${RUN_INVOICE_DATA_BACKFILLS:-false}" = "true" ]; then
+    NODE_ENV=production npx ts-node src/scripts/migrateInvoices.ts
+    NODE_ENV=production npx ts-node src/scripts/backfillInvoiceWalletPayments.ts
+  fi
 )
 
 echo "Installing client dependencies..."
