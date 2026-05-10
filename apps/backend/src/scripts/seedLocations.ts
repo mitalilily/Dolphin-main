@@ -106,6 +106,11 @@ async function insertBatch(rows: Row[]) {
 }
 
 async function importXlsx(filename: string) {
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`)
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS locations_pincode_unique_idx ON meracourierwala_locations (pincode)`,
+  )
+
   const fullPath = path.join(DATA_DIR, filename)
   if (!fs.existsSync(fullPath)) {
     console.error('File not found:', fullPath)

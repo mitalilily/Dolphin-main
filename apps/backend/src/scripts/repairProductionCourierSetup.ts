@@ -130,6 +130,11 @@ function envCredentials(provider: KnownCourierProvider) {
 }
 
 async function ensureZones() {
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`)
+  await db.execute(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS zones_code_business_type_unique ON meracourierwala_zones (code, business_type)`,
+  )
+
   for (const businessType of ['b2c', 'b2b'] as const) {
     for (const zone of zoneDefinitions) {
       await db
