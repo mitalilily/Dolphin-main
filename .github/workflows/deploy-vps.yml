@@ -39,6 +39,46 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build deploy artifacts
+        env:
+          CI: false
+          DISABLE_ESLINT_PLUGIN: true
+          GENERATE_SOURCEMAP: false
+        run: |
+          set -euo pipefail
+
+          cat > apps/client/.env.production <<EOF
+          VITE_API_URL=${PUBLIC_ORIGIN}/api
+          VITE_APP_SOCKET_URL=${PUBLIC_ORIGIN}
+          VITE_CLIENT_APP_URL=${PUBLIC_ORIGIN}/app
+          VITE_AUTH_APP_URL=${PUBLIC_ORIGIN}/login
+          VITE_ADMIN_APP_URL=${PUBLIC_ORIGIN}/admin
+          VITE_ADMIN_AUTH_URL=${PUBLIC_ORIGIN}/auth/signin
+          EOF
+
+          cat > apps/admin/.env.production <<EOF
+          REACT_APP_API_BASE_URL=${PUBLIC_ORIGIN}/api
+          REACT_APP_SOCKET_URL=${PUBLIC_ORIGIN}
+          EOF
+
+          npm --prefix apps/backend ci
+          npm --prefix apps/backend run build
+
+          npm --prefix apps/client ci
+          npm --prefix apps/client run build:netlify
+
+          if [ -f apps/admin/package-lock.json ]; then
+            npm --prefix apps/admin ci --legacy-peer-deps
+          else
+            npm --prefix apps/admin install --legacy-peer-deps
+          fi
+          (cd apps/admin && PUBLIC_URL=/admin npx react-scripts build)
+
       - name: Deploy on VPS
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -125,13 +165,10 @@ jobs:
             --exclude='.github/' \
             --exclude='node_modules/' \
             --exclude='apps/backend/node_modules/' \
-            --exclude='apps/backend/dist/' \
             --exclude='apps/backend/.env' \
             --exclude='apps/backend/.env.production' \
             --exclude='apps/client/node_modules/' \
-            --exclude='apps/client/dist/' \
             --exclude='apps/admin/node_modules/' \
-            --exclude='apps/admin/build/' \
             ./ "$ssh_target:${APP_DIR}/"
 
-          retry "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' BACKUP_DATABASE_BEFORE_PATCHES='${BACKUP_DATABASE_BEFORE_PATCHES}' RUN_INVOICE_DATA_BACKFILLS='${RUN_INVOICE_DATA_BACKFILLS}' SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash scripts/vps/deploy.sh"
+          retry "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' BACKUP_DATABASE_BEFORE_PATCHES='${BACKUP_DATABASE_BEFORE_PATCHES}' RUN_INVOICE_DATA_BACKFILLS='${RUN_INVOICE_DATA_BACKFILLS}' SKIP_BACKEND_BUILD=true SKIP_CLIENT_BUILD=true SKIP_ADMIN_BUILD=true SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash scripts/vps/deploy.sh"

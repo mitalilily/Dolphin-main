@@ -19,6 +19,9 @@ LOCAL_POSTGRES_PASSWORD="${LOCAL_POSTGRES_PASSWORD:-DolphinLocalPostgres_2026_St
 LOCAL_POSTGRES_DATA="${LOCAL_POSTGRES_DATA:-/opt/dolphin-postgres/data}"
 BACKUP_DATABASE_BEFORE_PATCHES="${BACKUP_DATABASE_BEFORE_PATCHES:-true}"
 DB_BACKUP_DIR="${DB_BACKUP_DIR:-/var/backups/dolphin}"
+SKIP_BACKEND_BUILD="${SKIP_BACKEND_BUILD:-false}"
+SKIP_CLIENT_BUILD="${SKIP_CLIENT_BUILD:-false}"
+SKIP_ADMIN_BUILD="${SKIP_ADMIN_BUILD:-false}"
 
 build_cors_origins() {
   local origins="${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin"
@@ -387,8 +390,12 @@ fi
 
 echo "Installing backend dependencies..."
 npm --prefix apps/backend ci
-echo "Building backend..."
-npm --prefix apps/backend run build
+if [ "$SKIP_BACKEND_BUILD" = "true" ] && [ -f apps/backend/dist/index.js ]; then
+  echo "Using backend build synced by GitHub Actions."
+else
+  echo "Building backend..."
+  npm --prefix apps/backend run build
+fi
 echo "Applying database schema and seed data..."
 backup_database
 (
@@ -414,48 +421,56 @@ backup_database
 )
 
 echo "Installing client dependencies..."
-npm --prefix apps/client ci
-if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
-  git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
+if [ "$SKIP_CLIENT_BUILD" = "true" ] && [ -f apps/client/dist/index.html ]; then
+  echo "Using client build synced by GitHub Actions."
+else
+  npm --prefix apps/client ci
+  if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
+    git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
+  fi
+  echo "Building client and landing frontend..."
+  CLIENT_ASSET_BACKUP="$(mktemp -d)"
+  if [ -d apps/client/dist/assets ]; then
+    mkdir -p "$CLIENT_ASSET_BACKUP/assets"
+    cp -a apps/client/dist/assets/. "$CLIENT_ASSET_BACKUP/assets/"
+  fi
+  npm --prefix apps/client run build:netlify
+  if [ -d "$CLIENT_ASSET_BACKUP/assets" ]; then
+    mkdir -p apps/client/dist/assets
+    cp -an "$CLIENT_ASSET_BACKUP/assets/." apps/client/dist/assets/ || true
+    grep -rl '72.60.96.97' apps/client/dist/assets 2>/dev/null | xargs -r rm -f
+    find apps/client/dist/assets -type f -mtime +21 -delete || true
+  fi
+  rm -rf "$CLIENT_ASSET_BACKUP"
 fi
-echo "Building client and landing frontend..."
-CLIENT_ASSET_BACKUP="$(mktemp -d)"
-if [ -d apps/client/dist/assets ]; then
-  mkdir -p "$CLIENT_ASSET_BACKUP/assets"
-  cp -a apps/client/dist/assets/. "$CLIENT_ASSET_BACKUP/assets/"
-fi
-npm --prefix apps/client run build:netlify
-if [ -d "$CLIENT_ASSET_BACKUP/assets" ]; then
-  mkdir -p apps/client/dist/assets
-  cp -an "$CLIENT_ASSET_BACKUP/assets/." apps/client/dist/assets/ || true
-  grep -rl '72.60.96.97' apps/client/dist/assets 2>/dev/null | xargs -r rm -f
-  find apps/client/dist/assets -type f -mtime +21 -delete || true
-fi
-rm -rf "$CLIENT_ASSET_BACKUP"
 
 echo "Installing admin dependencies..."
-if [ -f apps/admin/package-lock.json ]; then
-  npm --prefix apps/admin ci --legacy-peer-deps
+if [ "$SKIP_ADMIN_BUILD" = "true" ] && [ -f apps/admin/build/index.html ]; then
+  echo "Using admin build synced by GitHub Actions."
 else
-  npm --prefix apps/admin install --legacy-peer-deps
+  if [ -f apps/admin/package-lock.json ]; then
+    npm --prefix apps/admin ci --legacy-peer-deps
+  else
+    npm --prefix apps/admin install --legacy-peer-deps
+  fi
+  echo "Building admin frontend under /admin..."
+  ADMIN_STATIC_BACKUP="$(mktemp -d)"
+  if [ -d apps/admin/build/static ]; then
+    mkdir -p "$ADMIN_STATIC_BACKUP/static"
+    cp -a apps/admin/build/static/. "$ADMIN_STATIC_BACKUP/static/"
+  fi
+  (
+    cd apps/admin
+    CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/admin npx react-scripts build
+  )
+  if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
+    mkdir -p apps/admin/build/static
+    cp -an "$ADMIN_STATIC_BACKUP/static/." apps/admin/build/static/ || true
+    grep -rl '72.60.96.97' apps/admin/build/static 2>/dev/null | xargs -r rm -f
+    find apps/admin/build/static -type f -mtime +21 -delete || true
+  fi
+  rm -rf "$ADMIN_STATIC_BACKUP"
 fi
-echo "Building admin frontend under /admin..."
-ADMIN_STATIC_BACKUP="$(mktemp -d)"
-if [ -d apps/admin/build/static ]; then
-  mkdir -p "$ADMIN_STATIC_BACKUP/static"
-  cp -a apps/admin/build/static/. "$ADMIN_STATIC_BACKUP/static/"
-fi
-(
-  cd apps/admin
-  CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/admin npx react-scripts build
-)
-if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
-  mkdir -p apps/admin/build/static
-  cp -an "$ADMIN_STATIC_BACKUP/static/." apps/admin/build/static/ || true
-  grep -rl '72.60.96.97' apps/admin/build/static 2>/dev/null | xargs -r rm -f
-  find apps/admin/build/static -type f -mtime +21 -delete || true
-fi
-rm -rf "$ADMIN_STATIC_BACKUP"
 
 echo "Restarting API..."
 pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
