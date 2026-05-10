@@ -3,8 +3,8 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
-PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN api.$PRIMARY_DOMAIN}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
@@ -71,9 +71,7 @@ EOF
 fi
 
 cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env.production"
-cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env"
 chmod 600 "$APP_DIR/apps/backend/.env.production"
-chmod 600 "$APP_DIR/apps/backend/.env"
 
 cat > /etc/dolphin/ecosystem.config.cjs <<EOF
 module.exports = {

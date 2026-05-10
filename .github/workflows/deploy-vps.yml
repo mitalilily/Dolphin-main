@@ -15,22 +15,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VPS_HOST: ${{ secrets.VPS_HOST || '72.60.96.97' }}
-      VPS_SSH_PORT: ${{ secrets.VPS_SSH_PORT || '22' }}
       VPS_USER: ${{ secrets.VPS_USER || 'root' }}
-      PRIMARY_DOMAIN: ${{ secrets.PRIMARY_DOMAIN || 'shopnship.in' }}
-      DOMAIN_NAMES: ${{ secrets.DOMAIN_NAMES || 'shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in' }}
-      PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
+      PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://dolphinenterprises.in' }}
       APP_DIR: /var/www/dolphin
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
-      - name: Checkout deploy commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
       - name: Deploy on VPS
-        timeout-minutes: 60
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
@@ -44,65 +33,26 @@ jobs:
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh_base=(
-            -p "$VPS_SSH_PORT"
-            -o StrictHostKeyChecking=accept-new
-            -o IdentitiesOnly=yes
-            -o ConnectTimeout=15
-            -o ConnectionAttempts=1
-            -o ServerAliveInterval=10
-            -o ServerAliveCountMax=2
-          )
+          ssh_base=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
           ssh_target="${VPS_USER}@${VPS_HOST}"
-
-          if ! command -v rsync >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y rsync
-          fi
 
           if [ -n "${VPS_SSH_KEY:-}" ]; then
             printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/dolphin_vps
             chmod 600 ~/.ssh/dolphin_vps
-            ssh_cmd=(ssh -i ~/.ssh/dolphin_vps -o BatchMode=yes "${ssh_base[@]}" "$ssh_target")
-            rsync_cmd=(rsync -az --delete -e "ssh -i ~/.ssh/dolphin_vps ${ssh_base[*]}")
+            ssh_cmd=(ssh -i ~/.ssh/dolphin_vps "${ssh_base[@]}" "$ssh_target")
           else
             sudo apt-get update
-            sudo apt-get install -y sshpass rsync
-            ssh_cmd=(sshpass -p "$VPS_PASSWORD" ssh -o PreferredAuthentications=password,keyboard-interactive -o PubkeyAuthentication=no "${ssh_base[@]}" "$ssh_target")
-            rsync_cmd=(sshpass -p "$VPS_PASSWORD" rsync -az --delete -e "ssh ${ssh_base[*]}")
+            sudo apt-get install -y sshpass
+            ssh_cmd=(sshpass -p "$VPS_PASSWORD" ssh "${ssh_base[@]}" "$ssh_target")
           fi
 
-          connected=false
-          for attempt in $(seq 1 12); do
-            echo "Checking VPS SSH connection, attempt ${attempt}/12..."
-            if "${ssh_cmd[@]}" "echo '[vps] connected' && hostname && date"; then
-              connected=true
-              break
-            fi
-            echo "::warning::VPS SSH is not reachable yet at ${VPS_HOST}:${VPS_SSH_PORT}. Retrying in 20 seconds..."
-            sleep 20
-          done
+          cat > /tmp/dolphin-deploy.sh <<'REMOTE'
+          set -euo pipefail
+          cd "${APP_DIR:-/var/www/dolphin}"
+          git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          git reset --hard origin/main
+          git show -s --oneline --decorate HEAD
+          bash scripts/vps/deploy.sh
+          REMOTE
 
-          if [ "$connected" != "true" ]; then
-            echo "::error::Cannot reach VPS SSH at ${VPS_HOST}:${VPS_SSH_PORT}. DNS may be correct, but the VPS/network/firewall is not accepting SSH. Deployment cannot continue until the server is reachable."
-            exit 1
-          fi
-
-          "${ssh_cmd[@]}" "mkdir -p '${APP_DIR}' && (command -v rsync >/dev/null 2>&1 || (apt-get update && apt-get install -y rsync))"
-
-          "${rsync_cmd[@]}" \
-            --timeout=120 \
-            --exclude='.git/' \
-            --exclude='.github/' \
-            --exclude='node_modules/' \
-            --exclude='apps/backend/node_modules/' \
-            --exclude='apps/backend/dist/' \
-            --exclude='apps/backend/.env' \
-            --exclude='apps/backend/.env.production' \
-            --exclude='apps/client/node_modules/' \
-            --exclude='apps/client/dist/' \
-            --exclude='apps/admin/node_modules/' \
-            --exclude='apps/admin/build/' \
-            ./ "$ssh_target:${APP_DIR}/"
-
-          "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' SKIP_DEPLOY_GIT_SYNC=true bash scripts/vps/deploy.sh"
+          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh
