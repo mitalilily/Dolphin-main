@@ -14,10 +14,18 @@ if (!process.env.DATABASE_URL) {
 }
 
 const databaseUrl = process.env.DATABASE_URL as string
+const databaseSslMode = (() => {
+  try {
+    return process.env.PGSSLMODE || new URL(databaseUrl).searchParams.get('sslmode') || ''
+  } catch {
+    return process.env.PGSSLMODE || ''
+  }
+})()
+const sslDisabled = /^(disable|false|0)$/i.test(databaseSslMode)
+const sslRequired = /^(require|verify-ca|verify-full|no-verify|true|1)$/i.test(databaseSslMode)
 const shouldUseSsl =
-  process.env.PGSSLMODE === 'require' ||
-  env === 'production' ||
-  /render\.com|railway\.app|supabase\.co/i.test(databaseUrl)
+  !sslDisabled &&
+  (sslRequired || /render\.com|railway\.app|proxy\.rlwy\.net|supabase\.co/i.test(databaseUrl))
 
 export const pool = new Pool({
   connectionString: databaseUrl,
