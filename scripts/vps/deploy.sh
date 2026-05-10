@@ -10,7 +10,7 @@ API_PORT="${API_PORT:-5002}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 SKIP_DEPLOY_GIT_SYNC="${SKIP_DEPLOY_GIT_SYNC:-false}"
 DEPLOY_COMMIT="${DEPLOY_COMMIT:-}"
-USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-true}"
+USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-false}"
 LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
 LOCAL_POSTGRES_IMAGE="${LOCAL_POSTGRES_IMAGE:-postgres:16-alpine}"
 LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
@@ -95,6 +95,14 @@ ensure_backend_env() {
   if [ "$USE_LOCAL_POSTGRES" = "true" ]; then
     set_env_value "$BACKEND_ENV_SOURCE" DATABASE_URL "postgresql://${LOCAL_POSTGRES_USER}:${LOCAL_POSTGRES_PASSWORD}@127.0.0.1:5432/${LOCAL_POSTGRES_DB}"
     set_env_value "$BACKEND_ENV_SOURCE" PGSSLMODE disable
+  fi
+}
+
+require_database_url() {
+  if ! grep -Eq '^DATABASE_URL=.{8,}' "$BACKEND_ENV_SOURCE"; then
+    echo "DATABASE_URL is missing in ${BACKEND_ENV_SOURCE}." >&2
+    echo "Refusing to deploy against an empty database config. Restore BACKEND_ENV or set USE_LOCAL_POSTGRES=true intentionally." >&2
+    exit 1
   fi
 }
 
@@ -329,6 +337,7 @@ fi
 
 ensure_local_postgres
 ensure_backend_env
+require_database_url
 
 cat > apps/client/.env.production <<EOF
 VITE_API_URL=${API_ORIGIN}/api

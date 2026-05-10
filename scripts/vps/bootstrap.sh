@@ -13,7 +13,7 @@ PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 ENABLE_SSL="${ENABLE_SSL:-true}"
 SSL_EMAIL="${SSL_EMAIL:-admin@$PRIMARY_DOMAIN}"
-USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-true}"
+USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-false}"
 LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
 LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
 LOCAL_POSTGRES_USER="${LOCAL_POSTGRES_USER:-dolphin}"
@@ -53,14 +53,15 @@ if [ ! -d "$APP_DIR/.git" ]; then
   git clone "$REPO_URL" "$APP_DIR"
 fi
 
-if [ ! -f "$BACKEND_ENV_SOURCE" ]; then
+if [ ! -s "$BACKEND_ENV_SOURCE" ]; then
   DOMAIN_ORIGINS=""
   for domain in $DOMAIN_NAMES; do
     DOMAIN_ORIGINS="${DOMAIN_ORIGINS},https://${domain},http://${domain}"
   done
   CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin${DOMAIN_ORIGINS}}"
 
-  cat > "$BACKEND_ENV_SOURCE" <<EOF
+  if [ "$USE_LOCAL_POSTGRES" = "true" ]; then
+    cat > "$BACKEND_ENV_SOURCE" <<EOF
 NODE_ENV=production
 PORT=${API_PORT}
 DATABASE_URL=postgresql://${LOCAL_POSTGRES_USER}:${LOCAL_POSTGRES_PASSWORD}@127.0.0.1:5432/${LOCAL_POSTGRES_DB}
@@ -70,8 +71,23 @@ CORS_ORIGINS=${CORS_ORIGIN_LIST}
 FRONTEND_URL=${PUBLIC_ORIGIN}
 API_URL=${API_ORIGIN}
 EOF
-  chmod 600 "$BACKEND_ENV_SOURCE"
-  echo "Created ${BACKEND_ENV_SOURCE} with the local Postgres connection."
+    chmod 600 "$BACKEND_ENV_SOURCE"
+    echo "Created ${BACKEND_ENV_SOURCE} with the local Postgres connection."
+  else
+    cat > "$BACKEND_ENV_SOURCE" <<EOF
+NODE_ENV=production
+PORT=${API_PORT}
+DATABASE_URL=
+PGSSLMODE=require
+CORS_ALLOWED_ORIGINS=${CORS_ORIGIN_LIST}
+CORS_ORIGINS=${CORS_ORIGIN_LIST}
+FRONTEND_URL=${PUBLIC_ORIGIN}
+API_URL=${API_ORIGIN}
+EOF
+    chmod 600 "$BACKEND_ENV_SOURCE"
+    echo "Created ${BACKEND_ENV_SOURCE}. Fill it with the real production BACKEND_ENV, then rerun bootstrap." >&2
+    exit 1
+  fi
 fi
 
 cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env.production"

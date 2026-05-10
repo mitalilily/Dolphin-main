@@ -28,7 +28,7 @@ jobs:
       PRIMARY_DOMAIN: ${{ secrets.PRIMARY_DOMAIN || 'shopnship.in' }}
       DOMAIN_NAMES: ${{ secrets.DOMAIN_NAMES || 'shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in' }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
-      USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'true' }}
+      USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'false' }}
       RUN_INVOICE_DATA_BACKFILLS: ${{ inputs.run_invoice_data_backfills || secrets.RUN_INVOICE_DATA_BACKFILLS || 'false' }}
       APP_DIR: /var/www/dolphin
     steps:
@@ -42,6 +42,7 @@ jobs:
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
         run: |
           set -euo pipefail
 
@@ -94,17 +95,30 @@ jobs:
             printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/dolphin_vps
             chmod 600 ~/.ssh/dolphin_vps
             ssh_cmd=(ssh -i ~/.ssh/dolphin_vps "${ssh_base[@]}" "$ssh_target")
+            scp_cmd=(scp -i ~/.ssh/dolphin_vps "${ssh_base[@]}")
             rsync_ssh="ssh -i ~/.ssh/dolphin_vps ${ssh_base[*]}"
             rsync_cmd=(rsync -az --delete -e "$rsync_ssh")
           else
             sudo apt-get update
             sudo apt-get install -y sshpass
             ssh_cmd=(sshpass -p "$VPS_PASSWORD" ssh "${ssh_base[@]}" "$ssh_target")
+            scp_cmd=(sshpass -p "$VPS_PASSWORD" scp "${ssh_base[@]}")
             rsync_ssh="ssh ${ssh_base[*]}"
             rsync_cmd=(sshpass -p "$VPS_PASSWORD" rsync -az --delete -e "$rsync_ssh")
           fi
 
           retry "${ssh_cmd[@]}" "mkdir -p '${APP_DIR}' && (command -v rsync >/dev/null 2>&1 || (apt-get update && apt-get install -y rsync))"
+
+          if [ -n "${BACKEND_ENV:-}" ]; then
+            backend_env_file="$(mktemp)"
+            printf '%s\n' "$BACKEND_ENV" > "$backend_env_file"
+            chmod 600 "$backend_env_file"
+            retry "${scp_cmd[@]}" "$backend_env_file" "$ssh_target:/root/dolphin-backend.env"
+            retry "${ssh_cmd[@]}" "chmod 600 /root/dolphin-backend.env"
+            rm -f "$backend_env_file"
+          else
+            echo "::warning::BACKEND_ENV secret is empty. Deploy will preserve the existing VPS backend env and fail if DATABASE_URL is missing."
+          fi
 
           retry "${rsync_cmd[@]}" \
             --exclude='.github/' \
