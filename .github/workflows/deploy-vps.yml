@@ -22,6 +22,12 @@ jobs:
       USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'true' }}
       APP_DIR: /var/www/dolphin
     steps:
+      - name: Checkout deploy commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Deploy on VPS
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
@@ -39,23 +45,44 @@ jobs:
           ssh_base=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
           ssh_target="${VPS_USER}@${VPS_HOST}"
 
+          if ! command -v rsync >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y rsync
+          fi
+
           if [ -n "${VPS_SSH_KEY:-}" ]; then
             printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/dolphin_vps
             chmod 600 ~/.ssh/dolphin_vps
             ssh_cmd=(ssh -i ~/.ssh/dolphin_vps "${ssh_base[@]}" "$ssh_target")
+            rsync_ssh="ssh -i ~/.ssh/dolphin_vps ${ssh_base[*]}"
+            rsync_cmd=(rsync -az --delete -e "$rsync_ssh")
           else
             sudo apt-get update
             sudo apt-get install -y sshpass
             ssh_cmd=(sshpass -p "$VPS_PASSWORD" ssh "${ssh_base[@]}" "$ssh_target")
+            rsync_ssh="ssh ${ssh_base[*]}"
+            rsync_cmd=(sshpass -p "$VPS_PASSWORD" rsync -az --delete -e "$rsync_ssh")
           fi
+
+          "${ssh_cmd[@]}" "mkdir -p '${APP_DIR}' && (command -v rsync >/dev/null 2>&1 || (apt-get update && apt-get install -y rsync))"
+
+          "${rsync_cmd[@]}" \
+            --exclude='.github/' \
+            --exclude='node_modules/' \
+            --exclude='apps/backend/node_modules/' \
+            --exclude='apps/backend/dist/' \
+            --exclude='apps/backend/.env' \
+            --exclude='apps/backend/.env.production' \
+            --exclude='apps/client/node_modules/' \
+            --exclude='apps/client/dist/' \
+            --exclude='apps/admin/node_modules/' \
+            --exclude='apps/admin/build/' \
+            ./ "$ssh_target:${APP_DIR}/"
 
           cat > /tmp/dolphin-deploy.sh <<'REMOTE'
           set -euo pipefail
           cd "${APP_DIR:-/var/www/dolphin}"
-          git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
-          git reset --hard origin/main
-          git show -s --oneline --decorate HEAD
-          bash scripts/vps/deploy.sh
+          SKIP_DEPLOY_GIT_SYNC=true bash scripts/vps/deploy.sh
           REMOTE
 
-          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' bash -s" < /tmp/dolphin-deploy.sh
+          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash -s" < /tmp/dolphin-deploy.sh

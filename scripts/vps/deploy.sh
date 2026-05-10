@@ -8,6 +8,8 @@ PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
+SKIP_DEPLOY_GIT_SYNC="${SKIP_DEPLOY_GIT_SYNC:-false}"
+DEPLOY_COMMIT="${DEPLOY_COMMIT:-}"
 USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-true}"
 LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
 LOCAL_POSTGRES_IMAGE="${LOCAL_POSTGRES_IMAGE:-postgres:16-alpine}"
@@ -311,11 +313,18 @@ EOF
 
 cd "$APP_DIR"
 
-if [ -d .git ]; then
+if [ -n "$DEPLOY_COMMIT" ]; then
+  echo "Deploying commit ${DEPLOY_COMMIT}..."
+fi
+
+if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
   echo "Syncing repository with origin/main..."
   git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
   git reset --hard origin/main
   git show -s --oneline --decorate HEAD
+elif [ "$SKIP_DEPLOY_GIT_SYNC" = "true" ]; then
+  echo "Using source already synced by GitHub Actions."
+  git show -s --oneline --decorate HEAD 2>/dev/null || true
 fi
 
 ensure_local_postgres
@@ -356,7 +365,7 @@ echo "Applying database schema and seed data..."
 
 echo "Installing client dependencies..."
 npm --prefix apps/client ci
-if [ -d .git ]; then
+if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
   git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
 fi
 echo "Building client and landing frontend..."
