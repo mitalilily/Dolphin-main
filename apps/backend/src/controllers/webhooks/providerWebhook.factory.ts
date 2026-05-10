@@ -46,7 +46,11 @@ const fetchProviderSecret = async (provider: string) => {
 
 const extractWebhookMeta = (payload: any) => {
   const event = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : payload
+  const firstNdrEvent = Array.isArray(event?.ndr_data) ? event.ndr_data[0] : null
   const awb =
+    firstNdrEvent?.awb ||
+    firstNdrEvent?.awb_number ||
+    firstNdrEvent?.shipment_id ||
     event?.awb_number ||
     event?.awb ||
     event?.waybill ||
@@ -57,6 +61,8 @@ const extractWebhookMeta = (payload: any) => {
     event?.shipment_id ||
     null
   const status =
+    firstNdrEvent?.type ||
+    firstNdrEvent?.status ||
     event?.current_status ||
     event?.shipment_status ||
     event?.status ||
@@ -84,6 +90,16 @@ export const createProviderWebhookHandler = (provider: string) => {
       const result = await processGenericCourierWebhook(normalizedProvider, payload)
       if (!result.success && result.reason === 'missing_awb') {
         return res.status(400).json({ success: false, message: 'Missing AWB/order reference' })
+      }
+
+      if (
+        !result.success &&
+        ['invalid_callback_type', 'invalid_payload'].includes(String(result.reason || ''))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: (result as any).message || result.reason,
+        })
       }
 
       if (!result.success && result.reason === 'order_not_found') {

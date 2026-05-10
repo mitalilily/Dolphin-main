@@ -67,6 +67,59 @@ const getMerchantOrderWhere = (userId: string | undefined, orderId?: string, awb
   return null
 }
 
+const recordIcarryNdrAction = async (params: {
+  order: any
+  awb?: string
+  reason: string
+  remarks: string
+  action: string
+  payload: Record<string, any>
+  attachmentKey?: string
+  attachmentName?: string
+  attachmentMime?: string
+}) => {
+  const {
+    order,
+    awb,
+    reason,
+    remarks,
+    action,
+    payload,
+    attachmentKey,
+    attachmentName,
+    attachmentMime,
+  } = params
+
+  const inserted = await recordNdrEvent({
+    orderId: order.id,
+    userId: order.user_id,
+    awbNumber: awb || order.awb_number || undefined,
+    status: 'ndr_action',
+    reason,
+    remarks,
+    attachmentKey: attachmentKey || undefined,
+    attachmentName: attachmentName || undefined,
+    attachmentMime: attachmentMime || undefined,
+    payload: {
+      source: 'merchant',
+      provider: 'icarry',
+      action,
+      remote_submitted: false,
+      note: 'iCarry API exposes incoming NDR webhooks but no documented outbound NDR action endpoint in the integrated API.',
+      ...payload,
+      attachment: attachmentKey
+        ? {
+            key: attachmentKey,
+            name: attachmentName,
+            mime: attachmentMime,
+          }
+        : undefined,
+    },
+  })
+
+  return inserted
+}
+
 /**
  * POST /ndr/reattempt
  * Body: { orderId?: string, awb?: string, nextAttemptDate: string (YYYY-MM-DD), comments?: string, alternateAddress?, alternateNumber? }
@@ -114,6 +167,11 @@ export const ndrReattemptController = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, message: 'Order not found' })
     }
 
+    const provider = (order.integration_type || '').toString().trim().toLowerCase()
+    if (!provider) {
+      return res.status(400).json({ success: false, message: 'Missing integration_type on order.' })
+    }
+
     // Eligibility checks from latest NDR event
     try {
       const awbLookup = awb || order.awb_number
@@ -132,7 +190,7 @@ export const ndrReattemptController = async (req: Request, res: Response) => {
             .status(400)
             .json({ success: false, message: 'Cannot reattempt: Not serviceable (NSL)' })
         }
-        if (attempts >= 3) {
+        if (attempts >= 3 && provider !== 'icarry') {
           return res.status(400).json({
             success: false,
             message: 'Cannot reattempt: Maximum delivery attempts reached',
@@ -144,12 +202,33 @@ export const ndrReattemptController = async (req: Request, res: Response) => {
       console.warn('Eligibility read failed for reattempt:', e)
     }
 
-    // Use integration_type as provided by orders
-    let provider = (order.integration_type || '').toString().trim().toLowerCase()
-    if (!provider) {
-      return res.status(400).json({ success: false, message: 'Missing integration_type on order.' })
-    }
     // Branch by provider
+
+    if (provider === 'icarry') {
+      const wb = awb || order.awb_number
+      await recordIcarryNdrAction({
+        order,
+        awb: wb || undefined,
+        reason: 'merchant_reattempt_requested',
+        remarks: 'reattempt',
+        action: 'REATTEMPT',
+        attachmentKey,
+        attachmentName,
+        attachmentMime,
+        payload: {
+          next_attempt_date: nextAttemptDate,
+          comments,
+          alternate_address: alternateAddress,
+          alternate_number: alternateNumber,
+        },
+      })
+      return res.status(202).json({
+        success: true,
+        queued: true,
+        remoteSubmitted: false,
+        message: 'iCarry reattempt preference captured locally for seller/admin follow-up.',
+      })
+    }
 
     if (provider === 'delhivery' || provider === 'delhivyery') {
       const delhivery = new DelhiveryService()
@@ -327,6 +406,32 @@ export const ndrChangeAddressController = async (req: Request, res: Response) =>
     if (!provider)
       return res.status(400).json({ success: false, message: 'Missing integration_type on order.' })
     // Branch by provider
+
+    if (provider === 'icarry') {
+      const wb = awb || order.awb_number
+      await recordIcarryNdrAction({
+        order,
+        awb: wb || undefined,
+        reason: 'merchant_change_address_requested',
+        remarks: 'change-address',
+        action: 'EDIT_DETAILS',
+        attachmentKey,
+        attachmentName,
+        attachmentMime,
+        payload: {
+          name,
+          address_1,
+          address_2,
+          pincode,
+        },
+      })
+      return res.status(202).json({
+        success: true,
+        queued: true,
+        remoteSubmitted: false,
+        message: 'iCarry address-change preference captured locally for seller/admin follow-up.',
+      })
+    }
 
     if (provider === 'delhivery' || provider === 'delhivyery') {
       const delhivery = new DelhiveryService()
@@ -562,6 +667,29 @@ export const ndrChangePhoneController = async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Missing integration_type on order.' })
     // Branch by provider
 
+    if (provider === 'icarry') {
+      const wb = awb || order.awb_number
+      await recordIcarryNdrAction({
+        order,
+        awb: wb || undefined,
+        reason: 'merchant_change_phone_requested',
+        remarks: 'change-phone',
+        action: 'EDIT_DETAILS',
+        attachmentKey,
+        attachmentName,
+        attachmentMime,
+        payload: {
+          phone: String(phone),
+        },
+      })
+      return res.status(202).json({
+        success: true,
+        queued: true,
+        remoteSubmitted: false,
+        message: 'iCarry phone-change preference captured locally for seller/admin follow-up.',
+      })
+    }
+
     if (provider === 'delhivery') {
       const delhivery = new DelhiveryService()
       const wb = awb || order.awb_number
@@ -783,6 +911,7 @@ export const delhiveryPickupRescheduleController = async (req: Request, res: Res
  */
 export const ndrBulkActionController = async (req: Request, res: Response) => {
   try {
+    const userId = (req as any).user?.sub as string | undefined
     const { items } = req.body as {
       items: Array<{ awb: string; provider?: string; action: string; data?: any }>
     }
@@ -921,8 +1050,62 @@ export const ndrBulkActionController = async (req: Request, res: Response) => {
       }
     }
 
+    if (grouped['icarry']?.length) {
+      results['icarry'] = []
+      for (const item of grouped['icarry']) {
+        try {
+          if (!userId) {
+            throw new Error('Unauthorized')
+          }
+          const [order] = await db
+            .select()
+            .from(b2c_orders)
+            .where(and(eq(b2c_orders.awb_number, item.awb), eq(b2c_orders.user_id, userId)))
+            .limit(1)
+
+          if (!order) {
+            results['icarry'].push({
+              awb: item.awb,
+              action: item.action,
+              success: false,
+              message: 'Order not found',
+            })
+            continue
+          }
+
+          const action = String(item.action || '').toUpperCase()
+          await recordIcarryNdrAction({
+            order,
+            awb: item.awb,
+            reason:
+              action === 'RE-ATTEMPT' || action === 'REATTEMPT'
+                ? 'merchant_reattempt_requested'
+                : 'merchant_ndr_action_requested',
+            remarks: action === 'RE-ATTEMPT' || action === 'REATTEMPT' ? 'reattempt' : 'ndr-action',
+            action,
+            payload: item.data || {},
+          })
+
+          results['icarry'].push({
+            awb: item.awb,
+            action: item.action,
+            success: true,
+            queued: true,
+            remoteSubmitted: false,
+          })
+        } catch (err: any) {
+          results['icarry'].push({
+            awb: item.awb,
+            action: item.action,
+            success: false,
+            message: err?.message || 'Failed to capture iCarry NDR action',
+          })
+        }
+      }
+    }
+
     const unsupportedProviders = Object.keys(grouped).filter(
-      (provider) => !['delhivery', 'xpressbees'].includes(provider),
+      (provider) => !['delhivery', 'xpressbees', 'icarry'].includes(provider),
     )
     if (unsupportedProviders.length) {
       for (const provider of unsupportedProviders) {
@@ -930,7 +1113,7 @@ export const ndrBulkActionController = async (req: Request, res: Response) => {
           awb: item.awb,
           action: item.action,
           success: false,
-          message: 'Only Delhivery is supported for NDR APIs.',
+          message: 'Only Delhivery, Xpressbees, and local iCarry action capture are supported.',
         }))
       }
     }

@@ -66,6 +66,12 @@ const hasNdrSignal = (...parts: unknown[]) => {
     'refused',
     'otp not shared',
     'otp failed',
+    'misroute',
+    'cod not ready',
+    'future delivery date',
+    'restricted entry',
+    'outofstn',
+    'open delivery',
   ]
 
   return ndrMarkers.some((marker) => text.includes(marker))
@@ -92,7 +98,23 @@ const shouldSkipDuplicateNdrEvent = async (params: {
   reason?: string | null
   remarks?: string | null
   attemptNo?: string | null
+  dedupeKey?: string | null
 }) => {
+  if (params.dedupeKey) {
+    const [existingByDedupeKey] = await db
+      .select({ id: ndr_events.id })
+      .from(ndr_events)
+      .where(
+        and(
+          eq(ndr_events.order_id, params.orderId),
+          sql`${ndr_events.payload}->>'__dedupe_key' = ${params.dedupeKey}`,
+        ),
+      )
+      .limit(1)
+
+    if (existingByDedupeKey) return true
+  }
+
   const [latest] = await db
     .select({
       id: ndr_events.id,
@@ -128,6 +150,7 @@ const captureNdrEventFromWebhook = async (params: {
   reason?: string | null
   remarks?: string | null
   attemptNo?: string | null
+  dedupeKey?: string | null
   payload?: any
   courierLabel: string
   signalParts?: unknown[]
@@ -139,6 +162,7 @@ const captureNdrEventFromWebhook = async (params: {
     reason,
     remarks,
     attemptNo,
+    dedupeKey,
     payload,
     courierLabel,
     signalParts = [],
@@ -151,6 +175,7 @@ const captureNdrEventFromWebhook = async (params: {
     reason,
     remarks,
     attemptNo,
+    dedupeKey,
   })
 
   if (duplicate) {
@@ -170,7 +195,10 @@ const captureNdrEventFromWebhook = async (params: {
     reason: reason || null,
     remarks: remarks || null,
     attemptNo: attemptNo || null,
-    payload,
+    payload:
+      dedupeKey && payload && typeof payload === 'object' && !Array.isArray(payload)
+        ? { ...payload, __dedupe_key: dedupeKey }
+        : payload,
   })
 
   await createNotificationService({
@@ -1884,27 +1912,713 @@ const normalizeProviderLabel = (provider: string) => {
   return p.charAt(0).toUpperCase() + p.slice(1)
 }
 
+const ICARRY_STATUS_LABELS: Record<string, string> = {
+  '1': 'Pending Pickup',
+  '2': 'Processing',
+  '3': 'Shipped',
+  '7': 'Canceled',
+  '12': 'Damaged',
+  '14': 'Lost',
+  '16': 'Voided',
+  '21': 'Delivered',
+  '22': 'In Transit',
+  '23': 'Returned to Origin',
+  '24': 'Manifested',
+  '25': 'Pickup Scheduled',
+  '26': 'Out For Delivery',
+  '27': 'Pending Return',
+}
+
+const ICARRY_NDR_DESCRIPTIONS: Record<string, string> = {
+  'REATTEMPT-CONTACT':
+    'Consignee address incomplete, wrong, or not reachable on mobile.',
+  REATTEMPT: 'Delivery attempt failed.',
+  MISROUTE: 'Shipment is in wrong delivery pincode.',
+  'DC-ADDRESS': 'Delivery address is ODA or needs self collection.',
+  'URGENT-DELIVERY': 'Delivery is beyond EDD.',
+  'REATTEMPT-COD-NOT-READY': 'Consignee did not have COD amount ready or asked to come later.',
+  'RTO-MISSING': 'Shipment is missing while in return.',
+  'OPEN-DELIVERY': 'Consignee asked for open delivery before accepting parcel.',
+  'CONSIGNEE-OPENED-REFUSED': 'Consignee opened the parcel and refused delivery.',
+  'RTO-REATTEMPT': 'Return shipment delivery attempt failed.',
+  'REATTEMPT-NEW-DATE': 'Consignee asked for a future delivery date.',
+  'REATTEMPT-RESTRICTED-ENTRY': 'Consignee address entry is restricted.',
+  'RTO-PACKING': 'Return shipment could not be completed due to improper packaging.',
+  'REATTEMPT-CUST-REFUSED': 'Consignee refused shipment; reattempt requested.',
+  'REATTEMPT-OTP': 'Consignee did not have OTP to accept delivery.',
+  'MANUAL-VERIFY': 'Unknown NDR event; manual verification needed.',
+  'RTO-SECURITY': 'Shipment returned due to security reason.',
+  'FINANCE-EMBARGO': 'Shipment is held due to payment issue.',
+  'EWAY-SEND': 'Shipment is held pending E-Way bill information.',
+  'REATTEMPT-DAMAGE': 'Shipment is damaged.',
+  'REATTEMPT-RTO-REFUSED': 'Return shipment has been refused by the shipper.',
+  'REATTEMPT-OUTOFSTN': 'Consignee is not at the delivery address.',
+}
+
+const firstPresent = (...values: unknown[]) => {
+  for (const value of values) {
+    if (value === undefined || value === null) continue
+    const text = String(value).trim()
+    if (text) return value
+  }
+  return undefined
+}
+
+const toNumberOrUndefined = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined
+  const normalized =
+    typeof value === 'string' ? value.replace(/[^\d.-]/g, '') : String(value)
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : undefined
+}
+
+const normalizeWeightKg = (value: unknown, unit?: unknown, gramsLikely = false) => {
+  const n = toNumberOrUndefined(value)
+  if (n === undefined || n <= 0) return undefined
+
+  const unitText = String(unit || '').trim().toLowerCase()
+  if (unitText === 'g' || unitText === 'gm' || unitText === 'gram' || unitText === 'grams') {
+    return n / 1000
+  }
+
+  if (unitText === 'kg' || unitText === 'kgs' || unitText === 'kilogram' || unitText === 'kilograms') {
+    return n
+  }
+
+  return gramsLikely || n > 30 ? n / 1000 : n
+}
+
+const normalizeDimensions = (source: any, fallback: any) => ({
+  length: Number(firstPresent(source?.length, source?.l, fallback?.length, 0)) || 0,
+  breadth:
+    Number(firstPresent(source?.breadth, source?.width, source?.b, fallback?.breadth, 0)) || 0,
+  height: Number(firstPresent(source?.height, source?.h, fallback?.height, 0)) || 0,
+})
+
+const normalizeIcarryNdrType = (value: unknown) =>
+  String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[\u0000-\u001f]+/g, '-')
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+
+const describeIcarryNdrType = (type: string) =>
+  ICARRY_NDR_DESCRIPTIONS[type] || type.replace(/-/g, ' ').toLowerCase()
+
+const mapIcarryStatus = (status: unknown) => {
+  const raw = String(status ?? '').trim()
+  const code = raw.replace(/\.0$/, '')
+  const label = ICARRY_STATUS_LABELS[code]
+
+  switch (code) {
+    case '1':
+    case '25':
+      return { internalStatus: 'pickup_initiated', statusText: label || raw || 'Pickup initiated' }
+    case '2':
+    case '24':
+      return { internalStatus: 'booked', statusText: label || raw || 'Booked' }
+    case '3':
+    case '22':
+      return { internalStatus: 'in_transit', statusText: label || raw || 'In transit' }
+    case '7':
+    case '16':
+      return { internalStatus: 'cancelled', statusText: label || raw || 'Cancelled' }
+    case '12':
+      return { internalStatus: 'damaged', statusText: label || raw || 'Damaged' }
+    case '14':
+      return { internalStatus: 'lost', statusText: label || raw || 'Lost' }
+    case '21':
+      return { internalStatus: 'delivered', statusText: label || raw || 'Delivered' }
+    case '23':
+      return { internalStatus: 'rto_delivered', statusText: label || raw || 'Returned to Origin' }
+    case '26':
+      return { internalStatus: 'out_for_delivery', statusText: label || raw || 'Out For Delivery' }
+    case '27':
+      return { internalStatus: 'rto_in_transit', statusText: label || raw || 'Pending Return' }
+    default:
+      return { internalStatus: mapGenericWebhookStatus(raw), statusText: label || raw || 'In Transit' }
+  }
+}
+
+const resolveProviderStatus = (provider: string, status: unknown) => {
+  if (String(provider || '').trim().toLowerCase() === 'icarry') {
+    return mapIcarryStatus(status)
+  }
+  const statusText = String(status || '').trim()
+  return {
+    internalStatus: mapGenericWebhookStatus(statusText),
+    statusText: statusText || 'in_transit',
+  }
+}
+
+const getIcarryNdrItems = (payload: any) => {
+  const rawItems =
+    Array.isArray(payload?.ndr_data)
+      ? payload.ndr_data
+      : Array.isArray(payload?.data?.ndr_data)
+        ? payload.data.ndr_data
+        : Array.isArray(payload?.msg)
+          ? payload.msg
+          : []
+
+  return rawItems.filter((item: any) => item && typeof item === 'object')
+}
+
+const getGenericCourierEvent = (payload: any) =>
+  payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+    ? payload.data
+    : payload
+
+const extractCourierRefs = (event: any) => {
+  const awb = firstPresent(
+    event?.awb_number,
+    event?.awb,
+    event?.waybill,
+    event?.tracking_no,
+    event?.tracking_id,
+    event?.trackingId,
+    event?.wbn,
+    event?.barcode,
+  )
+  const shipmentId = firstPresent(
+    event?.shipment_id,
+    event?.shipmentId,
+    event?.shipment?.id,
+    event?.id,
+  )
+  const orderRef = firstPresent(
+    event?.order_number,
+    event?.order_id,
+    event?.orderId,
+    event?.client_order_id,
+    event?.reference_number,
+    event?.tracking_ref,
+    event?.ref_no,
+  )
+
+  return {
+    awb: awb === undefined ? null : String(awb),
+    shipmentId: shipmentId === undefined ? null : String(shipmentId),
+    orderRef: orderRef === undefined ? null : String(orderRef),
+  }
+}
+
+const findB2cOrderForCourierWebhook = async (
+  tx: any,
+  refs: { awb?: string | null; shipmentId?: string | null; orderRef?: string | null },
+) => {
+  let order
+  if (refs.awb) {
+    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.awb_number, refs.awb))
+  }
+  if (!order && refs.shipmentId) {
+    ;[order] = await tx
+      .select()
+      .from(b2c_orders)
+      .where(eq(b2c_orders.shipment_id, refs.shipmentId))
+  }
+  if (!order && refs.orderRef) {
+    ;[order] = await tx
+      .select()
+      .from(b2c_orders)
+      .where(eq(b2c_orders.order_number, refs.orderRef))
+  }
+  if (!order && refs.orderRef) {
+    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.order_id, refs.orderRef))
+  }
+
+  return order
+}
+
+const resolveWebhookWeights = (provider: string, event: any, order: any) => {
+  const isIcarry = String(provider || '').trim().toLowerCase() === 'icarry'
+  const gramsUnit = firstPresent(
+    event?.weight_unit,
+    event?.weightUnit,
+    event?.charged_weight_unit,
+    event?.chargeable_weight_unit,
+  )
+  const actualWeight = normalizeWeightKg(
+    firstPresent(
+      event?.actual_weight,
+      event?.actualWeight,
+      event?.dead_weight,
+      event?.deadWeight,
+      event?.measured_weight,
+      event?.measuredWeight,
+    ),
+    firstPresent(event?.actual_weight_unit, event?.weight_unit),
+    false,
+  )
+  const volumetricWeight = normalizeWeightKg(
+    firstPresent(event?.volumetric_weight, event?.volumetricWeight, event?.vol_weight),
+    firstPresent(event?.volumetric_weight_unit, event?.weight_unit),
+    false,
+  )
+  const chargedWeight = normalizeWeightKg(
+    firstPresent(
+      event?.charged_weight,
+      event?.chargedWeight,
+      event?.chargeable_weight,
+      event?.chargeableWeight,
+      event?.billing_weight,
+      event?.billed_weight,
+      isIcarry ? event?.weight : undefined,
+    ),
+    gramsUnit,
+    isIcarry,
+  )
+
+  return {
+    declaredWeight: Number(order?.weight ?? 0) || 0,
+    actualWeight,
+    volumetricWeight,
+    chargedWeight,
+  }
+}
+
+const maybeCreateWeightDiscrepancyFromWebhook = async (params: {
+  provider: string
+  providerLabel: string
+  event: any
+  payload: any
+  order: any
+  awb?: string | null
+  remarks?: string | null
+  statusText?: string | null
+}) => {
+  const { provider, providerLabel, event, payload, order, awb, remarks, statusText } = params
+  const { declaredWeight, actualWeight, volumetricWeight, chargedWeight } = resolveWebhookWeights(
+    provider,
+    event,
+    order,
+  )
+
+  if (!declaredWeight || !chargedWeight || chargedWeight <= declaredWeight) return
+
+  const revisedShippingCharge = toNumberOrUndefined(
+    firstPresent(
+      event?.revised_shipping_charge,
+      event?.shipping_charge,
+      event?.courier_cost,
+      event?.miles,
+      event?.amount,
+    ),
+  )
+  const proof = extractWeightProofFromWebhook(payload, String(provider || ''))
+  const proofSlipUrl = proof?.weightSlipUrl
+  const proofImages = proof?.weightImages?.length
+    ? proof.weightImages
+    : proofSlipUrl
+      ? [proofSlipUrl]
+      : undefined
+
+  await createWeightDiscrepancy({
+    orderType: 'b2c',
+    orderId: order.id,
+    userId: order.user_id,
+    orderNumber: order.order_number,
+    awbNumber: order.awb_number || awb || undefined,
+    courierPartner: providerLabel,
+    declaredWeight,
+    actualWeight: actualWeight ?? declaredWeight,
+    volumetricWeight,
+    chargedWeight,
+    declaredDimensions: normalizeDimensions(null, order),
+    actualDimensions: normalizeDimensions(event?.actual_dimensions || event?.dimensions, order),
+    originalShippingCharge: Number(order.freight_charges ?? order.shipping_charges ?? 0) || 0,
+    revisedShippingCharge,
+    courierRemarks: String(firstPresent(remarks, statusText, event?.type) || '').slice(0, 500),
+    courierWeightSlipUrl: proofSlipUrl || undefined,
+    courierWeightProofImages: proofImages,
+    weighingMetadata: {
+      timestamp: String(firstPresent(event?.date, event?.date_added, event?.updated_at, '') || ''),
+      location: String(firstPresent(event?.location, event?.city, event?.hub_name, '') || ''),
+      source: `${String(provider || '').toLowerCase()}_webhook`,
+    },
+  })
+}
+
+const resolveNextNdrAttemptNo = async (orderId: string) => {
+  const [latest] = await db
+    .select({ attempt_no: ndr_events.attempt_no })
+    .from(ndr_events)
+    .where(eq(ndr_events.order_id, orderId))
+    .orderBy(sql`${ndr_events.created_at} desc`)
+    .limit(1)
+
+  const lastAttempt = Number.parseInt(String(latest?.attempt_no || ''), 10)
+  return String(Number.isFinite(lastAttempt) && lastAttempt > 0 ? lastAttempt + 1 : 1)
+}
+
+const emitTrackingWebhook = async (params: {
+  order: any
+  awbNumber?: string | null
+  providerLabel: string
+  internalStatus: string
+  statusText: string
+  location?: string | null
+  payload: any
+}) => {
+  const { order, awbNumber, providerLabel, internalStatus, statusText, location, payload } = params
+  await sendWebhookEvent(order.user_id, 'tracking.updated', {
+    order_id: order.id,
+    order_number: order.order_number,
+    awb_number: awbNumber || order.awb_number || undefined,
+    courier_partner: order.courier_partner || providerLabel,
+    integration_type: order.integration_type,
+    status: internalStatus,
+    status_text: statusText,
+    location,
+    raw: payload,
+    updated_at: new Date().toISOString(),
+  }).catch((err) => {
+    console.error(`Failed to send tracking.updated webhook for ${providerLabel}:`, err)
+  })
+}
+
+export const __webhookProcessorTestUtils = {
+  describeIcarryNdrType,
+  getIcarryNdrItems,
+  mapIcarryStatus,
+  normalizeIcarryNdrType,
+  normalizeWeightKg,
+  resolveWebhookWeights,
+}
+
+const processSingleCourierWebhookEvent = async (params: {
+  provider: string
+  providerLabel: string
+  event: any
+  payload: any
+  tx: any
+  forceNdr?: boolean
+  ndrType?: string | null
+  ndrDate?: string | null
+  ndrDedupeKey?: string | null
+}) => {
+  const {
+    provider,
+    providerLabel,
+    event,
+    payload,
+    tx,
+    forceNdr = false,
+    ndrType,
+    ndrDate,
+    ndrDedupeKey,
+  } = params
+  const refs = extractCourierRefs(event)
+
+  if (!refs.awb && !refs.shipmentId && !refs.orderRef) {
+    return { success: false, reason: 'missing_awb' as const }
+  }
+
+  const order = await findB2cOrderForCourierWebhook(tx, refs)
+  if (!order) {
+    return {
+      success: false,
+      reason: 'order_not_found' as const,
+      awb: refs.awb || refs.shipmentId || refs.orderRef,
+      status: String(firstPresent(event?.status, event?.type, 'unknown') || 'unknown'),
+    }
+  }
+
+  const statusRaw = firstPresent(
+    event?.current_status,
+    event?.shipment_status,
+    event?.status,
+    event?.event,
+    event?.event_name,
+    event?.scan_status,
+    event?.remarks_status,
+    ndrType,
+    '',
+  )
+  const { internalStatus: mappedStatus, statusText: mappedStatusText } = resolveProviderStatus(
+    provider,
+    statusRaw,
+  )
+  const ndrReason = ndrType ? describeIcarryNdrType(ndrType) : null
+  const remarks = String(
+    firstPresent(
+      event?.courier_remarks,
+      event?.remarks,
+      event?.remark,
+      event?.message,
+      event?.description,
+      ndrReason,
+      '',
+    ) || '',
+  )
+  const location = firstPresent(
+    event?.current_location,
+    event?.location,
+    event?.scan_location,
+    event?.hub_name,
+    event?.city,
+    null,
+  ) as string | null
+  const isRtoEvent =
+    mappedStatus.includes('rto') ||
+    Boolean(ndrType && (ndrType.startsWith('RTO-') || ndrType.includes('RTO') || ndrType.includes('RETURN')))
+  const internalStatus = forceNdr && !isRtoEvent ? 'ndr' : mappedStatus
+  const statusLower = internalStatus.toLowerCase()
+  const statusText =
+    ndrType && ndrReason ? `${ndrType}: ${ndrReason}` : mappedStatusText || internalStatus
+  const { actualWeight, volumetricWeight, chargedWeight } = resolveWebhookWeights(provider, event, order)
+
+  const updateData: any = {
+    order_status: internalStatus,
+    updated_at: new Date(),
+  }
+
+  if (location) updateData.delivery_location = String(location)
+  if (remarks || statusText) updateData.delivery_message = String(remarks || statusText).slice(0, 100)
+  if (refs.awb && !order.awb_number) updateData.awb_number = refs.awb
+  if (refs.shipmentId && !order.shipment_id) updateData.shipment_id = refs.shipmentId
+
+  const courierCost = toNumberOrUndefined(
+    firstPresent(
+      event?.courier_cost,
+      event?.shipping_charge,
+      event?.freight_charges,
+      event?.miles,
+      event?.amount,
+    ),
+  )
+  if (courierCost !== undefined) updateData.courier_cost = courierCost
+  if (actualWeight !== undefined) updateData.actual_weight = actualWeight
+  if (volumetricWeight !== undefined) updateData.volumetric_weight = volumetricWeight
+  if (chargedWeight !== undefined) updateData.charged_weight = chargedWeight
+  if (event?.label) updateData.label = String(event.label)
+  if (event?.manifest) updateData.manifest = String(event.manifest)
+
+  await tx.transaction(async (innerTx: any) => {
+    await innerTx.update(b2c_orders).set(updateData).where(eq(b2c_orders.id, order.id))
+    await syncShopifyStatusForLocalOrder({ ...order, ...updateData }, innerTx).catch((err) => {
+      console.warn(`Failed Shopify status sync for ${providerLabel} webhook:`, err)
+    })
+
+    try {
+      await logTrackingEvent({
+        orderId: order.id,
+        userId: order.user_id,
+        awbNumber: refs.awb || order.awb_number,
+        courier: providerLabel,
+        statusCode: internalStatus,
+        statusText,
+        location,
+        raw: payload,
+      })
+      await emitTrackingWebhook({
+        order,
+        awbNumber: refs.awb || order.awb_number,
+        providerLabel,
+        internalStatus,
+        statusText,
+        location,
+        payload,
+      })
+    } catch (err: any) {
+      console.error(`Failed to log ${providerLabel} tracking event:`, err)
+    }
+
+    if (
+      ['booked', 'pickup_initiated', 'shipment_created', 'in_transit', 'out_for_delivery', 'delivered'].includes(
+        internalStatus,
+      )
+    ) {
+      const [freshOrder] = await innerTx.select().from(b2c_orders).where(eq(b2c_orders.id, order.id))
+      if (freshOrder) await ensureOrderDocumentsAfterWebhook(freshOrder, innerTx, providerLabel)
+    }
+  })
+
+  if (forceNdr || hasNdrSignal(statusLower, statusText, remarks)) {
+    const explicitAttemptNo = String(
+      firstPresent(event?.attempt_no, event?.attempt, event?.attempt_count, '') || '',
+    )
+    const attemptNo = explicitAttemptNo || (forceNdr ? await resolveNextNdrAttemptNo(order.id) : undefined)
+
+    await captureNdrEventFromWebhook({
+      order,
+      awbNumber: refs.awb || order.awb_number || '',
+      status: isRtoEvent ? 'rto' : statusLower,
+      reason: remarks || ndrReason || null,
+      remarks: statusText || null,
+      attemptNo,
+      dedupeKey: ndrDedupeKey || null,
+      payload: forceNdr
+        ? {
+            provider: String(provider || '').toLowerCase(),
+            callback_type: 'ndr_status',
+            event: {
+              ...event,
+              type: ndrType || event?.type,
+              date_added: ndrDate || event?.date_added,
+            },
+            raw: payload,
+          }
+        : payload,
+      courierLabel: providerLabel,
+      signalParts: [statusText, remarks, ndrType],
+    }).catch((err) => console.error(`Failed NDR capture for ${providerLabel}:`, err))
+  }
+
+  if (isRtoEvent || statusLower.includes('rto')) {
+    try {
+      const rtoCharge = await applyRtoChargeOnce(tx, order, providerLabel)
+      await recordRtoEvent({
+        orderId: order.id,
+        userId: order.user_id,
+        awbNumber: refs.awb || order.awb_number || undefined,
+        status: isRtoEvent && !statusLower.includes('rto') ? 'rto_in_transit' : statusLower,
+        reason: remarks || ndrReason || null,
+        remarks: statusText || null,
+        rtoCharges: rtoCharge,
+        payload,
+        tx,
+      })
+    } catch (err) {
+      console.error(`Failed RTO capture for ${providerLabel}:`, err)
+    }
+  }
+
+  if (internalStatus === 'delivered' && order.order_type === 'cod') {
+    try {
+      await createCodRemittance({
+        orderId: order.id,
+        orderType: 'b2c',
+        userId: order.user_id,
+        orderNumber: order.order_number,
+        awbNumber: refs.awb || order.awb_number || undefined,
+        courierPartner: providerLabel,
+        codAmount: Number(order.order_amount ?? 0),
+        codCharges: Number(order.cod_charges ?? 0),
+        freightCharges: Number(order.freight_charges ?? order.shipping_charges ?? 0),
+        collectedAt: new Date(),
+      })
+    } catch (err) {
+      console.error(`Failed COD remittance for ${providerLabel}:`, err)
+    }
+  }
+
+  if (internalStatus === 'cancelled') {
+    await applyCancellationRefundOnce(tx, order, `${String(provider || '').toLowerCase()}_webhook`)
+  }
+
+  try {
+    await maybeCreateWeightDiscrepancyFromWebhook({
+      provider,
+      providerLabel,
+      event,
+      payload,
+      order,
+      awb: refs.awb,
+      remarks,
+      statusText,
+    })
+  } catch (err) {
+    console.error(`Failed weight discrepancy handling for ${providerLabel}:`, err)
+  }
+
+  return {
+    success: true as const,
+    awb: String(refs.awb || order.awb_number || ''),
+    status: statusText,
+  }
+}
+
+const processIcarryCourierWebhook = async (payload: any, tx: any) => {
+  const callbackType = String(payload?.callback_type || payload?.callbackType || '')
+    .trim()
+    .toLowerCase()
+  const providerLabel = normalizeProviderLabel('icarry')
+
+  if (callbackType === 'ndr_status') {
+    const items = getIcarryNdrItems(payload)
+    if (!items.length) {
+      return { success: false, reason: 'invalid_payload' as const, message: 'ndr_data is required' }
+    }
+
+    const results = []
+    for (const item of items) {
+      const ndrType = normalizeIcarryNdrType(firstPresent(item?.type, item?.ndr_type, item?.event_type))
+      const ndrDate = String(firstPresent(item?.date_added, item?.date, item?.event_date, '') || '')
+      const refs = extractCourierRefs(item)
+      const dedupeKey =
+        refs.awb || refs.shipmentId
+          ? `icarry:ndr:${refs.awb || refs.shipmentId}:${ndrType || 'unknown'}:${ndrDate || 'no-date'}`
+          : null
+
+      results.push(
+        await processSingleCourierWebhookEvent({
+          provider: 'icarry',
+          providerLabel,
+          event: {
+            ...item,
+            status: ndrType || item?.status || 'ndr',
+            remarks: describeIcarryNdrType(ndrType),
+          },
+          payload,
+          tx,
+          forceNdr: true,
+          ndrType,
+          ndrDate,
+          ndrDedupeKey: dedupeKey,
+        }),
+      )
+    }
+
+    const processed = results.filter((result) => result.success)
+    if (processed.length) {
+      return {
+        success: true as const,
+        processed: processed.length,
+        failed: results.length - processed.length,
+        results,
+      }
+    }
+
+    const first = results[0] as any
+    return {
+      success: false,
+      reason: first?.reason || 'order_not_found',
+      awb: first?.awb,
+      status: first?.status || 'ndr_status',
+      results,
+    }
+  }
+
+  if (callbackType && callbackType !== 'sync_status') {
+    return {
+      success: false,
+      reason: 'invalid_callback_type' as const,
+      message: `Unsupported iCarry callback_type: ${callbackType}`,
+    }
+  }
+
+  return processSingleCourierWebhookEvent({
+    provider: 'icarry',
+    providerLabel,
+    event: payload,
+    payload,
+    tx,
+  })
+}
+
 export async function processGenericCourierWebhook(provider: string, payload: any, tx = db) {
-  const event = payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : payload
-  const awb =
-    event?.awb_number ||
-    event?.awb ||
-    event?.waybill ||
-    event?.tracking_no ||
-    event?.tracking_id ||
-    event?.trackingId ||
-    event?.wbn ||
-    event?.barcode ||
-    event?.shipment_id ||
-    null
-  const orderRef =
-    event?.order_number ||
-    event?.order_id ||
-    event?.orderId ||
-    event?.reference_number ||
-    event?.tracking_ref ||
-    event?.ref_no ||
-    null
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
+  if (normalizedProvider === 'icarry') {
+    return processIcarryCourierWebhook(payload, tx)
+  }
+
+  const event = getGenericCourierEvent(payload)
+  const refs = extractCourierRefs(event)
+  const awb = refs.awb
+  const orderRef = refs.orderRef
   const statusRaw =
     event?.current_status ||
     event?.shipment_status ||
@@ -1929,25 +2643,17 @@ export async function processGenericCourierWebhook(provider: string, payload: an
     event?.city ||
     null
 
-  if (!awb && !orderRef) return { success: false, reason: 'missing_awb' as const }
+  if (!refs.awb && !refs.shipmentId && !refs.orderRef) {
+    return { success: false, reason: 'missing_awb' as const }
+  }
 
-  let order
-  if (awb) {
-    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.awb_number, String(awb)))
-  }
-  if (!order && orderRef) {
-    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.order_number, String(orderRef)))
-  }
-  if (!order && orderRef) {
-    ;[order] = await tx.select().from(b2c_orders).where(eq(b2c_orders.order_id, String(orderRef)))
-  }
+  const order = await findB2cOrderForCourierWebhook(tx, refs)
 
   if (!order) return { success: false, reason: 'order_not_found' as const, awb, status: statusRaw || 'unknown' }
 
-  const internalStatus = mapGenericWebhookStatus(statusRaw)
+  const { internalStatus, statusText } = resolveProviderStatus(normalizedProvider, statusRaw)
   const statusLower = internalStatus.toLowerCase()
-  const statusText = statusRaw || internalStatus
-  const providerLabel = normalizeProviderLabel(provider)
+  const providerLabel = normalizeProviderLabel(normalizedProvider)
 
   const updateData: any = {
     order_status: internalStatus,
@@ -1977,12 +2683,21 @@ export async function processGenericCourierWebhook(provider: string, payload: an
       await logTrackingEvent({
         orderId: order.id,
         userId: order.user_id,
-        awbNumber: order.awb_number,
+        awbNumber: refs.awb || order.awb_number,
         courier: providerLabel,
         statusCode: internalStatus,
         statusText,
         location,
         raw: payload,
+      })
+      await emitTrackingWebhook({
+        order,
+        awbNumber: refs.awb || order.awb_number,
+        providerLabel,
+        internalStatus,
+        statusText,
+        location,
+        payload,
       })
     } catch (err: any) {
       console.error(`❌ Failed to log ${providerLabel} tracking event:`, err)
@@ -2054,26 +2769,16 @@ export async function processGenericCourierWebhook(provider: string, payload: an
   }
 
   try {
-    const actualWeight = Number(event?.actual_weight ?? order?.actual_weight ?? 0)
-    const chargedWeight = Number(event?.charged_weight ?? event?.chargeable_weight ?? order?.charged_weight ?? 0)
-    if (actualWeight > 0 && chargedWeight > 0 && chargedWeight > actualWeight) {
-      const proofUrl = await extractWeightProofFromWebhook(payload, String(provider || ''))
-      const discrepancyAmount =
-        Number(event?.weight_discrepancy_charge ?? event?.extra_weight_charges ?? event?.extra_charge ?? 0) || 0
-      await createWeightDiscrepancy({
-        orderId: order.id,
-        userId: order.user_id,
-        awbNumber: order.awb_number || String(awb || ''),
-        courierPartner: providerLabel,
-        deadWeightKg: actualWeight,
-        volumetricWeightKg: Number(event?.volumetric_weight ?? order?.volumetric_weight ?? 0) || undefined,
-        chargedWeightKg: chargedWeight,
-        discrepancyAmount,
-        proofUrl: proofUrl || undefined,
-        source: 'webhook',
-        rawPayload: payload,
-      } as any)
-    }
+    await maybeCreateWeightDiscrepancyFromWebhook({
+      provider: normalizedProvider,
+      providerLabel,
+      event,
+      payload,
+      order,
+      awb,
+      remarks,
+      statusText,
+    })
   } catch (err) {
     console.error(`❌ Failed weight discrepancy handling for ${providerLabel}:`, err)
   }
