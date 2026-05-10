@@ -197,6 +197,9 @@ export interface KycDetails {
   aadhaarMime?: string;
   msmeCertMime?: string;
   cancelledChequeMime?: string;
+  businessPanMime?: string;
+  companyAddressProofMime?: string;
+  gstCertificateMime?: string;
   boardResolutionMime?: string;
   partnershipDeedMime?: string;
   llpAgreementMime?: string;
@@ -209,6 +212,9 @@ export interface KycDetails {
   cancelledChequeStatus?: "pending" | "verified" | "rejected";
   boardResolutionStatus?: "pending" | "verified" | "rejected";
   partnershipDeedStatus?: "pending" | "verified" | "rejected";
+  businessPanStatus?: "pending" | "verified" | "rejected";
+  companyAddressProofStatus?: "pending" | "verified" | "rejected";
+  gstCertificateStatus?: "pending" | "verified" | "rejected";
   cinStatus?: "pending" | "verified" | "rejected";
   llpAgreementStatus: "pending" | "verified" | "rejected";
 
@@ -220,6 +226,9 @@ export interface KycDetails {
   cancelledChequeRejectionReason?: string;
   boardResolutionRejectionReason?: string;
   partnershipDeedRejectionReason?: string;
+  businessPanRejectionReason?: string;
+  companyAddressProofRejectionReason?: string;
+  gstCertificateRejectionReason?: string;
   cinRejectionReason?: string;
   llpAgreementReason?: string;
 

@@ -7,6 +7,10 @@ const envPath = process.env.QA_ENV_FILE
 
 dotenv.config({ path: envPath })
 
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'postgres://qa:qa@127.0.0.1:5432/dolphin_qa'
+}
+
 const asBool = (value: string | undefined, fallback = false) => {
   if (value === undefined) return fallback
   return value.toLowerCase() === 'true'

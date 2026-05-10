@@ -54,6 +54,25 @@ const exposeAuthCodes = parseBooleanEnv(process.env.EXPOSE_AUTH_CODES, env !== '
 
 export const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString()
 
+const sanitizeAuthUser = (user: any) => {
+  if (!user) return user
+
+  const {
+    passwordHash,
+    refreshToken,
+    refreshTokenExpiresAt,
+    previousRefreshToken,
+    previousRefreshTokenExpiresAt,
+    otp,
+    otpExpiresAt,
+    emailVerificationToken,
+    emailVerificationTokenExpiresAt,
+    ...safeUser
+  } = user
+
+  return safeUser
+}
+
 const sendSmsViaTwilio = async (phone: string, message: string) => {
   const client = twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
   await client.messages.create({
@@ -383,6 +402,7 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
 
       result.data.token = accessToken
       result.data.refreshToken = refreshToken
+      result.data.user = sanitizeAuthUser(user)
     }
 
     return res.status(result.status).json(result.data)

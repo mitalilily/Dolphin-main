@@ -27,6 +27,16 @@ export interface AdditionalKYCForm {
   llpAgreementUrl?: string;
 
   cancelledChequeUrl?: string;
+
+  aadhaarMime?: string;
+  businessPanMime?: string;
+  companyAddressProofMime?: string;
+  gstCertificateMime?: string;
+  panCardMime?: string;
+  partnershipDeedMime?: string;
+  boardResolutionMime?: string;
+  llpAgreementMime?: string;
+  cancelledChequeMime?: string;
 }
 
 interface Props {
@@ -63,6 +73,18 @@ const allowedMimeTypes: Partial<Record<keyof AdditionalKYCForm, string>> = {
   boardResolutionUrl: "application/pdf",
   companyAddressProofUrl: "application/pdf,image/jpeg,image/png",
   businessPanUrl: "image/jpeg,image/png,application/pdf",
+};
+
+const backendMimeFieldMap: Partial<Record<keyof AdditionalKYCForm, keyof AdditionalKYCForm>> = {
+  aadhaarUrl: "aadhaarMime",
+  businessPanUrl: "businessPanMime",
+  companyAddressProofUrl: "companyAddressProofMime",
+  gstCertificateUrl: "gstCertificateMime",
+  panCardUrl: "panCardMime",
+  partnershipDeedUrl: "partnershipDeedMime",
+  boardResolutionUrl: "boardResolutionMime",
+  llpAgreementUrl: "llpAgreementMime",
+  cancelledChequeUrl: "cancelledChequeMime",
 };
 
 const isFileField = (f: keyof AdditionalKYCForm) =>
@@ -216,11 +238,13 @@ export default function AdditionalDetailsStep({
                         onUploaded={async (files) => {
                           const file = files?.[0];
                           const fileKey = file?.key;
+                          const mimeField = backendMimeFieldMap[field];
                           setValue(field, fileKey);
                           // eslint-disable-next-line @typescript-eslint/no-explicit-any
                           setValue(`${field}_key` as any, file?.originalName);
-                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                          setValue(`${field}_mime` as any, file?.mime);
+                          if (mimeField) {
+                            setValue(mimeField, file?.mime);
+                          }
                           ctrl.onChange(fileKey);
                         }}
                       />
