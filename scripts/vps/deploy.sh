@@ -8,14 +8,18 @@ PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
+SKIP_DEPLOY_GIT_SYNC="${SKIP_DEPLOY_GIT_SYNC:-false}"
 
 cd "$APP_DIR"
 
-if [ -d .git ]; then
+if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
   echo "Syncing repository with origin/main..."
   git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
   git reset --hard origin/main
   git show -s --oneline --decorate HEAD
+elif [ "$SKIP_DEPLOY_GIT_SYNC" = "true" ]; then
+  echo "Using source synced by GitHub Actions."
+  git show -s --oneline --decorate HEAD 2>/dev/null || true
 fi
 
 cat > apps/client/.env.production <<EOF
@@ -45,7 +49,7 @@ npm --prefix apps/backend run build
 
 echo "Installing client dependencies..."
 npm --prefix apps/client ci
-if [ -d .git ]; then
+if [ -d .git ] && [ "$SKIP_DEPLOY_GIT_SYNC" != "true" ]; then
   git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
 fi
 echo "Building client and landing frontend..."
