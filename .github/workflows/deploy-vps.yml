@@ -31,6 +31,7 @@ jobs:
       USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'false' }}
       BACKUP_DATABASE_BEFORE_PATCHES: ${{ secrets.BACKUP_DATABASE_BEFORE_PATCHES || 'true' }}
       RUN_INVOICE_DATA_BACKFILLS: ${{ inputs.run_invoice_data_backfills || secrets.RUN_INVOICE_DATA_BACKFILLS || 'false' }}
+      REQUIRE_BACKEND_ENV: ${{ secrets.REQUIRE_BACKEND_ENV || 'true' }}
       APP_DIR: /var/www/dolphin
     steps:
       - name: Checkout deploy commit
@@ -84,11 +85,17 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
           BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
+          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
         run: |
           set -euo pipefail
 
           if [ -z "${VPS_SSH_KEY:-}" ] && [ -z "${VPS_PASSWORD:-}" ]; then
             echo "Set VPS_SSH_KEY or VPS_PASSWORD in repository secrets." >&2
+            exit 1
+          fi
+
+          if [ "$REQUIRE_BACKEND_ENV" = "true" ] && [ -z "${BACKEND_ENV:-}" ] && [ -z "${BACKEND_ENV_B64:-}" ]; then
+            echo "::error::Set the BACKEND_ENV repository secret, or set BACKEND_ENV_B64 to base64-encoded backend env content. Refusing to deploy because the VPS may use the wrong/empty database."
             exit 1
           fi
 
@@ -150,9 +157,13 @@ jobs:
 
           retry "${ssh_cmd[@]}" "mkdir -p '${APP_DIR}' && (command -v rsync >/dev/null 2>&1 || (apt-get update && apt-get install -y rsync))"
 
-          if [ -n "${BACKEND_ENV:-}" ]; then
+          if [ -n "${BACKEND_ENV:-}" ] || [ -n "${BACKEND_ENV_B64:-}" ]; then
             backend_env_file="$(mktemp)"
-            printf '%s\n' "$BACKEND_ENV" > "$backend_env_file"
+            if [ -n "${BACKEND_ENV_B64:-}" ]; then
+              printf '%s' "$BACKEND_ENV_B64" | base64 -d > "$backend_env_file"
+            else
+              printf '%s\n' "$BACKEND_ENV" > "$backend_env_file"
+            fi
             chmod 600 "$backend_env_file"
             retry "${scp_cmd[@]}" "$backend_env_file" "$ssh_target:/root/dolphin-backend.env"
             retry "${ssh_cmd[@]}" "chmod 600 /root/dolphin-backend.env"

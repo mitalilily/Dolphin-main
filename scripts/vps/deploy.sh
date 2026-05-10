@@ -109,6 +109,12 @@ require_database_url() {
     echo "Refusing to deploy against an empty database config. Restore BACKEND_ENV or set USE_LOCAL_POSTGRES=true intentionally." >&2
     exit 1
   fi
+
+  if [ "$USE_LOCAL_POSTGRES" != "true" ] && grep -Eq '^DATABASE_URL=.*(127\.0\.0\.1|localhost|dolphin-postgres)' "$BACKEND_ENV_SOURCE"; then
+    echo "DATABASE_URL in ${BACKEND_ENV_SOURCE} points to a local database while USE_LOCAL_POSTGRES is not enabled." >&2
+    echo "Refusing to deploy because this can hide the real production courier/rate-card data." >&2
+    exit 1
+  fi
 }
 
 backup_database() {
