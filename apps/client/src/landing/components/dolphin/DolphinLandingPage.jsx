@@ -507,16 +507,16 @@ function CommercePanel() {
             {["Shopify", "WooCommerce", "Amazon", "Flipkart"].map((label, index) => (
               <div
                 key={label}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+                className="grid min-h-[3.5rem] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700"
               >
-                <span className="flex items-center gap-2">
+                <span className="flex min-w-0 items-center gap-2">
                   <Icon
                     name={index === 0 ? "shoppingBag" : index === 1 ? "store" : index === 2 ? "globe" : "package"}
-                    className="h-4 w-4"
+                    className="h-4 w-4 shrink-0"
                   />
-                  <span>{label}</span>
+                  <span className="min-w-0 truncate">{label}</span>
                 </span>
-                <span className="rounded-full bg-[#D4F6FF] px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-700">
+                <span className="inline-flex h-7 min-w-[5.25rem] shrink-0 items-center justify-center rounded-full bg-[#D4F6FF] px-2.5 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-700">
                   Synced
                 </span>
               </div>
