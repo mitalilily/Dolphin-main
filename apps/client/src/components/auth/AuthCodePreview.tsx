@@ -41,7 +41,7 @@ export default function AuthCodePreview({ title, code, helper }: AuthCodePreview
           <Box>
             <Typography sx={{ color: brand.ink, fontWeight: 700, lineHeight: 1.15 }}>{title}</Typography>
             <Typography sx={{ color: brand.inkSoft, fontSize: '0.8rem' }}>
-              Inline preview for console and development auth flows
+              Enter this code to continue securely
             </Typography>
           </Box>
         </Stack>

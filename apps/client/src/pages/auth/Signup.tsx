@@ -15,10 +15,10 @@ export default function Signup() {
   return (
     <AuthShell
       eyebrow="Create Account"
-      title="Start with a faster, cleaner seller onboarding flow."
-      subtitle="Signup is now wired directly from the landing page and still reuses the backend’s existing password setup and verification endpoints."
-      helperTitle="Name capture stays frontend-only"
-      helperText="The backend schema is unchanged, so your name is simply used to prefill onboarding after verification instead of changing any API contracts."
+      title="Start shipping with Dolphin."
+      subtitle="Create your seller account, complete onboarding, add your warehouse, and begin booking courier orders from one connected dashboard."
+      helperTitle="Made for growing sellers"
+      helperText="Dolphin brings rate cards, pickups, manifests, labels, invoices, tracking, and support together so your team can move faster."
       showChrome={false}
     >
       <Stack spacing={2.4}>
@@ -34,8 +34,7 @@ export default function Signup() {
             Create your account
           </Typography>
           <Typography sx={{ color: brand.inkSoft, lineHeight: 1.72 }}>
-            Enter your name, email, and password to create access using the current backend flow.
-            Verification codes will show inline when available.
+            Enter your name, email, and password. We will guide you through onboarding after your account is verified.
           </Typography>
         </Stack>
 

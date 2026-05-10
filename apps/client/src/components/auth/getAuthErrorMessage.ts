@@ -37,6 +37,5 @@ export const getAuthErrorMessage = (err: unknown, fallback: string) => {
   const isNetwork = errObj.code === 'ERR_NETWORK' || !errObj.response
   if (!isNetwork) return message
 
-      const base = import.meta.env.VITE_API_URL || '/api'
-  return `Cannot reach API (${base}). Start backend or set VITE_API_URL.`
+  return 'We could not connect to Dolphin right now. Please refresh and try again in a moment.'
 }

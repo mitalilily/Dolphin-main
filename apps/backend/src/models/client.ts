@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { Pool } from 'pg'
 import * as schema from '../schema/schema'
+import { databaseSslConfig } from '../utils/databaseSsl'
 
 // Load environment variables (platform-injected in production).
 const env = process.env.NODE_ENV || 'development'
@@ -14,20 +15,10 @@ if (!process.env.DATABASE_URL) {
 }
 
 const databaseUrl = process.env.DATABASE_URL as string
-const sslMode = `${process.env.PGSSLMODE || process.env.DATABASE_SSL || process.env.DB_SSL || ''}`
-  .trim()
-  .toLowerCase()
-const shouldUseSsl =
-  ['require', 'true', '1', 'yes'].includes(sslMode) ||
-  (
-    !['disable', 'false', '0', 'no'].includes(sslMode) &&
-    /sslmode=require/i.test(databaseUrl)
-  ) ||
-  /render\.com|railway\.app|supabase\.co/i.test(databaseUrl)
 
 export const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: shouldUseSsl ? { rejectUnauthorized: false } : false,
+  ssl: databaseSslConfig(databaseUrl),
 })
 
 // console.log('DEBUG: pool created?', !!pool, 'pool.constructor.name=', pool?.constructor?.name)

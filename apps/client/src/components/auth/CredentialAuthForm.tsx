@@ -152,11 +152,11 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
   }
 
   const heading =
-    mode === 'signup' ? 'Create your account with password access' : 'Sign in with email and password'
+    mode === 'signup' ? 'Create your Dolphin account' : 'Sign in with email and password'
   const description =
     mode === 'signup'
-      ? 'We keep the existing backend flow intact. Your name is used only to prefill onboarding after verification.'
-      : 'If this account needs email verification, the existing backend will issue a code and the UI will reveal it inline here.'
+      ? 'Set up your seller profile and start managing shipping, pickups, rates, labels, and invoices from one place.'
+      : 'Enter your account details to open your dashboard and continue shipping without friction.'
 
   return (
     <Stack spacing={2.2}>
@@ -170,9 +170,9 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
       </Stack>
 
       <AuthCodePreview
-        title={mode === 'signup' ? 'Signup verification preview' : 'Password flow verification preview'}
+        title={mode === 'signup' ? 'Verify your new account' : 'Verify your sign in'}
         code={inlineCode}
-        helper="If the backend exposes verification tokens for this flow, the latest code appears here so you can continue without checking the console separately."
+        helper="Use this code to complete verification."
       />
 
       {step === 'form' ? (
@@ -312,7 +312,7 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
       <Stack direction="row" spacing={1} alignItems="center">
         <FiShield size={14} color={brand.success} />
         <Typography sx={{ color: brand.inkSoft, fontSize: '0.82rem', lineHeight: 1.6 }}>
-          Password access reuses the current `/auth/request-password-login` and `/auth/verify-user-email` flow.
+          Your shipping data, invoices, and courier settings stay protected behind secure account access.
         </Typography>
       </Stack>
 

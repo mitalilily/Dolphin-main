@@ -22,7 +22,15 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 
 apt-get update
-apt-get install -y ca-certificates curl git nginx ufw postgresql-client
+apt-get install -y ca-certificates curl git gnupg nginx ufw
+
+install -d -m 0755 /usr/share/postgresql-common/pgdg
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+  | gpg --dearmor --yes -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg
+echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.gpg] https://apt.postgresql.org/pub/repos/apt jammy-pgdg main" \
+  > /etc/apt/sources.list.d/pgdg.list
+apt-get update
+apt-get install -y postgresql-client-16
 
 if ! command -v node >/dev/null 2>&1 || ! node -v | grep -Eq '^v20\.'; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash -

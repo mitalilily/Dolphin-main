@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv'
 import { readFileSync } from 'fs'
 import path from 'path'
 import { Client } from 'pg'
+import { databaseSslConfig } from '../utils/databaseSsl'
 
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
@@ -14,7 +15,7 @@ async function run() {
 
   const client = new Client({
     connectionString,
-    ssl: { rejectUnauthorized: false },
+    ssl: databaseSslConfig(connectionString),
   })
 
   await client.connect()

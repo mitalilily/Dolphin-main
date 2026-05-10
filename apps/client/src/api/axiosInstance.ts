@@ -4,17 +4,12 @@ import { clearAuthTokens, getAuthTokens, setAuthTokens } from './tokenVault'
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL
 const DEFAULT_API_BASE_URL = '/api'
-const PRODUCTION_API_BASE_URL = 'https://dolphin-backend-production-99e8.up.railway.app/api'
 
 const getApiBaseUrl = () => {
   const fallback = DEFAULT_API_BASE_URL.replace(/\/+$/, '')
-  const host = typeof window !== 'undefined' ? window.location.hostname : ''
-  const isHostedFrontend =
-    host.endsWith('netlify.app') || host.endsWith('vercel.app') || host === 'dolphin-enterprises.netlify.app'
-  const hostedFallback = isHostedFrontend ? PRODUCTION_API_BASE_URL : fallback
 
   try {
-    if (!RAW_API_BASE_URL) return hostedFallback
+    if (!RAW_API_BASE_URL) return fallback
     const raw = String(RAW_API_BASE_URL).trim()
 
     // Handle relative path-style env values robustly (e.g. "/api", "//api/").
@@ -29,7 +24,7 @@ const getApiBaseUrl = () => {
     if (normalized.endsWith('/api') || normalized.includes('/api/')) return normalized
     return `${normalized}/api`
   } catch {
-    return hostedFallback
+    return fallback
   }
 }
 

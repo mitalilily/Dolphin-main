@@ -1,7 +1,5 @@
 const DEFAULT_API_BASE_URL = '/api'
 const DEFAULT_SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : ''
-const PRODUCTION_BACKEND_ORIGIN = 'https://dolphin-backend-production-99e8.up.railway.app'
-const FALLBACK_API_BASE_URLS = [`${PRODUCTION_BACKEND_ORIGIN}/api`]
 const ACTIVE_ADMIN_API_BASE_URL_KEY = 'activeAdminApiBaseUrl'
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
@@ -58,9 +56,7 @@ export const getAdminApiBaseUrlCandidates = () => {
   const environmentCandidates = [configured, socketDerived, sameOriginApi]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
-  const trustedCandidates = [...environmentCandidates, ...FALLBACK_API_BASE_URLS]
-    .filter(Boolean)
-    .filter((value, index, list) => list.indexOf(value) === index)
+  const trustedCandidates = environmentCandidates
 
   // On hosted/self-hosted frontends, ignore stale manual overrides that don't match
   // the current deployment. This prevents browser-local storage from pinning Admin to a wrong backend.
@@ -77,7 +73,7 @@ export const getAdminApiBaseUrlCandidates = () => {
     window.localStorage.removeItem(ACTIVE_ADMIN_API_BASE_URL_KEY)
   }
 
-  const candidates = [configured, socketDerived, sameOriginApi, safeStored, ...FALLBACK_API_BASE_URLS]
+  const candidates = [configured, socketDerived, sameOriginApi, safeStored]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 

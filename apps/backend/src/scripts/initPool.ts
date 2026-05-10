@@ -14,6 +14,7 @@
 import * as dotenv from 'dotenv'
 import * as path from 'path'
 import { Pool } from 'pg'
+import { databaseSslConfig } from '../utils/databaseSsl'
 
 async function loadEnv() {
   const env = process.env.NODE_ENV || 'development'
@@ -97,13 +98,9 @@ async function main() {
 
   // 3) Fallback: create a temporary Pool here, test and close it
   console.log('ℹ️ Falling back to creating a temporary Pool from DATABASE_URL')
-  const shouldUseSsl =
-    process.env.PGSSLMODE === 'require' ||
-    process.env.NODE_ENV === 'production' ||
-    /render\.com|railway\.app|supabase\.co/i.test(process.env.DATABASE_URL)
   const tmpPool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: shouldUseSsl ? { rejectUnauthorized: false } : false,
+    ssl: databaseSslConfig(process.env.DATABASE_URL),
   })
 
   try {

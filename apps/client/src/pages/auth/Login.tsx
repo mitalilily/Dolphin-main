@@ -18,10 +18,10 @@ export default function Login() {
   return (
     <AuthShell
       eyebrow="Seller Login"
-      title="Access the Dolphin shipping workspace."
-      subtitle="Login now flows through a cleaner branded interface while keeping the existing authentication, token storage, and onboarding logic exactly intact."
-      helperTitle="Direct route into the app"
-      helperText="Landing page actions now send new users to signup, existing users to login, and authenticated users into the protected app entry route."
+      title="Welcome back to your shipping command center."
+      subtitle="Manage orders, couriers, invoices, pickups, and tracking from one simple workspace built for growing ecommerce teams."
+      helperTitle="Everything stays connected"
+      helperText="Sign in to continue where you left off, with your warehouses, rate cards, shipments, invoices, and reports ready in one place."
       showChrome={false}
     >
       <Stack spacing={2.4}>
@@ -30,7 +30,7 @@ export default function Login() {
             Login
           </Typography>
           <Typography sx={{ color: brand.inkSoft, lineHeight: 1.72 }}>
-            Choose OTP access or email plus password. If the backend exposes an OTP or verification token, the page will display it inline for you.
+            Use your registered email to securely access your Dolphin account.
           </Typography>
         </Stack>
 

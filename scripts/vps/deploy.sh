@@ -69,6 +69,13 @@ if [ -d "$CLIENT_ASSET_BACKUP/assets" ]; then
   find apps/client/dist/assets -type f -mtime +21 -delete || true
 fi
 rm -rf "$CLIENT_ASSET_BACKUP"
+grep -RIl \
+  -e 'dolphinenterprises.in/api' \
+  -e 'dolphin-backend-production' \
+  -e 'Start backend or set VITE_API_URL' \
+  -e 'Existing token storage' \
+  -e 'backend exposes' \
+  apps/client/dist/assets 2>/dev/null | xargs -r rm -f
 
 echo "Installing admin dependencies..."
 if [ -f apps/admin/package-lock.json ]; then
@@ -92,6 +99,10 @@ if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
   find apps/admin/build/static -type f -mtime +21 -delete || true
 fi
 rm -rf "$ADMIN_STATIC_BACKUP"
+grep -RIl \
+  -e 'dolphin-backend-production' \
+  -e 'dolphinenterprises.in/api' \
+  apps/admin/build/static 2>/dev/null | xargs -r rm -f
 
 echo "Restarting API..."
 pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
