@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
-PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
 DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
@@ -192,8 +192,8 @@ server {
     location ^~ /admin/static/ {
         alias /var/www/dolphin/apps/admin/build/static/;
         access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
+        expires -1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
     location = /admin {
@@ -202,18 +202,21 @@ server {
 
     location = /admin/ {
         root /var/www/dolphin/apps/admin/build;
+        add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files /index.html =404;
     }
 
     location ^~ /admin/ {
         alias /var/www/dolphin/apps/admin/build/;
+        add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri /admin/index.html;
     }
 
     location ^~ /auth/ {
         alias /var/www/dolphin/apps/admin/build/;
+        add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri /admin/index.html;
     }
@@ -224,11 +227,12 @@ server {
     location /assets/ {
         try_files $uri =404;
         access_log off;
-        expires 30d;
-        add_header Cache-Control "public, max-age=2592000, immutable";
+        expires -1;
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
     location / {
+        add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
         try_files $uri $uri/ /index.html;
     }
