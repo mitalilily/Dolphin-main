@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
+import {
+  fetchTracking,
+  isValidTrackingContact,
+  normalizeAwbParam,
+  normalizeContactParam,
+} from "../../../api/tracking.service";
 import Icon from "./Icons";
 import { Field, Reveal } from "./primitives";
 import { trackingStatuses } from "./siteData";
@@ -12,6 +18,13 @@ const COURIER_CART_API = "https://api.couriercart.in/api";
 const PINCODE_API = "https://api.postalpincode.in/pincode";
 const paymentTypes = ["Prepaid", "COD"];
 const rateBucketKeys = ["rates", "localRates", "regionalRates", "metroRates", "nationalRates", "zonalRates"];
+const defaultTrackingLookup = {
+  awb: "DLP-2048127",
+  orderNumber: "",
+  contact: "",
+  searched: "DLP-2048127",
+  mode: "AWB",
+};
 
 function parseNumber(value) {
   const number = Number(value);
@@ -58,6 +71,53 @@ function formatChargeableWeight(weight) {
   }
 
   return `${numericWeight.toFixed(2)} kg`;
+}
+
+function formatTrackingTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getTrackingLookupFromSearch(search) {
+  const params = new URLSearchParams(search);
+  const awb = normalizeAwbParam(params.get("awb"));
+
+  if (awb) {
+    return {
+      mode: "AWB",
+      params: { awb },
+      form: { awb, orderNumber: "", contact: "" },
+      display: awb,
+    };
+  }
+
+  const orderNumber = (params.get("orderNumber") || "").trim();
+  const contact = (params.get("contact") || "").trim();
+
+  if (orderNumber && contact) {
+    return {
+      mode: "Order Details",
+      params: { orderNumber, contact: normalizeContactParam(contact) },
+      form: { awb: "", orderNumber, contact },
+      display: orderNumber,
+    };
+  }
+
+  return null;
 }
 
 function readStoredValue(key, fallback) {
@@ -646,39 +706,136 @@ export function ShippingToolPlaceholders() {
 
 export function TrackingPanel() {
   const location = useLocation();
-  const storedTracking = readStoredValue("dolphin-tracking-panel", {
-    awb: "DLP-2048127",
-    searched: "DLP-2048127",
-    mode: "AWB",
-  });
-  const initialQuery = location.state?.query || storedTracking.awb || "DLP-2048127";
-  const initialMode =
-    location.state?.mode === "order" ? "Order Details" : location.state?.mode ? "AWB" : storedTracking.mode;
-  const [awb, setAwb] = useState(initialQuery);
-  const [searched, setSearched] = useState(location.state?.query || storedTracking.searched || initialQuery);
+  const [, setSearchParams] = useSearchParams();
+  const urlLookup = useMemo(() => getTrackingLookupFromSearch(location.search), [location.search]);
+  const storedTracking = readStoredValue("dolphin-tracking-panel", defaultTrackingLookup);
+  const stateMode = location.state?.mode === "order" ? "Order Details" : location.state?.mode ? "AWB" : null;
+  const initialMode = urlLookup?.mode || stateMode || storedTracking.mode || "AWB";
+  const initialForm = {
+    awb: urlLookup?.form.awb || location.state?.query || storedTracking.awb || defaultTrackingLookup.awb,
+    orderNumber: urlLookup?.form.orderNumber || storedTracking.orderNumber || "",
+    contact: urlLookup?.form.contact || storedTracking.contact || "",
+  };
+  const [form, setForm] = useState(initialForm);
+  const [searched, setSearched] = useState(urlLookup?.display || location.state?.query || storedTracking.searched || initialForm.awb);
   const [mode, setMode] = useState(initialMode);
+  const [tracking, setTracking] = useState(null);
+  const [trackingError, setTrackingError] = useState("");
+  const [isTracking, setIsTracking] = useState(false);
+
   const timeline = useMemo(
-    () =>
-      trackingStatuses.map((status, index) => ({
+    () => {
+      if (tracking?.history?.length) {
+        return [...tracking.history]
+          .sort((a, b) => new Date(b.event_time).getTime() - new Date(a.event_time).getTime())
+          .map((event, index) => ({
+            title: event.message || event.status_code || "Tracking update",
+            detail: [
+              event.location ? `Location: ${event.location}` : "",
+              formatTrackingTime(event.event_time),
+            ]
+              .filter(Boolean)
+              .join(" | "),
+            complete: true,
+            active: index === 0,
+          }));
+      }
+
+      return trackingStatuses.map((status, index) => ({
         ...status,
         complete: index < 3,
         active: index === 2,
-      })),
-    []
+      }));
+    },
+    [tracking]
   );
+
+  useEffect(() => {
+    if (!urlLookup) {
+      setTracking(null);
+      setTrackingError("");
+      setIsTracking(false);
+      return undefined;
+    }
+
+    setMode(urlLookup.mode);
+    setForm((current) => ({ ...current, ...urlLookup.form }));
+    setSearched(urlLookup.display);
+    setTracking(null);
+    setTrackingError("");
+    setIsTracking(true);
+
+    let ignore = false;
+
+    fetchTracking(urlLookup.params)
+      .then((result) => {
+        if (!ignore) {
+          setTracking(result);
+        }
+      })
+      .catch((error) => {
+        if (!ignore) {
+          setTrackingError(error instanceof Error ? error.message : "Unable to fetch tracking right now.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsTracking(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [urlLookup]);
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    setSearched(awb || "DLP-2048127");
+    setTrackingError("");
+
+    const params = new URLSearchParams();
+
+    if (mode === "AWB") {
+      const awb = normalizeAwbParam(form.awb);
+
+      if (awb.length < 4) {
+        setTrackingError("Enter a valid AWB number.");
+        return;
+      }
+
+      params.set("awb", awb);
+    } else {
+      const orderNumber = form.orderNumber.trim();
+      const contact = normalizeContactParam(form.contact);
+
+      if (orderNumber.length < 3 || !isValidTrackingContact(form.contact)) {
+        setTrackingError("Enter a valid order number and email or phone.");
+        return;
+      }
+
+      params.set("orderNumber", orderNumber);
+      params.set("contact", contact);
+    }
+
+    setSearchParams(params);
   };
 
   useEffect(() => {
     try {
-      window.localStorage.setItem("dolphin-tracking-panel", JSON.stringify({ awb, searched, mode }));
+      window.localStorage.setItem("dolphin-tracking-panel", JSON.stringify({ ...form, searched, mode }));
     } catch {
       // Tracking still works without local storage.
     }
-  }, [awb, searched, mode]);
+  }, [form, searched, mode]);
+
+  const handleFieldChange = (event) => {
+    const { name, value } = event.target;
+    setForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const statusLabel =
+    tracking?.status || tracking?.status_code || (isTracking ? "Checking courier network" : "Out for delivery");
+  const lookupLabel = mode === "AWB" ? searched : `${searched}${form.contact ? ` / ${form.contact}` : ""}`;
 
   return (
     <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
@@ -695,7 +852,7 @@ export function TrackingPanel() {
             </span>
             <div>
               <h3 className="font-display text-2xl text-slate-900">Shipment tracking</h3>
-              <p className="mt-1 text-sm text-slate-500">Enter an AWB or order reference to preview the tracking experience.</p>
+              <p className="mt-1 text-sm text-slate-500">Enter an AWB or order details to check the latest shipment movement.</p>
             </div>
           </div>
 
@@ -707,35 +864,64 @@ export function TrackingPanel() {
                   name="trackingType"
                   className="h-4 w-4 accent-slate-900"
                   checked={mode === option}
-                  onChange={() => setMode(option)}
+                  onChange={() => {
+                    setMode(option);
+                    setTrackingError("");
+                  }}
                 />
                 <span>{option}</span>
               </label>
             ))}
           </div>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto]">
-            <Field
-              label="Tracking number"
-              name="awb"
-              value={awb}
-              onChange={(event) => setAwb(event.target.value)}
-              placeholder={mode === "AWB" ? "Enter AWB number" : "Enter order number"}
-            />
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            {mode === "AWB" ? (
+              <Field
+                label="Tracking number"
+                name="awb"
+                value={form.awb}
+                onChange={handleFieldChange}
+                placeholder="Enter AWB number"
+              />
+            ) : (
+              <>
+                <Field
+                  label="Order number"
+                  name="orderNumber"
+                  value={form.orderNumber}
+                  onChange={handleFieldChange}
+                  placeholder="Enter order number"
+                />
+                <Field
+                  label="Email or phone"
+                  name="contact"
+                  value={form.contact}
+                  onChange={handleFieldChange}
+                  placeholder="Email or phone used for shipment"
+                />
+              </>
+            )}
             <button
               type="submit"
-              className="mt-auto inline-flex h-[52px] items-center justify-center rounded-2xl bg-[#f3d971] px-6 text-sm font-semibold text-slate-900 transition hover:bg-[#efcf54]"
+              disabled={isTracking}
+              className="mt-auto inline-flex h-[52px] items-center justify-center rounded-2xl bg-[#f3d971] px-6 text-sm font-semibold text-slate-900 transition hover:bg-[#efcf54] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Search
+              {isTracking ? "Tracking..." : "Search"}
             </button>
           </div>
 
+          {trackingError ? <p className="mt-4 text-sm font-semibold text-red-500">{trackingError}</p> : null}
+
           <div className="mt-6 rounded-[1.75rem] bg-[linear-gradient(135deg,rgba(198,231,255,0.92),rgba(255,221,174,0.88))] px-5 py-5 text-slate-900 shadow-sm">
             <p className="text-sm text-slate-600">Latest lookup</p>
-            <p className="mt-2 break-all font-display text-2xl sm:text-3xl">{searched}</p>
-            <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">{mode}</p>
+            <p className="mt-2 break-all font-display text-2xl sm:text-3xl">{lookupLabel}</p>
+            <p className="mt-1 text-xs uppercase tracking-[0.22em] text-slate-500">{statusLabel}</p>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Current preview shows a shipment that is out for delivery and ready for final customer notification.
+              {tracking
+                ? `Courier: ${tracking.courier_name || tracking.provider || "To be updated"}${
+                    tracking.edd ? ` | EDD: ${tracking.edd}` : ""
+                  }`
+                : "Use the search box to check live courier updates. A sample journey is shown until a lookup is run."}
             </p>
           </div>
         </MotionForm>
@@ -753,7 +939,7 @@ export function TrackingPanel() {
               <h3 className="mt-2 font-display text-2xl text-slate-900">Delivery journey snapshot</h3>
             </div>
             <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              Out for delivery
+              {statusLabel}
             </span>
           </div>
 

@@ -36,7 +36,6 @@ import {
   loadLayout,
   loadLogin,
   loadNdrList,
-  loadOrderTracking,
   loadOrderTrackingForm,
   loadOrders,
   loadPickupAddresses,
@@ -53,6 +52,7 @@ import {
   loadSupportTicketsPage,
   loadTermsOfService,
   loadTicketDetailsPage,
+  loadTrackingLandingPage,
   loadUserOnboarding,
   loadUserProfileSettings,
   loadUsersManagement,
@@ -67,6 +67,7 @@ import GlobalRedirectHandler from './WalletRedirectHandler'
 const LandingMainLayout = lazy(loadLandingLayout)
 const LandingPage = lazy(loadLandingPage)
 const RateCalculatorLandingPage = lazy(loadRateCalculatorLandingPage)
+const TrackingLandingPage = lazy(loadTrackingLandingPage)
 const VolumetricCalculatorPage = lazy(loadVolumetricCalculatorPage)
 const Login = lazy(loadLogin)
 const Signup = lazy(loadSignup)
@@ -82,7 +83,6 @@ const Orders = lazy(loadOrders)
 const B2COrdersList = lazy(loadB2COrdersList)
 const B2bOrders = lazy(loadB2bOrders)
 const CreateOrderWrapper = lazy(loadCreateOrderWrapper)
-const OrderTracking = lazy(loadOrderTracking)
 
 // Settings
 const Settings = lazy(loadSettings)
@@ -151,13 +151,13 @@ export default function AppRoutes() {
           <Route element={<LandingMainLayout />}>
             <Route path="/" element={<LandingPage />} />
             <Route path="/rate-calculator" element={<RateCalculatorLandingPage />} />
+            <Route path="/tracking" element={<TrackingLandingPage />} />
             <Route path="/volumetric-weight-calculator" element={<VolumetricCalculatorPage />} />
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/app" element={<AppEntry />} />
           <Route path="/preview" element={<ClientPreview />} />
-          <Route path="/tracking" element={<OrderTracking />} />
           {/* onboarding */}
           <Route
             path="/onboarding-questions"

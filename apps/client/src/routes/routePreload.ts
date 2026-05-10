@@ -3,6 +3,7 @@ type RouteLoader = () => Promise<unknown>
 export const loadLandingLayout = () => import('../landing/components/dolphin/MainLayout.jsx')
 export const loadLandingPage = () => import('../landing/pages/LandingPage.jsx')
 export const loadRateCalculatorLandingPage = () => import('../landing/pages/RateCalculatorPage.jsx')
+export const loadTrackingLandingPage = () => import('../landing/pages/TrackingPage.jsx')
 export const loadVolumetricCalculatorPage = () => import('../landing/pages/VolumetricCalculatorPage.jsx')
 export const loadLogin = () => import('../pages/auth/Login')
 export const loadSignup = () => import('../pages/auth/Signup')
@@ -113,7 +114,13 @@ const routePreloaders: Array<{
   { match: (pathname) => pathname === '/login', loaders: [['login', loadLogin]] },
   { match: (pathname) => pathname === '/signup', loaders: [['signup', loadSignup]] },
   { match: (pathname) => pathname === '/preview', loaders: [['preview', loadClientPreview]] },
-  { match: (pathname) => pathname === '/tracking', loaders: [['tracking', loadOrderTracking]] },
+  {
+    match: (pathname) => pathname === '/tracking',
+    loaders: [
+      ['landing-shell', loadLandingLayout],
+      ['landing-tracking', loadTrackingLandingPage],
+    ],
+  },
   {
     match: (pathname) => pathname === '/onboarding-questions',
     loaders: [['onboarding', loadUserOnboarding]],
