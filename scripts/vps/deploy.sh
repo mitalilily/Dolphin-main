@@ -2,11 +2,12 @@
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
-PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-dolphinenterprises.in}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
+PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN api.$PRIMARY_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
+BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 
 cd "$APP_DIR"
 
@@ -31,6 +32,12 @@ REACT_APP_API_BASE_URL=${API_ORIGIN}/api
 REACT_APP_SOCKET_URL=${API_ORIGIN}
 EOF
 
+if [ -f "$BACKEND_ENV_SOURCE" ]; then
+  cp "$BACKEND_ENV_SOURCE" apps/backend/.env.production
+  cp "$BACKEND_ENV_SOURCE" apps/backend/.env
+  chmod 600 apps/backend/.env.production apps/backend/.env
+fi
+
 echo "Installing backend dependencies..."
 npm --prefix apps/backend ci
 echo "Building backend..."
@@ -51,6 +58,7 @@ npm --prefix apps/client run build:netlify
 if [ -d "$CLIENT_ASSET_BACKUP/assets" ]; then
   mkdir -p apps/client/dist/assets
   cp -an "$CLIENT_ASSET_BACKUP/assets/." apps/client/dist/assets/ || true
+  grep -rl '72.60.96.97' apps/client/dist/assets 2>/dev/null | xargs -r rm -f
   find apps/client/dist/assets -type f -mtime +21 -delete || true
 fi
 rm -rf "$CLIENT_ASSET_BACKUP"
@@ -74,6 +82,7 @@ fi
 if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
   mkdir -p apps/admin/build/static
   cp -an "$ADMIN_STATIC_BACKUP/static/." apps/admin/build/static/ || true
+  grep -rl '72.60.96.97' apps/admin/build/static 2>/dev/null | xargs -r rm -f
   find apps/admin/build/static -type f -mtime +21 -delete || true
 fi
 rm -rf "$ADMIN_STATIC_BACKUP"
@@ -85,8 +94,8 @@ pm2 save
 echo "Reloading Nginx..."
 NGINX_SITE="/etc/nginx/sites-available/dolphin"
 if [ -f "$NGINX_SITE" ]; then
-  if grep -q 'server_name _;' "$NGINX_SITE"; then
-    sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
+  if grep -q 'server_name ' "$NGINX_SITE"; then
+    sed -i "s/server_name .*/server_name ${DOMAIN_NAMES};/g" "$NGINX_SITE"
   fi
   if ! grep -q 'location = /admin {' "$NGINX_SITE"; then
     sed -i '/location \^~ \/admin\/static\/ {/i\

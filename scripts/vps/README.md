@@ -2,11 +2,11 @@
 
 This deploys the current monorepo to a single VPS with path routing:
 
-- Landing/client frontend: `https://dolphinenterprises.in/`
-- Client app entry: `https://dolphinenterprises.in/app`
-- Admin frontend: `https://dolphinenterprises.in/admin/`
-- API: `https://dolphinenterprises.in/api/`
-- pgAdmin: `https://dolphinenterprises.in/pgadmin/`
+- Landing/client frontend: `https://shopnship.in/`
+- Client app entry: `https://shopnship.in/app`
+- Admin frontend: `https://shopnship.in/admin/`
+- API: `https://shopnship.in/api/`
+- pgAdmin: `https://shopnship.in/pgadmin/`
 
 ## DNS records
 
@@ -18,6 +18,7 @@ A     @      72.60.96.97
 A     www    72.60.96.97
 A     app    72.60.96.97
 A     admin  72.60.96.97
+A     api    72.60.96.97
 ```
 
 Remove any old A records for these names that point somewhere else. SSL is
@@ -30,8 +31,10 @@ Create `/root/dolphin-backend.env` on the VPS with the backend production env va
 Then run:
 
 ```bash
-PUBLIC_ORIGIN=https://dolphinenterprises.in \
-PGADMIN_EMAIL=admin@dolphinenterprises.in \
+PRIMARY_DOMAIN=shopnship.in \
+DOMAIN_NAMES="shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in" \
+PUBLIC_ORIGIN=https://shopnship.in \
+PGADMIN_EMAIL=admin@shopnship.in \
 PGADMIN_PASSWORD='<strong-password>' \
 bash /var/www/dolphin/scripts/vps/bootstrap.sh
 ```
@@ -53,7 +56,9 @@ VPS_HOST=72.60.96.97
 VPS_USER=root
 VPS_SSH_KEY=<private key allowed in /root/.ssh/authorized_keys>
 VPS_PASSWORD=<optional fallback if no SSH key is configured>
-PUBLIC_ORIGIN=https://dolphinenterprises.in
+PRIMARY_DOMAIN=shopnship.in
+DOMAIN_NAMES=shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in
+PUBLIC_ORIGIN=https://shopnship.in
 ```
 
 The workflow runs on every push to `main`, resets `/var/www/dolphin` to
