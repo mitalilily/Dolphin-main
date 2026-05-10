@@ -45,8 +45,8 @@ jobs:
           ssh_base=(
             -o StrictHostKeyChecking=accept-new
             -o IdentitiesOnly=yes
-            -o ConnectTimeout=30
-            -o ConnectionAttempts=3
+            -o ConnectTimeout=10
+            -o ConnectionAttempts=1
             -o ServerAliveInterval=15
             -o ServerAliveCountMax=4
           )
@@ -54,8 +54,8 @@ jobs:
 
           retry() {
             local attempt=1
-            local max_attempts=3
-            local delay_seconds=20
+            local max_attempts=2
+            local delay_seconds=15
 
             until "$@"; do
               local exit_code=$?
@@ -69,7 +69,7 @@ jobs:
           }
 
           echo "Checking ${VPS_HOST}:22 before deploy..."
-          if timeout 15 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/22"; then
+          if timeout 8 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/22"; then
             echo "SSH port is reachable."
           else
             echo "::warning::SSH port ${VPS_HOST}:22 is not reachable from GitHub Actions right now."
