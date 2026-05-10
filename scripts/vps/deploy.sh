@@ -161,6 +161,14 @@ if [ -f "$NGINX_SITE" ]; then
   if ! grep -q 'max-age=2592000, immutable' "$NGINX_SITE"; then
     sed -i '/expires 30d;/a\        add_header Cache-Control "public, max-age=2592000, immutable";' "$NGINX_SITE"
   fi
+  sed -i 's#expires 30d;#expires -1;#g' "$NGINX_SITE"
+  sed -i 's#add_header Cache-Control "public, max-age=2592000, immutable";#add_header Cache-Control "no-cache, no-store, must-revalidate";#g' "$NGINX_SITE"
+  if ! grep -q 'Clear-Site-Data' "$NGINX_SITE"; then
+    sed -i '/location = \/admin\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
+    sed -i '/location \^~ \/admin\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
+    sed -i '/location \^~ \/auth\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
+    sed -i '/location \/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
+  fi
   if ! grep -q 'no-cache, no-store, must-revalidate' "$NGINX_SITE"; then
     sed -i '/location \^~ \/admin\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
     sed -i '/location \^~ \/auth\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
