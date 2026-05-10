@@ -1,7 +1,6 @@
 import * as dotenv from 'dotenv'
 import path from 'path'
 import { Client } from 'pg'
-import { buildScriptPgClientConfig } from './scriptPgClient'
 
 const env = process.env.NODE_ENV || 'development'
 dotenv.config({ path: path.resolve(__dirname, `../../.env.${env}`) })
@@ -12,7 +11,10 @@ async function run() {
     throw new Error('DATABASE_URL is not set')
   }
 
-  const client = new Client(buildScriptPgClientConfig(connectionString))
+  const client = new Client({
+    connectionString,
+    ssl: { rejectUnauthorized: false },
+  })
 
   await client.connect()
 

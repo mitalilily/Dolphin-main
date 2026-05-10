@@ -5,15 +5,6 @@ on:
     branches:
       - main
   workflow_dispatch:
-    inputs:
-      run_invoice_data_backfills:
-        description: Run one-time invoice data backfill scripts after schema patches
-        required: false
-        default: 'false'
-        type: choice
-        options:
-          - 'false'
-          - 'true'
 
 concurrency:
   group: dolphin-vps-deploy
@@ -28,76 +19,12 @@ jobs:
       PRIMARY_DOMAIN: ${{ secrets.PRIMARY_DOMAIN || 'shopnship.in' }}
       DOMAIN_NAMES: ${{ secrets.DOMAIN_NAMES || 'shopnship.in www.shopnship.in app.shopnship.in admin.shopnship.in api.shopnship.in' }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
-      USE_LOCAL_POSTGRES: ${{ secrets.USE_LOCAL_POSTGRES || 'false' }}
-      BACKUP_DATABASE_BEFORE_PATCHES: ${{ secrets.BACKUP_DATABASE_BEFORE_PATCHES || 'true' }}
-      RUN_INVOICE_DATA_BACKFILLS: ${{ inputs.run_invoice_data_backfills || secrets.RUN_INVOICE_DATA_BACKFILLS || 'false' }}
-      REQUIRE_BACKEND_ENV: ${{ secrets.REQUIRE_BACKEND_ENV || 'true' }}
       APP_DIR: /var/www/dolphin
     steps:
-      - name: Checkout deploy commit
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Validate production backend env
-        env:
-          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
-          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
-        run: |
-          set -euo pipefail
-
-          if [ "$REQUIRE_BACKEND_ENV" = "true" ] && [ -z "${BACKEND_ENV:-}" ] && [ -z "${BACKEND_ENV_B64:-}" ]; then
-            echo "::error::Set the BACKEND_ENV repository secret, or set BACKEND_ENV_B64 to base64-encoded backend env content. Refusing to deploy because the VPS may use the wrong/empty database."
-            exit 1
-          fi
-
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build deploy artifacts
-        env:
-          CI: false
-          DISABLE_ESLINT_PLUGIN: true
-          GENERATE_SOURCEMAP: false
-        run: |
-          set -euo pipefail
-
-          cat > apps/client/.env.production <<EOF
-          VITE_API_URL=${PUBLIC_ORIGIN}/api
-          VITE_APP_SOCKET_URL=${PUBLIC_ORIGIN}
-          VITE_CLIENT_APP_URL=${PUBLIC_ORIGIN}/app
-          VITE_AUTH_APP_URL=${PUBLIC_ORIGIN}/login
-          VITE_ADMIN_APP_URL=${PUBLIC_ORIGIN}/admin
-          VITE_ADMIN_AUTH_URL=${PUBLIC_ORIGIN}/auth/signin
-          EOF
-
-          cat > apps/admin/.env.production <<EOF
-          REACT_APP_API_BASE_URL=${PUBLIC_ORIGIN}/api
-          REACT_APP_SOCKET_URL=${PUBLIC_ORIGIN}
-          EOF
-
-          npm --prefix apps/backend ci
-          npm --prefix apps/backend run build
-
-          npm --prefix apps/client ci
-          npm --prefix apps/client run build:netlify
-
-          if [ -f apps/admin/package-lock.json ]; then
-            npm --prefix apps/admin ci --legacy-peer-deps
-          else
-            npm --prefix apps/admin install --legacy-peer-deps
-          fi
-          (cd apps/admin && PUBLIC_URL=/admin npx react-scripts build)
-
       - name: Deploy on VPS
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
-          BACKEND_ENV: ${{ secrets.BACKEND_ENV }}
-          BACKEND_ENV_B64: ${{ secrets.BACKEND_ENV_B64 }}
         run: |
           set -euo pipefail
 
@@ -106,92 +33,28 @@ jobs:
             exit 1
           fi
 
-          if [ "$REQUIRE_BACKEND_ENV" = "true" ] && [ -z "${BACKEND_ENV:-}" ] && [ -z "${BACKEND_ENV_B64:-}" ]; then
-            echo "::error::Set the BACKEND_ENV repository secret, or set BACKEND_ENV_B64 to base64-encoded backend env content. Refusing to deploy because the VPS may use the wrong/empty database."
-            exit 1
-          fi
-
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh_base=(
-            -o StrictHostKeyChecking=accept-new
-            -o IdentitiesOnly=yes
-            -o ConnectTimeout=10
-            -o ConnectionAttempts=1
-            -o ServerAliveInterval=15
-            -o ServerAliveCountMax=4
-          )
+          ssh_base=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
           ssh_target="${VPS_USER}@${VPS_HOST}"
-
-          retry() {
-            local attempt=1
-            local max_attempts=2
-            local delay_seconds=15
-
-            until "$@"; do
-              local exit_code=$?
-              if [ "$attempt" -ge "$max_attempts" ]; then
-                return "$exit_code"
-              fi
-              echo "Attempt ${attempt}/${max_attempts} failed; retrying in ${delay_seconds}s..."
-              sleep "$delay_seconds"
-              attempt=$((attempt + 1))
-            done
-          }
-
-          echo "Checking ${VPS_HOST}:22 before deploy..."
-          if timeout 8 bash -c "cat < /dev/null > /dev/tcp/${VPS_HOST}/22"; then
-            echo "SSH port is reachable."
-          else
-            echo "::warning::SSH port ${VPS_HOST}:22 is not reachable from GitHub Actions right now."
-          fi
-
-          if ! command -v rsync >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y rsync
-          fi
 
           if [ -n "${VPS_SSH_KEY:-}" ]; then
             printf '%s\n' "$VPS_SSH_KEY" | tr -d '\r' > ~/.ssh/dolphin_vps
             chmod 600 ~/.ssh/dolphin_vps
             ssh_cmd=(ssh -i ~/.ssh/dolphin_vps "${ssh_base[@]}" "$ssh_target")
-            scp_cmd=(scp -i ~/.ssh/dolphin_vps "${ssh_base[@]}")
-            rsync_ssh="ssh -i ~/.ssh/dolphin_vps ${ssh_base[*]}"
-            rsync_cmd=(rsync -az --delete -e "$rsync_ssh")
           else
             sudo apt-get update
             sudo apt-get install -y sshpass
             ssh_cmd=(sshpass -p "$VPS_PASSWORD" ssh "${ssh_base[@]}" "$ssh_target")
-            scp_cmd=(sshpass -p "$VPS_PASSWORD" scp "${ssh_base[@]}")
-            rsync_ssh="ssh ${ssh_base[*]}"
-            rsync_cmd=(sshpass -p "$VPS_PASSWORD" rsync -az --delete -e "$rsync_ssh")
           fi
 
-          retry "${ssh_cmd[@]}" "mkdir -p '${APP_DIR}' && (command -v rsync >/dev/null 2>&1 || (apt-get update && apt-get install -y rsync))"
+          cat > /tmp/dolphin-deploy.sh <<'REMOTE'
+          set -euo pipefail
+          cd "${APP_DIR:-/var/www/dolphin}"
+          git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
+          git reset --hard origin/main
+          git show -s --oneline --decorate HEAD
+          bash scripts/vps/deploy.sh
+          REMOTE
 
-          if [ -n "${BACKEND_ENV:-}" ] || [ -n "${BACKEND_ENV_B64:-}" ]; then
-            backend_env_file="$(mktemp)"
-            if [ -n "${BACKEND_ENV_B64:-}" ]; then
-              printf '%s' "$BACKEND_ENV_B64" | base64 -d > "$backend_env_file"
-            else
-              printf '%s\n' "$BACKEND_ENV" > "$backend_env_file"
-            fi
-            chmod 600 "$backend_env_file"
-            retry "${scp_cmd[@]}" "$backend_env_file" "$ssh_target:/root/dolphin-backend.env"
-            retry "${ssh_cmd[@]}" "chmod 600 /root/dolphin-backend.env"
-            rm -f "$backend_env_file"
-          else
-            echo "::warning::BACKEND_ENV secret is empty. Deploy will preserve the existing VPS backend env and fail if DATABASE_URL is missing."
-          fi
-
-          retry "${rsync_cmd[@]}" \
-            --exclude='.github/' \
-            --exclude='node_modules/' \
-            --exclude='apps/backend/node_modules/' \
-            --exclude='apps/backend/.env' \
-            --exclude='apps/backend/.env.production' \
-            --exclude='apps/client/node_modules/' \
-            --exclude='apps/admin/node_modules/' \
-            ./ "$ssh_target:${APP_DIR}/"
-
-          retry "${ssh_cmd[@]}" "cd '${APP_DIR}' && APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' USE_LOCAL_POSTGRES='${USE_LOCAL_POSTGRES}' BACKUP_DATABASE_BEFORE_PATCHES='${BACKUP_DATABASE_BEFORE_PATCHES}' RUN_INVOICE_DATA_BACKFILLS='${RUN_INVOICE_DATA_BACKFILLS}' SKIP_BACKEND_BUILD=true SKIP_CLIENT_BUILD=true SKIP_ADMIN_BUILD=true SKIP_DEPLOY_GIT_SYNC=true DEPLOY_COMMIT='${GITHUB_SHA}' bash scripts/vps/deploy.sh"
+          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PRIMARY_DOMAIN='${PRIMARY_DOMAIN}' DOMAIN_NAMES='${DOMAIN_NAMES}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh

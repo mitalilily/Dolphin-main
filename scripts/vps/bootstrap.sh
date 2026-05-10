@@ -13,11 +13,6 @@ PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 ENABLE_SSL="${ENABLE_SSL:-true}"
 SSL_EMAIL="${SSL_EMAIL:-admin@$PRIMARY_DOMAIN}"
-USE_LOCAL_POSTGRES="${USE_LOCAL_POSTGRES:-false}"
-LOCAL_POSTGRES_CONTAINER="${LOCAL_POSTGRES_CONTAINER:-dolphin-postgres}"
-LOCAL_POSTGRES_DB="${LOCAL_POSTGRES_DB:-dolphin}"
-LOCAL_POSTGRES_USER="${LOCAL_POSTGRES_USER:-dolphin}"
-LOCAL_POSTGRES_PASSWORD="${LOCAL_POSTGRES_PASSWORD:-DolphinLocalPostgres_2026_Strong}"
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this script as root." >&2
@@ -46,35 +41,21 @@ if ! command -v docker >/dev/null 2>&1; then
   apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 
-mkdir -p /var/www /etc/dolphin /opt/pgadmin /opt/dolphin-postgres/data
+mkdir -p /var/www /etc/dolphin /opt/pgadmin
 
 if [ ! -d "$APP_DIR/.git" ]; then
   rm -rf "$APP_DIR"
   git clone "$REPO_URL" "$APP_DIR"
 fi
 
-if [ ! -s "$BACKEND_ENV_SOURCE" ]; then
+if [ ! -f "$BACKEND_ENV_SOURCE" ]; then
   DOMAIN_ORIGINS=""
   for domain in $DOMAIN_NAMES; do
     DOMAIN_ORIGINS="${DOMAIN_ORIGINS},https://${domain},http://${domain}"
   done
   CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin${DOMAIN_ORIGINS}}"
 
-  if [ "$USE_LOCAL_POSTGRES" = "true" ]; then
-    cat > "$BACKEND_ENV_SOURCE" <<EOF
-NODE_ENV=production
-PORT=${API_PORT}
-DATABASE_URL=postgresql://${LOCAL_POSTGRES_USER}:${LOCAL_POSTGRES_PASSWORD}@127.0.0.1:5432/${LOCAL_POSTGRES_DB}
-PGSSLMODE=disable
-CORS_ALLOWED_ORIGINS=${CORS_ORIGIN_LIST}
-CORS_ORIGINS=${CORS_ORIGIN_LIST}
-FRONTEND_URL=${PUBLIC_ORIGIN}
-API_URL=${API_ORIGIN}
-EOF
-    chmod 600 "$BACKEND_ENV_SOURCE"
-    echo "Created ${BACKEND_ENV_SOURCE} with the local Postgres connection."
-  else
-    cat > "$BACKEND_ENV_SOURCE" <<EOF
+  cat > "$BACKEND_ENV_SOURCE" <<EOF
 NODE_ENV=production
 PORT=${API_PORT}
 DATABASE_URL=
@@ -84,10 +65,9 @@ CORS_ORIGINS=${CORS_ORIGIN_LIST}
 FRONTEND_URL=${PUBLIC_ORIGIN}
 API_URL=${API_ORIGIN}
 EOF
-    chmod 600 "$BACKEND_ENV_SOURCE"
-    echo "Created ${BACKEND_ENV_SOURCE}. Fill it with the real production BACKEND_ENV, then rerun bootstrap." >&2
-    exit 1
-  fi
+  chmod 600 "$BACKEND_ENV_SOURCE"
+  echo "Created ${BACKEND_ENV_SOURCE}. Fill it with backend secrets, then rerun bootstrap." >&2
+  exit 1
 fi
 
 cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env.production"
@@ -102,7 +82,6 @@ module.exports = {
       name: 'dolphin-api',
       cwd: '${APP_DIR}/apps/backend',
       script: 'dist/index.js',
-      restart_delay: 30000,
       env: {
         NODE_ENV: 'production',
         PORT: '${API_PORT}'
@@ -116,13 +95,13 @@ cat > /opt/pgadmin/servers.json <<'EOF'
 {
   "Servers": {
     "1": {
-      "Name": "Dolphin Local Postgres",
+      "Name": "Dolphin Railway Postgres",
       "Group": "Servers",
-      "Host": "host.docker.internal",
-      "Port": 5432,
-      "MaintenanceDB": "dolphin",
-      "Username": "dolphin",
-      "SSLMode": "disable"
+      "Host": "switchback.proxy.rlwy.net",
+      "Port": 56485,
+      "MaintenanceDB": "railway",
+      "Username": "postgres",
+      "SSLMode": "require"
     }
   }
 }
@@ -133,7 +112,6 @@ docker run -d \
   --name dolphin-pgadmin \
   --restart unless-stopped \
   -p 127.0.0.1:5050:80 \
-  --add-host host.docker.internal:host-gateway \
   -e PGADMIN_DEFAULT_EMAIL="$PGADMIN_EMAIL" \
   -e PGADMIN_DEFAULT_PASSWORD="$PGADMIN_PASSWORD" \
   -e PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION=False \
@@ -285,14 +263,7 @@ if [ "$ENABLE_SSL" = "true" ]; then
   fi
 fi
 
-PUBLIC_ORIGIN="$PUBLIC_ORIGIN" \
-API_ORIGIN="$API_ORIGIN" \
-USE_LOCAL_POSTGRES="$USE_LOCAL_POSTGRES" \
-LOCAL_POSTGRES_CONTAINER="$LOCAL_POSTGRES_CONTAINER" \
-LOCAL_POSTGRES_DB="$LOCAL_POSTGRES_DB" \
-LOCAL_POSTGRES_USER="$LOCAL_POSTGRES_USER" \
-LOCAL_POSTGRES_PASSWORD="$LOCAL_POSTGRES_PASSWORD" \
-bash "$APP_DIR/scripts/vps/deploy.sh"
+PUBLIC_ORIGIN="$PUBLIC_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
 pm2 startup systemd -u root --hp /root || true
 
 echo "Bootstrap complete."
