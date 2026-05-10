@@ -12,15 +12,20 @@ API_PORT="${API_PORT:-5002}"
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
-if [ ! -d .git ]; then
-  echo "Git metadata missing in $APP_DIR; restoring checkout."
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Git checkout missing or invalid in $APP_DIR; restoring checkout."
+  rm -rf .git
   git init
   git remote add origin "$REPO_URL"
 fi
 
 if [ -d .git ]; then
   echo "Syncing repository with origin/main..."
-  git remote set-url origin "$REPO_URL"
+  if git remote get-url origin >/dev/null 2>&1; then
+    git remote set-url origin "$REPO_URL"
+  else
+    git remote add origin "$REPO_URL"
+  fi
   git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
   git reset --hard origin/main
   git show -s --oneline --decorate HEAD

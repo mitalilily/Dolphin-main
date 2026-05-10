@@ -52,16 +52,30 @@ jobs:
           repo_url="https://github.com/mitalilily/Dolphin-main.git"
           mkdir -p "$app_dir"
           cd "$app_dir"
-          if [ ! -d .git ]; then
-            echo "Git metadata missing in $app_dir; restoring checkout."
+          if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            echo "Git checkout missing or invalid in $app_dir; restoring checkout."
+            rm -rf .git
             git init
             git remote add origin "$repo_url"
           fi
-          git remote set-url origin "$repo_url"
+          if git remote get-url origin >/dev/null 2>&1; then
+            git remote set-url origin "$repo_url"
+          else
+            git remote add origin "$repo_url"
+          fi
           git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
           git reset --hard origin/main
           git show -s --oneline --decorate HEAD
           bash scripts/vps/deploy.sh
           REMOTE
 
-          "${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh
+          set +e
+          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
+          deploy_status=$?
+          set -e
+          printf '%s\n' "$deploy_output"
+          if [ "$deploy_status" -ne 0 ]; then
+            deploy_error="$(printf '%s' "$deploy_output" | tail -c 900 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
+            echo "::error title=VPS deploy failed::${deploy_error}"
+            exit "$deploy_status"
+          fi
