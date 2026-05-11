@@ -1,28 +1,17 @@
 // components/wallet/AddMoneyDialog.tsx
-import {
-  Alert,
-  alpha,
-  Box,
-  Button,
-  Divider,
-  InputAdornment,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material'
-import { useState, type Dispatch, type SetStateAction } from 'react'
+import { Alert, alpha, Box, Button, Stack, Typography } from '@mui/material'
+import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { BiWallet } from 'react-icons/bi'
+import { FiCreditCard } from 'react-icons/fi'
+import { brand, brandGradients } from '../theme/brand'
 import { useAuth } from '../context/auth/AuthContext'
 import { useUserProfile } from '../hooks/User/useUserProfile'
 import { usePaymentOptions } from '../hooks/usePaymentOptions'
 import { useRechargeWallet } from '../hooks/useRechargeWallets'
 import { toast } from './UI/Toast'
 import CustomIconLoadingButton from './UI/button/CustomLoadingButton'
+import CustomInput from './UI/inputs/CustomInput'
 import CustomDialog from './UI/modal/CustomModal'
-
-const DE_BLUE = '#0052CC'
-const DE_AMBER = '#FFAB00'
-const BRAND_GRADIENT = `linear-gradient(135deg, ${DE_BLUE} 0%, ${DE_AMBER} 100%)`
 
 interface AddMoneyDialogProps {
   open: boolean
@@ -32,11 +21,11 @@ interface AddMoneyDialogProps {
 
 const quickAmounts = [500, 1000, 2000, 10000]
 
+const formatAmount = (value: number) => `INR ${Number(value || 0).toLocaleString('en-IN')}`
+
 const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentBalance }) => {
   const { user } = useAuth()
   const [amount, setAmount] = useState<number>(500)
-  //   const [showCoupon, setShowCoupon] = useState<boolean>(false);
-  //   const [coupon, setCoupon] = useState<string>("");
   const recharge = useRechargeWallet()
   const { data: paymentOptions } = usePaymentOptions()
   const { data: profile } = useUserProfile(true)
@@ -44,9 +33,16 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
   const minWalletRecharge = paymentOptions?.minWalletRecharge ?? 0
 
   const effectiveAmount = amount || 0
+  const projectedBalance = currentBalance + effectiveAmount
   const isBelowMin = minWalletRecharge > 0 && effectiveAmount < minWalletRecharge
   const kycStatus = profile?.domesticKyc?.status
   const isKycBlocked = kycStatus !== 'verified'
+
+  const amountOptions = useMemo(() => {
+    const options = new Set(quickAmounts)
+    if (minWalletRecharge > 0) options.add(minWalletRecharge)
+    return Array.from(options).sort((a, b) => a - b)
+  }, [minWalletRecharge])
 
   const handleRecharge = async () => {
     if (isKycBlocked) {
@@ -62,7 +58,7 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
 
     if (isBelowMin) {
       toast.open({
-        message: `Minimum wallet recharge amount is ₹${minWalletRecharge.toLocaleString('en-IN')}`,
+        message: `Minimum wallet recharge amount is ${formatAmount(minWalletRecharge)}`,
         severity: 'warning',
       })
       return
@@ -73,17 +69,15 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
         amount,
         prefill: {
           name: user?.companyInfo?.businessName,
-          email: user.companyInfo?.contactEmail ?? '',
-          contact: user.companyInfo?.contactNumber ?? '',
+          email: user?.companyInfo?.contactEmail ?? '',
+          contact: user?.companyInfo?.contactNumber ?? '',
         },
       })
-      // ✅ Don't toast here, Razorpay modal handles UI
-      // Payment success is handled in useRechargeWallets hook
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Recharge error:', err)
+      const apiError = err as { response?: { data?: { error?: string } }; message?: string }
       toast.open({
-        message: err?.response?.data?.error || err?.message || 'Recharge failed!',
+        message: apiError?.response?.data?.error || apiError?.message || 'Recharge failed!',
         severity: 'error',
       })
     }
@@ -91,201 +85,143 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
 
   return (
     <CustomDialog
-      maxWidth="xs"
+      maxWidth="sm"
       title={
-        <Stack direction={'row'} spacing={2} justifyContent={'space-between'} alignItems={'center'}>
-          <Typography
-            variant="h6"
-            fontWeight={700}
-            sx={{
-              background: BRAND_GRADIENT,
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-            }}
-          >
-            Add Money to Wallet
-          </Typography>
-
+        <Stack direction="row" spacing={1.2} alignItems="center">
           <Box
-            display={'flex'}
-            gap={1}
-            alignItems={'center'}
             sx={{
-              bgcolor: alpha(DE_BLUE, 0.08),
-              px: 2,
-              py: 1,
+              width: 38,
+              height: 38,
               borderRadius: 1,
-              border: `1px solid ${alpha(DE_BLUE, 0.15)}`,
+              display: 'grid',
+              placeItems: 'center',
+              bgcolor: alpha(brand.sky, 0.54),
+              color: brand.ink,
+              border: `1px solid ${alpha(brand.ink, 0.08)}`,
+              flexShrink: 0,
             }}
           >
-            <BiWallet size={18} color={DE_BLUE} />
-            <Typography variant="body2" fontWeight={800} color={DE_BLUE}>
-              ₹{currentBalance.toLocaleString('en-IN')}
+            <BiWallet size={19} />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography sx={{ color: brand.ink, fontWeight: 800, lineHeight: 1.15 }}>
+              Add Money to Wallet
+            </Typography>
+            <Typography sx={{ color: brand.inkSoft, fontSize: '0.78rem', mt: 0.3 }}>
+              Current balance: {formatAmount(currentBalance)}
             </Typography>
           </Box>
         </Stack>
       }
       open={open}
       onClose={() => setOpen(false)}
+      footer={
+        <Stack
+          direction={{ xs: 'column-reverse', sm: 'row' }}
+          spacing={1}
+          sx={{ width: '100%', justifyContent: 'flex-end' }}
+        >
+          <Button variant="outlined" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <CustomIconLoadingButton
+            onClick={handleRecharge}
+            disabled={recharge.isPending || effectiveAmount <= 0 || isBelowMin || isKycBlocked}
+            text={`Add ${formatAmount(effectiveAmount)}`}
+            loading={recharge.isPending}
+            loadingText="Opening payment..."
+            icon={<FiCreditCard size={16} />}
+            styles={{ minWidth: 180 }}
+          />
+        </Stack>
+      }
     >
-      <Box display={'flex'} flexDirection={'column'} width={'100%'}>
-        {/* Custom Amount */}
+      <Stack spacing={2.2}>
         <Box
-          width={'100%'}
-          display={'flex'}
-          justifyContent={'center'}
           sx={{
-            bgcolor: alpha(DE_BLUE, 0.04),
+            p: { xs: 1.5, sm: 1.75 },
             borderRadius: 1,
-            p: 3,
-            mb: 3,
-            border: `1px solid ${alpha(DE_BLUE, 0.1)}`,
+            border: `1px solid ${alpha(brand.ink, 0.08)}`,
+            background: brandGradients.surface,
+            boxShadow: '0 12px 28px rgba(15,44,67,0.05)',
           }}
         >
-          <TextField
-            type="number"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
-            variant="standard"
-            placeholder="Enter Amount"
-            slotProps={{
-              input: {
-                disableUnderline: true,
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ fontSize: '2.5rem', color: DE_BLUE }}>
-                    ₹
-                  </InputAdornment>
-                ),
-                sx: {
-                  fontSize: '2.2rem',
-                  fontWeight: 900,
-                  borderBottom: `2px solid ${alpha(DE_BLUE, 0.15)}`,
-                  width: '100%',
-                  maxWidth: 280,
-                  color: DE_BLUE,
-                  pb: 1,
-                  mx: 'auto',
-                  transition: 'all 0.3s ease',
-                  '&:focus-within': {
-                    borderBottomColor: DE_BLUE,
-                  },
-                },
-                inputProps: {
-                  inputMode: 'numeric',
-                  pattern: '[0-9]*',
-                  style: {
-                    textAlign: 'center',
-                    color: DE_BLUE,
-                    MozAppearance: 'textfield',
-                  },
-                },
-              },
-            }}
-            sx={{
-              '& .MuiInputBase-input::placeholder': {
-                color: alpha(DE_BLUE, 0.3),
-                opacity: 0.7,
-              },
-              '& input::-webkit-outer-spin-button, & input::-webkit-inner-spin-button': {
-                WebkitAppearance: 'none',
-                margin: 0,
-              },
-              '& input[type=number]': { MozAppearance: 'textfield' },
-            }}
-          />
-        </Box>
-        <Box mb={3}>
-          <Typography
-            variant="body2"
-            fontWeight={700}
-            sx={{ color: '#42526E', mb: 1.5, textAlign: 'center', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: 1 }}
-          >
-            Quick Select Amount
-          </Typography>
-          <Stack direction="row" flexWrap="wrap" gap={1.5} width={'100%'} justifyContent={'center'}>
-            {quickAmounts.map((v) => (
-              <Button
-                key={v}
-                variant={amount === v ? 'contained' : 'outlined'}
-                onClick={() => setAmount(v)}
+          <Stack spacing={1.35}>
+            <CustomInput
+              label="Recharge Amount"
+              type="number"
+              value={amount || ''}
+              onChange={(event) => {
+                const nextAmount = Number(event.target.value)
+                setAmount(Number.isFinite(nextAmount) ? Math.max(0, nextAmount) : 0)
+              }}
+              placeholder="Enter amount"
+              prefix={<Typography sx={{ color: 'inherit', fontWeight: 800 }}>INR</Typography>}
+              topMargin={false}
+              error={isBelowMin}
+              helperText={
+                isBelowMin
+                  ? `Minimum recharge is ${formatAmount(minWalletRecharge)}`
+                  : 'Wallet balance updates after Razorpay confirms the payment.'
+              }
+              inputProps={{ min: 0, inputMode: 'numeric', pattern: '[0-9]*' }}
+            />
+
+            <Box>
+              <Typography
                 sx={{
-                  borderRadius: 1,
-                  minWidth: 85,
+                  mb: 1,
+                  color: brand.inkSoft,
+                  fontSize: '0.74rem',
                   fontWeight: 800,
-                  fontSize: '0.9rem',
-                  px: 3,
-                  py: 1.2,
-                  bgcolor: amount === v ? DE_BLUE : '#FFFFFF',
-                  color: amount === v ? '#FFFFFF' : DE_BLUE,
-                  border: amount === v ? 'none' : `1px solid ${alpha(DE_BLUE, 0.2)}`,
-                  background: amount === v ? DE_BLUE : '#FFFFFF',
-                  boxShadow: amount === v ? `0 8px 16px ${alpha(DE_BLUE, 0.25)}` : 'none',
-                  transition: 'all 0.2s ease',
-                  textTransform: 'none',
-                  '&:hover': {
-                    transform: 'translateY(-1px)',
-                    boxShadow:
-                      amount === v
-                        ? `0 10px 20px ${alpha(DE_BLUE, 0.35)}`
-                        : `0 4px 12px ${alpha(DE_BLUE, 0.15)}`,
-                    bgcolor: amount === v ? '#0043A4' : alpha(DE_BLUE, 0.06),
-                    borderColor: amount === v ? undefined : DE_BLUE,
-                  },
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
                 }}
               >
-                ₹{v.toLocaleString('en-IN')}
-              </Button>
-            ))}
+                Quick amount
+              </Typography>
+              <Stack direction="row" flexWrap="wrap" gap={1}>
+                {amountOptions.map((value) => {
+                  const selected = amount === value
+
+                  return (
+                    <Button
+                      key={value}
+                      variant={selected ? 'contained' : 'outlined'}
+                      onClick={() => setAmount(value)}
+                      sx={{
+                        minWidth: { xs: 'calc(50% - 4px)', sm: 94 },
+                        justifyContent: 'center',
+                        fontWeight: 800,
+                        background: selected ? brandGradients.button : alpha('#FFFFFF', 0.78),
+                        color: brand.ink,
+                        borderColor: selected ? alpha('#FFFFFF', 0.36) : alpha(brand.ink, 0.12),
+                        boxShadow: selected ? '0 12px 24px rgba(130,194,255,0.2)' : 'none',
+                        '&:hover': {
+                          background: selected ? brandGradients.button : '#FFFFFF',
+                          borderColor: alpha(brand.ink, 0.22),
+                        },
+                      }}
+                    >
+                      {formatAmount(value)}
+                    </Button>
+                  )
+                })}
+              </Stack>
+            </Box>
           </Stack>
         </Box>
-
-        {/* Coupon toggle */}
-        {/* {!showCoupon ? (
-          <Button
-            variant="text"
-            onClick={() => setShowCoupon(true)}
-            startIcon={<FaGift />}
-            sx={{ textTransform: "none", mb: 1 }}
-          >
-            Have a coupon code?
-          </Button>
-        ) : (
-          <Collapse in={showCoupon}>
-            <Stack direction="row" alignItems="center" spacing={1} mb={2}>
-              <TextField
-                label="Coupon Code"
-                value={coupon}
-                onChange={(e) => setCoupon(e.target.value)}
-                fullWidth
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <FaGift />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <IconButton onClick={() => setShowCoupon(false)}>
-                <MdClose />
-              </IconButton>
-            </Stack>
-          </Collapse>
-        )} */}
-
-        <Divider sx={{ my: 3, borderColor: alpha(DE_BLUE, 0.1) }} />
 
         {isKycBlocked && (
           <Alert
             severity="warning"
             sx={{
-              mb: 2,
-              borderRadius: 2,
-              border: `1px solid ${alpha('#f59e0b', 0.3)}`,
-              bgcolor: alpha('#f59e0b', 0.05),
-              color: '#92400e',
+              borderRadius: 1,
+              border: `1px solid ${alpha(brand.warning, 0.26)}`,
+              bgcolor: alpha(brand.warning, 0.08),
+              color: brand.ink,
               fontSize: '0.85rem',
-              '& .MuiAlert-icon': { color: '#f59e0b' },
+              '& .MuiAlert-icon': { color: brand.warning },
             }}
           >
             {kycStatus === 'pending' || kycStatus === 'verification_in_progress'
@@ -294,65 +230,38 @@ const AddMoneyDialog: React.FC<AddMoneyDialogProps> = ({ open, setOpen, currentB
           </Alert>
         )}
 
-        {/* Payment Info */}
         <Box
           sx={{
-            bgcolor: alpha(DE_BLUE, 0.04),
-            border: `1px solid ${alpha(DE_BLUE, 0.1)}`,
+            p: { xs: 1.5, sm: 1.75 },
             borderRadius: 1,
-            p: 2.5,
-            mb: 3,
+            border: `1px solid ${alpha(brand.ink, 0.08)}`,
+            bgcolor: alpha(brand.sky, 0.14),
           }}
         >
-          <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-            <Typography variant="body2" sx={{ color: '#6b6b6b', fontWeight: 600 }}>
-              Amount to Pay
-            </Typography>
-            <Typography
-              variant="h6"
-              sx={{
-                background: BRAND_GRADIENT,
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                fontWeight: 700,
-              }}
-            >
-              ₹{effectiveAmount.toLocaleString('en-IN')}
+          <Stack spacing={1.1}>
+            <Stack direction="row" justifyContent="space-between" spacing={2}>
+              <Typography sx={{ color: brand.inkSoft, fontWeight: 700, fontSize: '0.88rem' }}>
+                Amount to pay
+              </Typography>
+              <Typography sx={{ color: brand.ink, fontWeight: 900 }}>
+                {formatAmount(effectiveAmount)}
+              </Typography>
+            </Stack>
+            <Stack direction="row" justifyContent="space-between" spacing={2}>
+              <Typography sx={{ color: brand.inkSoft, fontWeight: 700, fontSize: '0.88rem' }}>
+                Balance after recharge
+              </Typography>
+              <Typography sx={{ color: brand.ink, fontWeight: 900 }}>
+                {formatAmount(projectedBalance)}
+              </Typography>
+            </Stack>
+            <Typography sx={{ color: brand.inkSoft, fontSize: '0.78rem', lineHeight: 1.6 }}>
+              Secure payment powered by Razorpay. Recharge credits are applied only after payment
+              confirmation.
             </Typography>
           </Stack>
-          <Typography variant="caption" sx={{ color: '#6b6b6b', fontSize: '0.8rem' }}>
-            {minWalletRecharge > 0
-              ? `Minimum recharge amount is ₹${minWalletRecharge.toLocaleString(
-                  'en-IN',
-                )}. Wallet balance updates only after Razorpay confirms the live payment.`
-              : 'Wallet balance updates only after Razorpay confirms the live payment.'}
-          </Typography>
         </Box>
-
-        {/* Action Button */}
-        <Box sx={{ mt: 2 }}>
-          <CustomIconLoadingButton
-            onClick={handleRecharge}
-            disabled={recharge.isPending || effectiveAmount <= 0 || isBelowMin || isKycBlocked}
-            text={`Add ₹${amount.toLocaleString('en-IN')} to Wallet`}
-            loading={recharge.isPending}
-            fullWidth
-            styles={{
-              py: 1.6,
-              borderRadius: 1,
-              bgcolor: DE_BLUE,
-              fontWeight: 800,
-              fontSize: '1rem',
-              boxShadow: `0 8px 20px ${alpha(DE_BLUE, 0.3)}`,
-              '&:hover': { bgcolor: '#0043A4' },
-            }}
-          />
-          <Typography variant="caption" sx={{ color: '#6B778C', textAlign: 'center', display: 'block', mt: 2, fontWeight: 500 }}>
-            Secure payment powered by <b>Razorpay</b>
-          </Typography>
-        </Box>
-      </Box>
+      </Stack>
     </CustomDialog>
   )
 }
