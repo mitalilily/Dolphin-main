@@ -4,7 +4,7 @@ import React, { type ErrorInfo, type ReactNode } from 'react'
 import { MdErrorOutline } from 'react-icons/md'
 import { isChunkLoadError, recoverFromChunkLoadError } from '../../utils/chunkRecovery'
 
-type InnerProps = { children: ReactNode; theme: Theme }
+type InnerProps = { children: ReactNode; theme: Theme; resetKey?: string }
 type State = { hasError: boolean; error: Error | null; recoveringChunk: boolean }
 
 class ErrorBoundaryCore extends React.Component<InnerProps, State> {
@@ -20,6 +20,12 @@ class ErrorBoundaryCore extends React.Component<InnerProps, State> {
     if (isChunkLoadError(error.message)) {
       const recoveringChunk = recoverFromChunkLoadError()
       if (recoveringChunk) this.setState({ recoveringChunk })
+    }
+  }
+
+  componentDidUpdate(prevProps: InnerProps) {
+    if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
+      this.setState({ hasError: false, error: null, recoveringChunk: false })
     }
   }
 
@@ -151,9 +157,16 @@ class ErrorBoundaryCore extends React.Component<InnerProps, State> {
 /* ------------------  FUNCTION WRAPPER  ------------------ */
 /** Grabs the current theme with a hook (allowed) and passes it down
  *  to the class component (where hooks aren’t allowed). */
-const ErrorBoundary: React.FC<{ children: ReactNode }> = ({ children }) => {
+const ErrorBoundary: React.FC<{ children: ReactNode; resetKey?: string }> = ({
+  children,
+  resetKey,
+}) => {
   const theme = useTheme()
-  return <ErrorBoundaryCore theme={theme}>{children}</ErrorBoundaryCore>
+  return (
+    <ErrorBoundaryCore theme={theme} resetKey={resetKey}>
+      {children}
+    </ErrorBoundaryCore>
+  )
 }
 
 export default ErrorBoundary

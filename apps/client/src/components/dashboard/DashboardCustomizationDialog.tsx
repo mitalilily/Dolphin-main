@@ -18,7 +18,11 @@ import {
 import { useState, useEffect } from 'react'
 import { MdClose, MdDragIndicator, MdSettings, MdSave } from 'react-icons/md'
 import { useDashboardPreferences, useSaveDashboardPreferences } from '../../hooks/useDashboardPreferences'
-import type { DashboardPreferences } from '../../api/dashboardPreferences.api'
+import {
+  defaultDashboardPreferences,
+  normalizeDashboardPreferences,
+  type DashboardPreferences,
+} from '../../api/dashboardPreferences.api'
 import { toast } from '../UI/Toast'
 
 interface DashboardCustomizationDialogProps {
@@ -44,65 +48,19 @@ const widgetLabels: Record<string, string> = {
   topDestinations: 'Top Destinations',
 }
 
-const defaultPreferences: DashboardPreferences = {
-  widgetVisibility: {
-    quickStats: true,
-    quickActions: true,
-    insights: true,
-    actionItems: true,
-    recommendations: true,
-    performanceMetrics: true,
-    ordersTrend: true,
-    financialHealth: true,
-    recentActivity: true,
-    todaysOperations: true,
-    orderStatusChart: true,
-    courierComparison: true,
-    metricsOverview: true,
-    courierPerformance: true,
-    topDestinations: true,
-  },
-  widgetOrder: [
-    'quickStats',
-    'quickActions',
-    'insights',
-    'actionItems',
-    'recommendations',
-    'performanceMetrics',
-    'ordersTrend',
-    'financialHealth',
-    'recentActivity',
-    'todaysOperations',
-    'orderStatusChart',
-    'courierComparison',
-    'metricsOverview',
-    'courierPerformance',
-    'topDestinations',
-  ],
-  layout: {
-    columns: 12,
-    spacing: 3,
-    cardStyle: 'default',
-    showGridLines: false,
-  },
-  dateRange: {
-    defaultRange: '7days',
-  },
-}
-
 export default function DashboardCustomizationDialog({ open, onClose }: DashboardCustomizationDialogProps) {
   const theme = useTheme()
   const { data: preferences, isLoading } = useDashboardPreferences()
   const { mutate: savePreferences, isPending } = useSaveDashboardPreferences()
 
-  const [localPreferences, setLocalPreferences] = useState<DashboardPreferences>(defaultPreferences)
+  const [localPreferences, setLocalPreferences] =
+    useState<DashboardPreferences>(defaultDashboardPreferences)
 
   useEffect(() => {
     if (preferences) {
-      setLocalPreferences(preferences)
+      setLocalPreferences(normalizeDashboardPreferences(preferences))
     } else if (!isLoading && open) {
-      // If no preferences exist yet, use defaults
-      setLocalPreferences(defaultPreferences)
+      setLocalPreferences(defaultDashboardPreferences)
     }
   }, [preferences, isLoading, open])
 
@@ -134,7 +92,7 @@ export default function DashboardCustomizationDialog({ open, onClose }: Dashboar
     savePreferences(localPreferences, {
       onSuccess: () => {
         toast.open({
-          message: 'Dashboard preferences saved successfully! 🎉',
+          message: 'Dashboard preferences saved successfully!',
           severity: 'success',
           duration: 3000,
         })
@@ -153,9 +111,9 @@ export default function DashboardCustomizationDialog({ open, onClose }: Dashboar
 
   const handleReset = () => {
     if (preferences) {
-      setLocalPreferences(preferences)
+      setLocalPreferences(normalizeDashboardPreferences(preferences))
     } else {
-      setLocalPreferences(defaultPreferences)
+      setLocalPreferences(defaultDashboardPreferences)
     }
   }
 

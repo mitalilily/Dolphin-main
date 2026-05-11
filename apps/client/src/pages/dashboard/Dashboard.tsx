@@ -28,6 +28,7 @@ import TodaysOperationsCard from '../../components/dashboard/TodaysOperationsCar
 import TopDestinationsCard from '../../components/dashboard/TopDestinationsCard'
 import { useMerchantDashboardStats } from '../../hooks/useDashboard'
 import { useDashboardPreferences } from '../../hooks/useDashboardPreferences'
+import { normalizeDashboardPreferences } from '../../api/dashboardPreferences.api'
 import { brand, brandGradients } from '../../theme/brand'
 
 // Widget mapping
@@ -140,26 +141,15 @@ export default function Dashboard() {
     (actions.ndrCount || 0) > 0 || (actions.rtoCount || 0) > 0 || (actions.pendingInvoices || 0) > 0
 
   // Get widget order from preferences or use default
-  const widgetOrder =
-    preferences?.widgetOrder ||
-    [
-      'quickStats',
-      'quickActions',
-      'insights',
-      'actionItems',
-      'performanceMetrics',
-      'ordersTrend',
-      'financialHealth',
-      'recentActivity',
-      'todaysOperations',
-      'orderStatusChart',
-      'courierComparison',
-      'metricsOverview',
-      'courierPerformance',
-      'topDestinations',
-    ].filter((widget) => widget !== 'revenueChart' && widget !== 'revenueByTypeChart')
+  const dashboardPreferences = normalizeDashboardPreferences(preferences)
+  const widgetOrder = dashboardPreferences.widgetOrder.filter(
+    (widget) =>
+      widget !== 'recommendations' &&
+      widget !== 'revenueChart' &&
+      widget !== 'revenueByTypeChart',
+  )
 
-  const widgetVisibility = preferences?.widgetVisibility || {}
+  const widgetVisibility = dashboardPreferences.widgetVisibility
 
   // Filter out hidden widgets from widgetOrder so they don't take up space
   const visibleWidgetOrder = widgetOrder.filter((widgetId) => {
@@ -306,8 +296,8 @@ export default function Dashboard() {
     return baseSize
   }
 
-  const spacing = preferences?.layout?.spacing || 3
-  const showGridLines = preferences?.layout?.showGridLines || false
+  const spacing = dashboardPreferences.layout.spacing || 3
+  const showGridLines = dashboardPreferences.layout.showGridLines || false
 
   return (
     <Box
