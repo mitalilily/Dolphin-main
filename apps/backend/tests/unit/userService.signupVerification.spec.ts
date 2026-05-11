@@ -1,6 +1,9 @@
 import * as bcrypt from 'bcryptjs'
 import { db } from '../../src/models/client'
-import { handleEmailVerificationRequest } from '../../src/models/services/userService'
+import {
+  createUserWithWallet,
+  handleEmailVerificationRequest,
+} from '../../src/models/services/userService'
 import { sendVerificationEmail } from '../../src/utils/emailSender'
 import { generate8DigitsVerificationToken } from '../../src/utils/functions'
 
@@ -46,6 +49,42 @@ const makeTransaction = (user: Record<string, unknown> | null) => {
   ;(db.transaction as jest.Mock).mockImplementation((work) => work(tx))
 
   return { tx, chain }
+}
+
+const makeCreateUserTransaction = () => {
+  const createdUser = {
+    id: 'user-new',
+    email: 'new@example.com',
+    phone: null,
+    role: 'customer',
+  }
+  const insertValues: Record<string, unknown>[] = []
+
+  const tx = {
+    insert: jest.fn(),
+    select: jest.fn(),
+  }
+
+  let insertCount = 0
+  tx.insert.mockImplementation(() => {
+    insertCount += 1
+    const returning = jest.fn().mockResolvedValue([createdUser])
+    return {
+      values: jest.fn((payload) => {
+        insertValues.push(payload)
+        return insertCount === 1 ? { returning } : Promise.resolve([])
+      }),
+    }
+  })
+
+  const limit = jest.fn().mockResolvedValue([])
+  const where = jest.fn(() => ({ limit }))
+  const from = jest.fn(() => ({ where }))
+  tx.select.mockReturnValue({ from })
+
+  ;(db.transaction as jest.Mock).mockImplementation((work) => work(tx))
+
+  return { createdUser, insertValues }
 }
 
 describe('handleEmailVerificationRequest signup verification', () => {
@@ -134,5 +173,29 @@ describe('handleEmailVerificationRequest signup verification', () => {
     })
     expect(tx.update).not.toHaveBeenCalled()
     expect(sendVerificationEmail).not.toHaveBeenCalled()
+  })
+
+  it('stores missing optional unique auth identifiers as null for new users', async () => {
+    const { createdUser, insertValues } = makeCreateUserTransaction()
+
+    const user = await createUserWithWallet({
+      email: ' New@Example.com ',
+      phone: '',
+      googleId: '',
+      passwordHash: 'stored-hash',
+      emailVerified: false,
+    })
+
+    expect(user).toBe(createdUser)
+    expect(insertValues[0]).toMatchObject({
+      email: 'new@example.com',
+      phone: null,
+      googleId: null,
+      role: 'customer',
+    })
+    expect(insertValues[insertValues.length - 1]?.companyInfo).toMatchObject({
+      contactEmail: 'new@example.com',
+      contactNumber: '',
+    })
   })
 })

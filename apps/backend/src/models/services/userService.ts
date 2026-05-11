@@ -746,6 +746,10 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
   return runWithTransaction(txn, async (tx: any) => {
     const normalizedRole = data.role && data.role.trim() ? data.role : 'customer'
     const normalizedEmail = data.email ? normalizeEmail(data.email) : data.email
+    const normalizedPhone =
+      typeof data.phone === 'string' && data.phone.trim() ? data.phone.trim() : null
+    const normalizedGoogleId =
+      typeof data.googleId === 'string' && data.googleId.trim() ? data.googleId.trim() : null
 
     // 1) insert user
     const [user] = await tx
@@ -753,6 +757,8 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
       .values({
         ...(data as IUser),
         email: normalizedEmail,
+        phone: normalizedPhone,
+        googleId: normalizedGoogleId,
         role: normalizedRole,
       })
       .returning()
@@ -851,7 +857,7 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
     const companyInfo = {
       ...DEFAULT_PROFILE.companyInfo, // keeps required fields
       contactEmail: normalizedEmail ?? '',
-      contactNumber: data.phone ?? '',
+      contactNumber: normalizedPhone ?? '',
       POCEmailVerified: Boolean(data.emailVerified),
       profilePicture: data?.profilePicture,
     }
