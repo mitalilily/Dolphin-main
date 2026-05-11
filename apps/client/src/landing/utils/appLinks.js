@@ -1,20 +1,19 @@
 const stripTrailingSlash = (url) => url.replace(/\/+$/, "");
-const currentOrigin = () => window.location.origin;
 
 export const CLIENT_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_CLIENT_APP_URL || `${currentOrigin()}/app`,
+  import.meta.env.VITE_CLIENT_APP_URL || "https://app.shopnship.in",
 );
 
 export const AUTH_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_AUTH_APP_URL || `${currentOrigin()}/login`,
+  import.meta.env.VITE_AUTH_APP_URL || `${CLIENT_APP_URL}/login`,
 );
 
 export const ADMIN_APP_URL = stripTrailingSlash(
-  import.meta.env.VITE_ADMIN_APP_URL || `${currentOrigin()}/admin`,
+  import.meta.env.VITE_ADMIN_APP_URL || "https://admin.shopnship.in",
 );
 
 export const ADMIN_AUTH_URL = stripTrailingSlash(
-  import.meta.env.VITE_ADMIN_AUTH_URL || `${currentOrigin()}/auth/signin`,
+  import.meta.env.VITE_ADMIN_AUTH_URL || `${ADMIN_APP_URL}/auth/signin`,
 );
 
 export const launchDestinations = [

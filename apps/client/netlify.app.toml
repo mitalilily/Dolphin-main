@@ -1,10 +1,10 @@
 [build]
-  command = "npm run build:marketing"
+  command = "npm run build:app"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "20"
-  VITE_APP_SURFACE = "marketing"
+  VITE_APP_SURFACE = "app"
   VITE_MARKETING_SITE_URL = "https://shopnship.in"
   VITE_CLIENT_APP_URL = "https://app.shopnship.in"
   VITE_AUTH_APP_URL = "https://app.shopnship.in/login"

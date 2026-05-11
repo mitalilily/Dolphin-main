@@ -1,6 +1,20 @@
-const DEFAULT_API_BASE_URL = '/api'
+const SAME_ORIGIN_API_BASE_URL = '/api'
+const SHOPNSHIP_API_BASE_URL = 'https://api.shopnship.in/api'
+const SHOPNSHIP_SOCKET_URL = 'https://api.shopnship.in'
 const DEFAULT_SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : ''
 const ACTIVE_ADMIN_API_BASE_URL_KEY = 'activeAdminApiBaseUrl'
+
+const getCurrentHost = () => (typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '')
+
+const getDefaultApiBaseUrl = () => {
+  const host = getCurrentHost()
+  return host === 'admin.shopnship.in' ? SHOPNSHIP_API_BASE_URL : SAME_ORIGIN_API_BASE_URL
+}
+
+const getDefaultSocketUrl = () => {
+  const host = getCurrentHost()
+  return host === 'admin.shopnship.in' ? SHOPNSHIP_SOCKET_URL : DEFAULT_SOCKET_URL
+}
 
 const normalizeBaseUrl = (value, { ensureApi = false } = {}) => {
   if (!value) return null
@@ -39,7 +53,7 @@ export const setPreferredAdminApiBaseUrl = (value) => {
 }
 
 export const getAdminApiBaseUrlCandidates = () => {
-  const currentHost = typeof window !== 'undefined' ? window.location.hostname : ''
+  const currentHost = getCurrentHost()
   const isHostedFrontend =
     currentHost.endsWith('netlify.app') || currentHost.endsWith('vercel.app')
   const isLocalhost =
@@ -51,9 +65,10 @@ export const getAdminApiBaseUrlCandidates = () => {
     { ensureApi: true },
   )
   const socketDerived = normalizeBaseUrl(process.env.REACT_APP_SOCKET_URL, { ensureApi: true })
-  const sameOriginApi = normalizeBaseUrl(DEFAULT_API_BASE_URL, { ensureApi: true })
+  const defaultApi = normalizeBaseUrl(getDefaultApiBaseUrl(), { ensureApi: true })
+  const sameOriginApi = normalizeBaseUrl(SAME_ORIGIN_API_BASE_URL, { ensureApi: true })
   const stored = readStoredApiBaseUrl()
-  const environmentCandidates = [configured, socketDerived, sameOriginApi]
+  const environmentCandidates = [configured, socketDerived, defaultApi, sameOriginApi]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
   const trustedCandidates = environmentCandidates
@@ -73,7 +88,7 @@ export const getAdminApiBaseUrlCandidates = () => {
     window.localStorage.removeItem(ACTIVE_ADMIN_API_BASE_URL_KEY)
   }
 
-  const candidates = [configured, socketDerived, sameOriginApi, safeStored]
+  const candidates = [configured, socketDerived, defaultApi, sameOriginApi, safeStored]
     .filter(Boolean)
     .filter((value, index, list) => list.indexOf(value) === index)
 
@@ -93,7 +108,7 @@ export const getAdminApiBaseUrlCandidates = () => {
 
 export const getAdminApiBaseUrl = () => {
   const [primaryCandidate] = getAdminApiBaseUrlCandidates()
-  return primaryCandidate || DEFAULT_API_BASE_URL
+  return primaryCandidate || getDefaultApiBaseUrl()
 }
 
 export const getNextAdminApiBaseUrl = (currentValue) => {
@@ -113,5 +128,5 @@ export const getAdminSocketUrl = () => {
   const apiBase = getAdminApiBaseUrl()
   if (apiBase) return apiBase.replace(/\/api\/?$/, '')
 
-  return DEFAULT_SOCKET_URL
+  return getDefaultSocketUrl()
 }

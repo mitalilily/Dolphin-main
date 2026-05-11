@@ -5,6 +5,10 @@
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
+  REACT_APP_API_BASE_URL = "https://api.shopnship.in/api"
+  REACT_APP_SOCKET_URL = "https://api.shopnship.in"
+  REACT_APP_LANDING_URL = "https://shopnship.in"
+  REACT_APP_CLIENT_APP_URL = "https://app.shopnship.in"
 
 [[redirects]]
   from = "/*"

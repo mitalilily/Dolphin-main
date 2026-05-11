@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "build:netlify": "vite build",
+    "build:marketing": "tsc -b && vite build --mode marketing",
+    "build:app": "tsc -b && vite build --mode app",
+    "build:netlify": "npm run build:marketing",
     "lint": "eslint .",
     "preview": "vite preview"
   },

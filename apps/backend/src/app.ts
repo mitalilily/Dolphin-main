@@ -3,6 +3,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import express from 'express'
 import http from 'http'
+import { buildCorsOrigin } from './config/allowedOrigins'
 import { initSocketServer } from './config/socketServer'
 import { shopifyOrderWebhookController } from './controllers/shopify.controller'
 import {
@@ -82,67 +83,9 @@ initSocketServer(server)
 
 app.use(cookieParser())
 
-const normalizeOrigin = (origin: string) => origin.trim().replace(/\/+$/, '').toLowerCase()
-
-const localOrigins = [
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'http://localhost:5176',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:5174',
-  'http://127.0.0.1:5176',
-  'http://localhost:3000',
-  'http://localhost:3001',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:3001',
-  'http://localhost:4173',
-  'http://127.0.0.1:4173',
-  'https://admin.dolphinenterprises.in',
-  'https://app.dolphinenterprises.in',
-  'https://dolphinenterprises.in',
-  'https://www.dolphinenterprises.in',
-  'https://admin.shopnship.in',
-  'https://api.shopnship.in',
-  'https://app.shopnship.in',
-  'https://client.shopnship.in',
-  'https://shopnship.in',
-  'https://www.shopnship.in',
-]
-const configuredAllowedOrigins = `${process.env.CORS_ALLOWED_ORIGINS || ''},${process.env.CORS_ORIGINS || ''}`
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean)
-  .map(normalizeOrigin)
-
-const allowedOrigins = new Set([...localOrigins.map(normalizeOrigin), ...configuredAllowedOrigins])
-
-const isAllowedOrigin = (origin: string) => {
-  const normalizedOrigin = normalizeOrigin(origin)
-
-  if (allowedOrigins.has(normalizedOrigin)) {
-    return true
-  }
-
-  return /^https:\/\/([a-z0-9-]+\.)*(dolphinenterprises|shopnship)\.in$/.test(normalizedOrigin)
-}
-
 app.use(
   cors({
-    origin: (origin, callback) => {
-      const isPlatformPreview =
-        typeof origin === 'string' &&
-        (origin.endsWith('.netlify.app') ||
-          origin.endsWith('.netlify.live') ||
-          origin.endsWith('.onrender.com') ||
-          origin.endsWith('.railway.app') ||
-          origin.endsWith('.up.railway.app'))
-
-      if (!origin || isAllowedOrigin(origin) || isPlatformPreview) {
-        callback(null, true)
-      } else {
-        callback(new Error(`Not allowed by CORS: ${origin}`))
-      }
-    },
+    origin: buildCorsOrigin(),
     credentials: true,
   }),
 )

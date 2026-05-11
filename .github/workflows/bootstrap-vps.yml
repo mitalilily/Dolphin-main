@@ -20,8 +20,9 @@ jobs:
             export APP_DIR=/var/www/dolphin
             export REPO_URL=https://github.com/mitalilily/Dolphin-main.git
             export PUBLIC_ORIGIN="${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}"
-            export CLIENT_ORIGIN="${{ secrets.CLIENT_ORIGIN || 'https://client.shopnship.in' }}"
+            export CLIENT_ORIGIN="${{ secrets.CLIENT_ORIGIN || 'https://app.shopnship.in' }}"
             export ADMIN_ORIGIN="${{ secrets.ADMIN_ORIGIN || 'https://admin.shopnship.in' }}"
+            export API_ORIGIN="${{ secrets.API_ORIGIN || 'https://api.shopnship.in' }}"
             export PGADMIN_EMAIL="${{ secrets.PGADMIN_EMAIL || 'admin@shopnship.in' }}"
             export PGADMIN_PASSWORD="${{ secrets.PGADMIN_PASSWORD }}"
 

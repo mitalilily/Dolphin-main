@@ -4,13 +4,15 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
-CLIENT_DOMAIN="${CLIENT_DOMAIN:-client.$PRIMARY_DOMAIN}"
+MARKETING_DOMAINS="${MARKETING_DOMAINS:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN}"
+CLIENT_DOMAIN="${CLIENT_DOMAIN:-app.$PRIMARY_DOMAIN}"
 ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.$PRIMARY_DOMAIN}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN $CLIENT_DOMAIN $ADMIN_DOMAIN}"
+API_DOMAIN="${API_DOMAIN:-api.$PRIMARY_DOMAIN}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$MARKETING_DOMAINS $CLIENT_DOMAIN $ADMIN_DOMAIN $API_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
 ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
-API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
+API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
 API_PORT="${API_PORT:-5002}"
 
 purge_stale_frontend_assets() {
@@ -49,19 +51,33 @@ if [ -d .git ]; then
   git show -s --oneline --decorate HEAD
 fi
 
-cat > apps/client/.env.production <<EOF
+cat > apps/client/.env.marketing.local <<EOF
+VITE_APP_SURFACE=marketing
+VITE_MARKETING_SITE_URL=${PUBLIC_ORIGIN}
 VITE_API_URL=${API_ORIGIN}/api
 VITE_APP_SOCKET_URL=${API_ORIGIN}
-VITE_CLIENT_APP_URL=${CLIENT_ORIGIN}/app
+VITE_CLIENT_APP_URL=${CLIENT_ORIGIN}
 VITE_AUTH_APP_URL=${CLIENT_ORIGIN}/login
-VITE_ADMIN_APP_URL=${ADMIN_ORIGIN}/admin
+VITE_ADMIN_APP_URL=${ADMIN_ORIGIN}
+VITE_ADMIN_AUTH_URL=${ADMIN_ORIGIN}/auth/signin
+EOF
+
+cat > apps/client/.env.app.local <<EOF
+VITE_APP_SURFACE=app
+VITE_MARKETING_SITE_URL=${PUBLIC_ORIGIN}
+VITE_API_URL=${API_ORIGIN}/api
+VITE_APP_SOCKET_URL=${API_ORIGIN}
+VITE_CLIENT_APP_URL=${CLIENT_ORIGIN}
+VITE_AUTH_APP_URL=${CLIENT_ORIGIN}/login
+VITE_ADMIN_APP_URL=${ADMIN_ORIGIN}
 VITE_ADMIN_AUTH_URL=${ADMIN_ORIGIN}/auth/signin
 EOF
 
 cat > apps/admin/.env.production <<EOF
 REACT_APP_API_BASE_URL=${API_ORIGIN}/api
 REACT_APP_SOCKET_URL=${API_ORIGIN}
-REACT_APP_LANDING_URL=${CLIENT_ORIGIN}
+REACT_APP_LANDING_URL=${PUBLIC_ORIGIN}
+REACT_APP_CLIENT_APP_URL=${CLIENT_ORIGIN}
 EOF
 
 echo "Installing backend dependencies..."
@@ -74,20 +90,17 @@ npm --prefix apps/client ci
 if [ -d .git ]; then
   git restore --source=HEAD -- apps/client/yarn.lock 2>/dev/null || true
 fi
-echo "Building client and landing frontend..."
-CLIENT_ASSET_BACKUP="$(mktemp -d)"
-if [ -d apps/client/dist/assets ]; then
-  mkdir -p "$CLIENT_ASSET_BACKUP/assets"
-  cp -a apps/client/dist/assets/. "$CLIENT_ASSET_BACKUP/assets/"
-fi
-npm --prefix apps/client run build:netlify
-if [ -d "$CLIENT_ASSET_BACKUP/assets" ]; then
-  mkdir -p apps/client/dist/assets
-  cp -an "$CLIENT_ASSET_BACKUP/assets/." apps/client/dist/assets/ || true
-  find apps/client/dist/assets -type f -mtime +21 -delete || true
-fi
-rm -rf "$CLIENT_ASSET_BACKUP"
-purge_stale_frontend_assets apps/client/dist/assets
+echo "Building marketing frontend for ${PUBLIC_ORIGIN}..."
+npm --prefix apps/client run build:marketing
+rm -rf apps/client/dist-marketing
+cp -a apps/client/dist apps/client/dist-marketing
+purge_stale_frontend_assets apps/client/dist-marketing/assets
+
+echo "Building seller dashboard frontend for ${CLIENT_ORIGIN}..."
+npm --prefix apps/client run build:app
+rm -rf apps/client/dist-app
+cp -a apps/client/dist apps/client/dist-app
+purge_stale_frontend_assets apps/client/dist-app/assets
 
 echo "Installing admin dependencies..."
 if [ -f apps/admin/package-lock.json ]; then
@@ -95,7 +108,7 @@ if [ -f apps/admin/package-lock.json ]; then
 else
   npm --prefix apps/admin install --legacy-peer-deps
 fi
-echo "Building admin frontend under /admin..."
+echo "Building admin frontend for ${ADMIN_ORIGIN}..."
 ADMIN_STATIC_BACKUP="$(mktemp -d)"
 if [ -d apps/admin/build/static ]; then
   mkdir -p "$ADMIN_STATIC_BACKUP/static"
@@ -103,7 +116,7 @@ if [ -d apps/admin/build/static ]; then
 fi
 (
   cd apps/admin
-  CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/admin npx react-scripts build
+  CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/ npx react-scripts build
 )
 if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
   mkdir -p apps/admin/build/static
@@ -118,83 +131,9 @@ pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-
 pm2 save
 
 echo "Reloading Nginx..."
-NGINX_SITE="/etc/nginx/sites-available/dolphin"
-if [ -f "$NGINX_SITE" ]; then
-  sed -i "s/server_name .*/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
-  if ! grep -q 'location = /admin {' "$NGINX_SITE"; then
-    sed -i '/location \^~ \/admin\/static\/ {/i\
-    location = /admin {\
-        return 301 /admin/;\
-    }\
-\
-    location = /admin/ {\
-        root /var/www/dolphin/apps/admin/build;\
-        add_header Cache-Control "no-cache, no-store, must-revalidate";\
-        try_files /index.html =404;\
-    }\
-' "$NGINX_SITE"
-  fi
-  if ! grep -q 'return 302 /admin/dashboard;' "$NGINX_SITE"; then
-    awk -v admin_domain="$ADMIN_DOMAIN" '
-      /^[[:space:]]*location \/ \{/ && !inserted {
-        print "    location = / {"
-        print "        if ($host = " admin_domain ") {"
-        print "            return 302 /admin/dashboard;"
-        print "        }"
-        print "        add_header Clear-Site-Data \"\\\"cache\\\"\";"
-        print "        add_header Cache-Control \"no-cache, no-store, must-revalidate\";"
-        print "        try_files $uri $uri/ /index.html;"
-        print "    }"
-        print ""
-        inserted=1
-      }
-      { print }
-    ' "$NGINX_SITE" > "${NGINX_SITE}.tmp" && mv "${NGINX_SITE}.tmp" "$NGINX_SITE"
-  fi
-  sed -i 's#try_files \$uri \$uri/ /admin/index.html;#try_files $uri /admin/index.html;#g' "$NGINX_SITE"
-  if ! grep -q 'gzip on;' "$NGINX_SITE"; then
-    sed -i '/client_max_body_size 50m;/a\
-    sendfile on;\
-    tcp_nopush on;\
-    tcp_nodelay on;\
-    keepalive_timeout 65;\
-\
-    gzip on;\
-    gzip_vary on;\
-    gzip_proxied any;\
-    gzip_comp_level 6;\
-    gzip_min_length 1024;\
-    gzip_types\
-        text/plain\
-        text/css\
-        text/xml\
-        application/json\
-        application/javascript\
-        application/xml\
-        application/xml+rss\
-        image/svg+xml\
-        font/ttf\
-        font/otf\
-        font/woff\
-        font/woff2;' "$NGINX_SITE"
-  fi
-  if ! grep -q 'max-age=2592000, immutable' "$NGINX_SITE"; then
-    sed -i '/expires 30d;/a\        add_header Cache-Control "public, max-age=2592000, immutable";' "$NGINX_SITE"
-  fi
-  sed -i 's#expires 30d;#expires -1;#g' "$NGINX_SITE"
-  sed -i 's#add_header Cache-Control "public, max-age=2592000, immutable";#add_header Cache-Control "no-cache, no-store, must-revalidate";#g' "$NGINX_SITE"
-  if ! grep -q 'Clear-Site-Data' "$NGINX_SITE"; then
-    sed -i '/location = \/admin\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
-    sed -i '/location \^~ \/admin\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
-    sed -i '/location \^~ \/auth\/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
-    sed -i '/location \/ {/a\        add_header Clear-Site-Data "\"cache\"";' "$NGINX_SITE"
-  fi
-  if ! grep -q 'no-cache, no-store, must-revalidate' "$NGINX_SITE"; then
-    sed -i '/location \^~ \/admin\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-    sed -i '/location \^~ \/auth\/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-    sed -i '/location \/ {/a\        add_header Cache-Control "no-cache, no-store, must-revalidate";' "$NGINX_SITE"
-  fi
-fi
+APP_DIR="$APP_DIR" PRIMARY_DOMAIN="$PRIMARY_DOMAIN" MARKETING_DOMAINS="$MARKETING_DOMAINS" CLIENT_DOMAIN="$CLIENT_DOMAIN" ADMIN_DOMAIN="$ADMIN_DOMAIN" API_DOMAIN="$API_DOMAIN" API_ORIGIN="$API_ORIGIN" API_PORT="$API_PORT" bash "$APP_DIR/scripts/vps/write-nginx-config.sh"
+rm -f /etc/nginx/sites-enabled/default
+ln -sf /etc/nginx/sites-available/dolphin /etc/nginx/sites-enabled/dolphin
 nginx -t
 systemctl reload nginx
 

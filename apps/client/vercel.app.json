@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm run build:marketing",
+  "buildCommand": "npm run build:app",
   "outputDirectory": "dist",
   "env": {
-    "VITE_APP_SURFACE": "marketing",
+    "VITE_APP_SURFACE": "app",
     "VITE_MARKETING_SITE_URL": "https://shopnship.in",
     "VITE_CLIENT_APP_URL": "https://app.shopnship.in",
     "VITE_AUTH_APP_URL": "https://app.shopnship.in/login",

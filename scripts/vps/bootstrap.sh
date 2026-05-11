@@ -4,13 +4,15 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
-CLIENT_DOMAIN="${CLIENT_DOMAIN:-client.$PRIMARY_DOMAIN}"
+MARKETING_DOMAINS="${MARKETING_DOMAINS:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN}"
+CLIENT_DOMAIN="${CLIENT_DOMAIN:-app.$PRIMARY_DOMAIN}"
 ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.$PRIMARY_DOMAIN}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN $CLIENT_DOMAIN $ADMIN_DOMAIN}"
+API_DOMAIN="${API_DOMAIN:-api.$PRIMARY_DOMAIN}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$MARKETING_DOMAINS $CLIENT_DOMAIN $ADMIN_DOMAIN $API_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
 ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
-API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
+API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
 API_PORT="${API_PORT:-5002}"
 PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@$PRIMARY_DOMAIN}"
 PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
@@ -65,7 +67,7 @@ if [ ! -f "$BACKEND_ENV_SOURCE" ]; then
   for domain in $DOMAIN_NAMES; do
     DOMAIN_ORIGINS="${DOMAIN_ORIGINS},https://${domain},http://${domain}"
   done
-  CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-${PUBLIC_ORIGIN},${PUBLIC_ORIGIN}/admin${DOMAIN_ORIGINS}}"
+  CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-${PUBLIC_ORIGIN},${CLIENT_ORIGIN},${ADMIN_ORIGIN}${DOMAIN_ORIGINS}}"
 
   cat > "$BACKEND_ENV_SOURCE" <<EOF
 NODE_ENV=production
@@ -75,6 +77,8 @@ PGSSLMODE=require
 CORS_ALLOWED_ORIGINS=${CORS_ORIGIN_LIST}
 CORS_ORIGINS=${CORS_ORIGIN_LIST}
 FRONTEND_URL=${PUBLIC_ORIGIN}
+CLIENT_APP_URL=${CLIENT_ORIGIN}
+ADMIN_APP_URL=${ADMIN_ORIGIN}
 API_URL=${API_ORIGIN}
 EOF
   chmod 600 "$BACKEND_ENV_SOURCE"
@@ -131,128 +135,7 @@ docker run -d \
   -v /opt/pgadmin/servers.json:/pgadmin4/servers.json:ro \
   dpage/pgadmin4:latest
 
-cat > /etc/nginx/sites-available/dolphin <<'EOF'
-server {
-    listen 80 default_server;
-    listen [::]:80 default_server;
-    server_name _;
-
-    client_max_body_size 50m;
-    sendfile on;
-    tcp_nopush on;
-    tcp_nodelay on;
-    keepalive_timeout 65;
-
-    gzip on;
-    gzip_vary on;
-    gzip_proxied any;
-    gzip_comp_level 6;
-    gzip_min_length 1024;
-    gzip_types
-        text/plain
-        text/css
-        text/xml
-        application/json
-        application/javascript
-        application/xml
-        application/xml+rss
-        image/svg+xml
-        font/ttf
-        font/otf
-        font/woff
-        font/woff2;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:5002/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:5002/socket.io/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    location /pgadmin/ {
-        proxy_pass http://127.0.0.1:5050/;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Script-Name /pgadmin;
-        proxy_set_header X-Scheme $scheme;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_redirect off;
-    }
-
-    location ^~ /admin/static/ {
-        alias /var/www/dolphin/apps/admin/build/static/;
-        access_log off;
-        expires -1;
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-    }
-
-    location = /admin {
-        return 301 /admin/;
-    }
-
-    location = /admin/ {
-        root /var/www/dolphin/apps/admin/build;
-        add_header Clear-Site-Data "\"cache\"";
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files /index.html =404;
-    }
-
-    location ^~ /admin/ {
-        alias /var/www/dolphin/apps/admin/build/;
-        add_header Clear-Site-Data "\"cache\"";
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri /admin/index.html;
-    }
-
-    location ^~ /auth/ {
-        alias /var/www/dolphin/apps/admin/build/;
-        add_header Clear-Site-Data "\"cache\"";
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri /admin/index.html;
-    }
-
-    root /var/www/dolphin/apps/client/dist;
-    index index.html;
-
-    location /assets/ {
-        try_files $uri =404;
-        access_log off;
-        expires -1;
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-    }
-
-    location = / {
-        if ($host = admin.shopnship.in) {
-            return 302 /admin/dashboard;
-        }
-        add_header Clear-Site-Data "\"cache\"";
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri $uri/ /index.html;
-    }
-
-    location / {
-        add_header Clear-Site-Data "\"cache\"";
-        add_header Cache-Control "no-cache, no-store, must-revalidate";
-        try_files $uri $uri/ /index.html;
-    }
-}
-EOF
-sed -i "s/admin.shopnship.in/${ADMIN_DOMAIN}/g" /etc/nginx/sites-available/dolphin
-sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" /etc/nginx/sites-available/dolphin
+APP_DIR="$APP_DIR" PRIMARY_DOMAIN="$PRIMARY_DOMAIN" MARKETING_DOMAINS="$MARKETING_DOMAINS" CLIENT_DOMAIN="$CLIENT_DOMAIN" ADMIN_DOMAIN="$ADMIN_DOMAIN" API_DOMAIN="$API_DOMAIN" API_ORIGIN="$API_ORIGIN" API_PORT="$API_PORT" bash "$APP_DIR/scripts/vps/write-nginx-config.sh"
 
 rm -f /etc/nginx/sites-enabled/default
 ln -sf /etc/nginx/sites-available/dolphin /etc/nginx/sites-enabled/dolphin
@@ -287,11 +170,12 @@ if [ "$ENABLE_SSL" = "true" ]; then
   fi
 fi
 
-PUBLIC_ORIGIN="$PUBLIC_ORIGIN" CLIENT_ORIGIN="$CLIENT_ORIGIN" ADMIN_ORIGIN="$ADMIN_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
+PUBLIC_ORIGIN="$PUBLIC_ORIGIN" CLIENT_ORIGIN="$CLIENT_ORIGIN" ADMIN_ORIGIN="$ADMIN_ORIGIN" API_ORIGIN="$API_ORIGIN" API_DOMAIN="$API_DOMAIN" bash "$APP_DIR/scripts/vps/deploy.sh"
 pm2 startup systemd -u root --hp /root || true
 
 echo "Bootstrap complete."
-echo "Frontend: ${CLIENT_ORIGIN}"
+echo "Marketing: ${PUBLIC_ORIGIN}"
+echo "Client app: ${CLIENT_ORIGIN}"
 echo "Admin: ${ADMIN_ORIGIN}"
-echo "API health: ${PUBLIC_ORIGIN}/api/health"
-echo "pgAdmin: ${PUBLIC_ORIGIN}/pgadmin/"
+echo "API health: ${API_ORIGIN}/api/health"
+echo "pgAdmin: ${API_ORIGIN}/pgadmin/"

@@ -1,17 +1,28 @@
 import { io, type Socket } from 'socket.io-client'
 
-const DEFAULT_SOCKET_URL = window.location.origin
+const SHOPNSHIP_SOCKET_URL = 'https://api.shopnship.in'
+
+const getDefaultSocketUrl = () => {
+  const host = window.location.hostname.toLowerCase()
+  const shopnshipFrontendHosts = new Set([
+    'shopnship.in',
+    'www.shopnship.in',
+    'app.shopnship.in',
+  ])
+
+  return shopnshipFrontendHosts.has(host) ? SHOPNSHIP_SOCKET_URL : window.location.origin
+}
 
 const getSocketUrl = () => {
   const rawSocketUrl = import.meta.env.VITE_APP_SOCKET_URL
 
   try {
-    if (!rawSocketUrl) return DEFAULT_SOCKET_URL
+    if (!rawSocketUrl) return getDefaultSocketUrl()
 
     const candidate = new URL(rawSocketUrl, window.location.origin)
     return candidate.origin
   } catch {
-    return DEFAULT_SOCKET_URL
+    return getDefaultSocketUrl()
   }
 }
 

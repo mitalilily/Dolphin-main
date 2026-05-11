@@ -4,9 +4,23 @@ import { clearAuthTokens, getAuthTokens, setAuthTokens } from './tokenVault'
 
 const RAW_API_BASE_URL = import.meta.env.VITE_API_URL
 const DEFAULT_API_BASE_URL = '/api'
+const SHOPNSHIP_API_BASE_URL = 'https://api.shopnship.in/api'
+
+const getDefaultApiBaseUrl = () => {
+  if (typeof window === 'undefined') return DEFAULT_API_BASE_URL
+
+  const host = window.location.hostname.toLowerCase()
+  const shopnshipFrontendHosts = new Set([
+    'shopnship.in',
+    'www.shopnship.in',
+    'app.shopnship.in',
+  ])
+
+  return shopnshipFrontendHosts.has(host) ? SHOPNSHIP_API_BASE_URL : DEFAULT_API_BASE_URL
+}
 
 const getApiBaseUrl = () => {
-  const fallback = DEFAULT_API_BASE_URL.replace(/\/+$/, '')
+  const fallback = getDefaultApiBaseUrl().replace(/\/+$/, '')
 
   try {
     if (!RAW_API_BASE_URL) return fallback
