@@ -513,7 +513,7 @@ export const handleEmailVerificationRequest = async (
     const user = await findUserByEmail(normalizedEmail, tx)
 
     if (user) {
-      if (intent === 'signup') {
+      if (intent === 'signup' && user.emailVerified) {
         return {
           status: 409,
           data: {
@@ -610,6 +610,17 @@ export const handleEmailVerificationRequest = async (
 
       const valid = await bcrypt.compare(password, user.passwordHash)
       if (!valid) {
+        if (intent === 'signup') {
+          return {
+            status: 400,
+            data: {
+              code: 'ACCOUNT_PENDING_VERIFICATION',
+              error:
+                'This email is already awaiting verification. Use the same password to resend the code, or log in if the account is already verified.',
+            },
+          }
+        }
+
         return { status: 400, data: { error: 'Incorrect password.' } }
       }
 
