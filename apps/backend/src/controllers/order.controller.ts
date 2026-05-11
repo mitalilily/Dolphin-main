@@ -377,15 +377,26 @@ export const regenerateOrderDocumentsController = async (req: any, res: Response
       return res.status(400).json({ success: false, message: 'Order ID is required' })
     }
 
+    const hasExplicitDocumentSelection =
+      typeof req.body?.regenerateLabel === 'boolean' ||
+      typeof req.body?.regenerateInvoice === 'boolean' ||
+      typeof req.body?.regenerateManifest === 'boolean'
     const regenerateLabel =
-      typeof req.body?.regenerateLabel === 'boolean' ? req.body.regenerateLabel : true
+      typeof req.body?.regenerateLabel === 'boolean'
+        ? req.body.regenerateLabel
+        : !hasExplicitDocumentSelection
     const regenerateInvoice =
-      typeof req.body?.regenerateInvoice === 'boolean' ? req.body.regenerateInvoice : true
+      typeof req.body?.regenerateInvoice === 'boolean'
+        ? req.body.regenerateInvoice
+        : !hasExplicitDocumentSelection
+    const regenerateManifest =
+      typeof req.body?.regenerateManifest === 'boolean' ? req.body.regenerateManifest : false
 
     const result = await regenerateOrderDocumentsServiceAdmin({
       orderId,
       regenerateLabel,
       regenerateInvoice,
+      regenerateManifest,
       expectedUserId: userId,
     })
 

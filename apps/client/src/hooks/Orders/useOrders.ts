@@ -157,11 +157,18 @@ export const useRegenerateOrderDocuments = () => {
       orderId,
       regenerateLabel = true,
       regenerateInvoice = true,
+      regenerateManifest = false,
     }: {
       orderId: string
       regenerateLabel?: boolean
       regenerateInvoice?: boolean
-    }) => regenerateOrderDocumentsService(orderId, { regenerateLabel, regenerateInvoice }),
+      regenerateManifest?: boolean
+    }) =>
+      regenerateOrderDocumentsService(orderId, {
+        regenerateLabel,
+        regenerateInvoice,
+        regenerateManifest,
+      }),
     onSuccess: () => {
       toast.open({ message: 'Documents regenerated successfully.', severity: 'success' })
       queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] })

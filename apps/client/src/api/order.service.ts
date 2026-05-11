@@ -247,13 +247,24 @@ export const retryFailedManifestService = async (orderId: string) => {
   return res.data
 }
 
+export interface RegenerateOrderDocumentsParams {
+  regenerateLabel?: boolean
+  regenerateInvoice?: boolean
+  regenerateManifest?: boolean
+}
+
 export const regenerateOrderDocumentsService = async (
   orderId: string,
-  { regenerateLabel = true, regenerateInvoice = true } = {},
+  {
+    regenerateLabel = true,
+    regenerateInvoice = true,
+    regenerateManifest = false,
+  }: RegenerateOrderDocumentsParams = {},
 ) => {
   const res = await axiosInstance.post(`/orders/${orderId}/regenerate-documents`, {
     regenerateLabel,
     regenerateInvoice,
+    regenerateManifest,
   })
   return res.data
 }

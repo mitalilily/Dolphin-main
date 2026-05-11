@@ -201,13 +201,25 @@ const isProductionEnvironment = () => {
 }
 
 const isShipmozoLiveBookingAllowedInCurrentEnvironment = () => {
+  const disabled =
+    String(process.env.SHIPMOZO_DISABLE_LIVE_BOOKING || '').trim().toLowerCase() === 'true'
+  if (disabled) return false
+
   if (isProductionEnvironment()) return true
   const legacyOverride =
     String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST || '').trim().toLowerCase() === 'true'
   const nonProdOverride =
     String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING_NON_PROD || '').trim().toLowerCase() ===
     'true'
-  return legacyOverride || nonProdOverride
+  const genericOverride =
+    String(process.env.SHIPMOZO_ALLOW_LIVE_BOOKING || '').trim().toLowerCase() === 'true'
+  if (legacyOverride || nonProdOverride || genericOverride) return true
+
+  const nodeEnv = String(process.env.NODE_ENV || '').trim().toLowerCase()
+  const appEnv = String(process.env.APP_ENV || '').trim().toLowerCase()
+  const isCi = String(process.env.CI || '').trim().toLowerCase() === 'true'
+  const isTestLike = nodeEnv === 'test' || appEnv === 'test' || isCi
+  return !isTestLike
 }
 
 const normalizeIntegrationTypeAlias = (value?: string | null) => {
@@ -325,6 +337,101 @@ const extractShipmozoOrderId = (response: any, fallbackOrderId?: string | null) 
       response?.refrence_id ??
       fallbackOrderId,
   )
+
+const normalizeShipmozoObjectKey = (value: unknown) =>
+  normalizeShipmozoText(value).toLowerCase().replace(/[\s_-]+/g, '')
+
+const findShipmozoValueByKeys = (
+  source: any,
+  keys: Set<string>,
+  depth = 0,
+): string => {
+  if (source == null || depth > 6) return ''
+
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = findShipmozoValueByKeys(item, keys, depth + 1)
+      if (found) return found
+    }
+    return ''
+  }
+
+  if (typeof source !== 'object') return ''
+
+  for (const [key, value] of Object.entries(source)) {
+    if (!keys.has(normalizeShipmozoObjectKey(key))) continue
+    if (value != null && typeof value !== 'object') {
+      const normalized = normalizeShipmozoText(value)
+      if (normalized) return normalized
+    }
+    const nested = findShipmozoValueByKeys(value, keys, depth + 1)
+    if (nested) return nested
+  }
+
+  for (const value of Object.values(source)) {
+    const found = findShipmozoValueByKeys(value, keys, depth + 1)
+    if (found) return found
+  }
+
+  return ''
+}
+
+const SHIPMOZO_AWB_KEYS = new Set([
+  'awb',
+  'awbno',
+  'awbnumber',
+  'waybill',
+  'waybillno',
+  'waybillnumber',
+  'trackingid',
+  'trackingnumber',
+  'lr',
+  'lrnumber',
+  'lrno',
+  'docket',
+  'docketnumber',
+  'docketno',
+  'consignmentnumber',
+  'consignmentno',
+  'airwaybill',
+  'airwaybillno',
+  'airwaybillnumber',
+])
+
+const SHIPMOZO_COURIER_NAME_KEYS = new Set([
+  'courier',
+  'couriername',
+  'couriercompany',
+  'couriercompanyservice',
+  'carrier',
+  'carriername',
+  'shippingpartner',
+  'shippingpartnername',
+])
+
+const extractShipmozoAwbNumber = (...sources: any[]) => {
+  for (const source of sources) {
+    const found = findShipmozoValueByKeys(source, SHIPMOZO_AWB_KEYS)
+    if (found) return found
+  }
+  return ''
+}
+
+const extractShipmozoCourierName = (...sources: any[]) => {
+  for (const source of sources) {
+    const found = findShipmozoValueByKeys(source, SHIPMOZO_COURIER_NAME_KEYS)
+    if (found) return found
+  }
+  return ''
+}
+
+const isShipmozoAlreadyAssignedError = (message: unknown) =>
+  typeof message === 'string' &&
+  /already\s+(assigned|allocated)|courier\s+already|awb\s+already|waybill\s+already/i.test(message)
+
+const isShipmozoPickupAlreadyScheduledError = (message: unknown) =>
+  typeof message === 'string' &&
+  /already\s+(scheduled|manifested|picked|pickup)|pickup\s+already|manifest\s+already/i.test(message)
 
 const normalizeShipmozoPositiveNumber = (value: unknown, fallback = 1) => {
   const parsed = Number(value)
@@ -8034,6 +8141,8 @@ export const generateManifestService = async (params: {
             throw new Error(`Unable to load ${integrationType} orders for manifest generation`)
           }
 
+          manifestFailureOrderIds = fetchedOrders.map((order) => order.id)
+
           const providerName =
             integrationType === 'ekart'
               ? 'Ekart'
@@ -8061,12 +8170,12 @@ export const generateManifestService = async (params: {
 
           if (integrationType === 'shipmozo') {
             // Safety policy:
-            // Live Shipmozo booking is allowed in production only.
-            // Non-production can opt-in only with explicit override flags.
+            // Live Shipmozo booking is allowed for deployed runtimes, but blocked
+            // for tests/CI or when explicitly disabled.
             if (!isShipmozoLiveBookingAllowedInCurrentEnvironment()) {
               throw new HttpError(
                 403,
-                'Shipmozo live booking is blocked in non-production environment. Set SHIPMOZO_ALLOW_LIVE_BOOKING_NON_PROD=true (or legacy SHIPMOZO_ALLOW_LIVE_BOOKING_IN_TEST=true) only with explicit approval.',
+                'Shipmozo live manifesting is disabled for this runtime. Set SHIPMOZO_ALLOW_LIVE_BOOKING=true (or SHIPMOZO_ALLOW_LIVE_BOOKING_NON_PROD=true) only with explicit approval.',
               )
             }
 
@@ -8229,6 +8338,23 @@ export const generateManifestService = async (params: {
               const requestedCourierId = Number(order.courier_id || 0)
               let assignResp: any = null
               let autoAssignResp: any = null
+              const autoAssignShipmozoOrder = async () => {
+                try {
+                  return await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+                } catch (autoAssignError: any) {
+                  const autoAssignErrorMessage = String(autoAssignError?.message || '')
+                  if (isShipmozoAlreadyAssignedError(autoAssignErrorMessage)) {
+                    console.warn('[Shipmozo] Courier already assigned; continuing manifest.', {
+                      order_number: order.order_number,
+                      order_id: shipmozoOrderId,
+                      message: autoAssignErrorMessage,
+                    })
+                    return null
+                  }
+                  throw autoAssignError
+                }
+              }
+
               if (requestedCourierId > 0) {
                 try {
                   assignResp = await shipmozo.assignCourier({
@@ -8238,24 +8364,50 @@ export const generateManifestService = async (params: {
                 } catch (assignError: any) {
                   const assignErrorMessage = String(assignError?.message || '')
                   if (isShipmozoWalletError(assignErrorMessage)) {
-                    autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+                    autoAssignResp = await autoAssignShipmozoOrder()
+                  } else if (isShipmozoAlreadyAssignedError(assignErrorMessage)) {
+                    console.warn('[Shipmozo] Courier already assigned; continuing manifest.', {
+                      order_number: order.order_number,
+                      order_id: shipmozoOrderId,
+                      message: assignErrorMessage,
+                    })
                   } else {
                     throw assignError
                   }
                 }
               } else {
-                autoAssignResp = await shipmozo.autoAssignOrder({ order_id: shipmozoOrderId })
+                autoAssignResp = await autoAssignShipmozoOrder()
               }
 
-              const scheduleResp = await shipmozo.schedulePickup({ order_id: shipmozoOrderId })
+              let scheduleResp: any = null
+              try {
+                scheduleResp = await shipmozo.schedulePickup({ order_id: shipmozoOrderId })
+              } catch (scheduleError: any) {
+                const scheduleErrorMessage = String(scheduleError?.message || '')
+                if (isShipmozoPickupAlreadyScheduledError(scheduleErrorMessage)) {
+                  console.warn('[Shipmozo] Pickup already scheduled; continuing manifest.', {
+                    order_number: order.order_number,
+                    order_id: shipmozoOrderId,
+                    message: scheduleErrorMessage,
+                  })
+                } else {
+                  throw scheduleError
+                }
+              }
               const detailResp = await shipmozo.getOrderDetail(shipmozoOrderId)
-              const awbNumber =
-                autoAssignResp?.data?.awb_number ||
-                scheduleResp?.data?.awb_number ||
-                detailResp?.data?.awb_number ||
-                detailResp?.data?.awb ||
-                detailResp?.data?.tracking_id ||
-                null
+              const awbNumber = extractShipmozoAwbNumber(
+                assignResp,
+                autoAssignResp,
+                scheduleResp,
+                detailResp,
+              )
+
+              if (!awbNumber) {
+                throw new HttpError(
+                  502,
+                  `Shipmozo did not return an AWB/LR number for order ${order.order_number}. Please check the order in Shipmozo and retry manifest.`,
+                )
+              }
 
               const uploadShipmozoDocumentFromUrl = async (
                 rawUrl: unknown,
@@ -8334,9 +8486,7 @@ export const generateManifestService = async (params: {
               }
 
               const pickedCourierName =
-                assignResp?.data?.courier ||
-                autoAssignResp?.data?.courier_company_service ||
-                autoAssignResp?.data?.courier_company ||
+                extractShipmozoCourierName(assignResp, autoAssignResp, scheduleResp, detailResp) ||
                 order.courier_partner ||
                 'Shipmozo'
 
@@ -8386,7 +8536,8 @@ export const generateManifestService = async (params: {
           >()
 
           const inferProviderDocumentContentType = (buffer: Buffer, fallback: string) => {
-            if (buffer.subarray(0, 4).equals(Buffer.from('%PDF'))) return 'application/pdf'
+            const leadingText = buffer.subarray(0, 1024).toString('latin1')
+            if (leadingText.includes('%PDF')) return 'application/pdf'
             if (
               buffer.length >= 8 &&
               buffer[0] === 0x89 &&
@@ -8399,7 +8550,20 @@ export const generateManifestService = async (params: {
             if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
               return 'image/jpeg'
             }
-            return fallback
+            const trimmedText = buffer.subarray(0, 512).toString('utf8').trim().toLowerCase()
+            if (
+              trimmedText.startsWith('<!doctype') ||
+              trimmedText.startsWith('<html') ||
+              trimmedText.includes('<html') ||
+              trimmedText.includes('cloudflare') ||
+              trimmedText.includes('access denied')
+            ) {
+              return ''
+            }
+
+            const normalizedFallback = String(fallback || '').trim().toLowerCase()
+            if (normalizedFallback.includes('image/')) return normalizedFallback
+            return ''
           }
 
           const decodeBase64ProviderDocument = (value: string, fallbackContentType: string) => {
@@ -8485,6 +8649,12 @@ export const generateManifestService = async (params: {
               }
 
               if (!documentBuffer?.length) return null
+              if (!contentType) {
+                console.warn(
+                  `[Manifest] ${opts.filenamePrefix} document for order ${order.order_number} was not a PDF/image; skipping provider document.`,
+                )
+                return null
+              }
 
               const extension = contentType.includes('png')
                 ? 'png'
@@ -8509,7 +8679,7 @@ export const generateManifestService = async (params: {
                 `⚠️ [Manifest] Failed to persist ${opts.filenamePrefix} document for order ${order.order_number}:`,
                 docErr?.message || docErr,
               )
-              return /^data:/i.test(source) ? null : source
+              return null
             }
           }
 
@@ -9272,13 +9442,16 @@ export const generateManifestService = async (params: {
               return
             }
 
-            let nextLabel = getPdfDocumentReference(freshOrder.label)
+            const preferPlatformGeneratedLabel =
+              integrationType === 'icarry' || integrationType === 'truxcargo'
+            const existingPdfLabel = getPdfDocumentReference(freshOrder.label)
             const providerDocuments = providerDocumentByOrderId.get(String(freshOrder.id))
             const providerPdfLabel = getPdfDocumentReference(providerDocuments?.label)
+            let nextLabel = preferPlatformGeneratedLabel ? null : existingPdfLabel
             if (!nextLabel && providerPdfLabel) {
               nextLabel = providerPdfLabel
             }
-            if (!nextLabel && freshOrder.awb_number) {
+            if ((preferPlatformGeneratedLabel || !nextLabel) && freshOrder.awb_number) {
               try {
                 const generatedLabel = await generateLabelForOrder(freshOrder, freshOrder.user_id, tx)
                 if (generatedLabel && typeof generatedLabel === 'string' && generatedLabel.trim()) {
@@ -9290,6 +9463,9 @@ export const generateManifestService = async (params: {
                   labelErr?.message || labelErr,
                 )
               }
+            }
+            if (!nextLabel) {
+              nextLabel = existingPdfLabel || providerPdfLabel
             }
 
             let normalizedLabel: string | null = null
@@ -9319,8 +9495,13 @@ export const generateManifestService = async (params: {
               order_status: 'pickup_initiated',
               updated_at: new Date(),
             }
-            const normalizedManifestKey =
-              normalizeToR2Key(providerDocuments?.manifest) || normalizeToR2Key(manifestKey)
+            const generatedManifestKey = normalizeToR2Key(manifestKey)
+            const providerManifestKey = normalizeToR2Key(providerDocuments?.manifest)
+            const preferGeneratedManifest =
+              integrationType === 'truxcargo' || integrationType === 'icarry'
+            const normalizedManifestKey = preferGeneratedManifest
+              ? generatedManifestKey || providerManifestKey
+              : providerManifestKey || generatedManifestKey
             if (normalizedManifestKey) updatePayload.manifest = normalizedManifestKey
             if (normalizedLabel) updatePayload.label = normalizedLabel
             if (normalizedInvoice) {

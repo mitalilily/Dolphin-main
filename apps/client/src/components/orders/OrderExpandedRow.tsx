@@ -153,11 +153,14 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
     return true
   }
 
-  const handleGenerateDocument = async (documentType: DocumentType) => {
+  const handleGenerateDocument = async (
+    documentType: DocumentType,
+    regenerateExistingDocument = false,
+  ) => {
     try {
       setGeneratingDocumentType(documentType)
 
-      if (documentType === 'manifest') {
+      if (documentType === 'manifest' && !regenerateExistingDocument) {
         const manifestDisabledReason = getB2CManifestDisabledReason(row)
         if (manifestDisabledReason) {
           toast.open({
@@ -200,6 +203,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
         orderId: String(row.id),
         regenerateLabel: documentType === 'label',
         regenerateInvoice: documentType === 'invoice',
+        regenerateManifest: documentType === 'manifest',
       })
       const payload = ((result as { data?: Record<string, unknown> })?.data ||
         result ||
@@ -207,8 +211,10 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
       const downloaded = await handleGeneratedDocumentDownload(documentType, payload)
 
       if (!downloaded) {
+        const documentName =
+          documentType === 'label' ? 'Label' : documentType === 'invoice' ? 'Invoice' : 'Manifest'
         toast.open({
-          message: `${documentType === 'label' ? 'Label' : 'Invoice'} generated successfully.`,
+          message: `${documentName} generated successfully.`,
           severity: 'success',
         })
       }
@@ -246,6 +252,11 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
     const isGenerating = generatingDocumentType === type
     const hasDocument = Boolean(keyValue || urlValue)
     const disabledReason = !hasDocument ? manifestDisabledReason : null
+    const canRegenerateExistingDocument = hasDocument && (type === 'manifest' || canGenerate)
+    const isDocumentBusy =
+      isGenerating ||
+      isRegeneratingDocuments ||
+      ((isDownloading || isPending) && !urlValue)
 
     return (
       <Paper
@@ -290,12 +301,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
                   }
                   handleGenerateDocument(type)
                 }}
-                disabled={Boolean(
-                  disabledReason ||
-                    isGenerating ||
-                    isRegeneratingDocuments ||
-                    ((isDownloading || isPending) && !urlValue),
-                )}
+                disabled={Boolean(disabledReason || isDocumentBusy)}
               >
                 {isGenerating
                   ? 'Generating...'
@@ -307,6 +313,17 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
               </Button>
             </span>
           </Tooltip>
+          {canRegenerateExistingDocument && (
+            <Button
+              size="small"
+              variant="contained"
+              sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
+              onClick={() => handleGenerateDocument(type, true)}
+              disabled={isDocumentBusy}
+            >
+              {isGenerating ? 'Regenerating...' : 'Regenerate'}
+            </Button>
+          )}
         </Stack>
       </Paper>
     )

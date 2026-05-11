@@ -1,4 +1,5 @@
 import axios from 'axios'
+import PdfPrinter from 'pdfmake'
 import { eq, inArray } from 'drizzle-orm'
 import { db } from '../client'
 import { b2b_orders } from '../schema/b2bOrders'
@@ -16,13 +17,23 @@ import {
   loadInvoiceAssets,
   normalizePickupDetails,
 } from './invoiceHelpers'
-import { presignDownload, presignUpload } from './upload.service'
+import { presignUpload } from './upload.service'
+import { loadPlatformLogoDataUrl } from './platformLogo.service'
 import { resolveInvoiceNumber } from './invoiceNumber.service'
 import { logTrackingEvent } from './trackingEvents.service'
 import { createNotificationService } from './notifications.service'
 import { sendWebhookEvent } from '../../services/webhookDelivery.service'
 import { recordRtoEvent } from './rto.service'
 import { applyRtoChargeOnce } from './webhookProcessor'
+
+const pdfFonts = {
+  Helvetica: {
+    normal: 'Helvetica',
+    bold: 'Helvetica-Bold',
+    italics: 'Helvetica-Oblique',
+    bolditalics: 'Helvetica-BoldOblique',
+  },
+}
 
 const ADMIN_EDITABLE_ORDER_STATUSES = new Set([
   'pending',
@@ -211,18 +222,254 @@ const normalizeProducts = (rawProducts: unknown, fallbackAmount = 0): Product[] 
   ]
 }
 
+const toManifestText = (value: unknown, fallback = '-') => {
+  const text = String(value ?? '').trim()
+  return text || fallback
+}
+
+const loadRegeneratedManifestBranding = async () => {
+  const logoDataUrl = await loadPlatformLogoDataUrl()
+  const images: Record<string, string> = {}
+
+  if (logoDataUrl?.startsWith('data:image/')) {
+    images.platformLogo = logoDataUrl
+  }
+
+  return {
+    images: Object.keys(images).length ? images : undefined,
+    header: images.platformLogo
+      ? {
+          columns: [
+            { image: 'platformLogo', width: 84, alignment: 'left' },
+            {
+              text: 'Manifest',
+              fontSize: 16,
+              bold: true,
+              alignment: 'right',
+              margin: [0, 10, 0, 0],
+            },
+          ],
+          margin: [0, 0, 0, 14],
+        }
+      : {
+          text: 'Manifest',
+          fontSize: 16,
+          bold: true,
+          alignment: 'center',
+          margin: [0, 0, 0, 10],
+        },
+  }
+}
+
+const generateRegeneratedManifestPdf = async (orders: any[]) => {
+  if (!orders.length) {
+    throw new Error('Order not found')
+  }
+
+  const createManifestCard = (order: any) => ({
+    width: '48%',
+    margin: [0, 0, 0, 12],
+    stack: [
+      {
+        canvas: [
+          {
+            type: 'rect',
+            x: 0,
+            y: 0,
+            w: 245,
+            h: 118,
+            r: 8,
+            lineColor: '#d8deee',
+            fillColor: '#fbfcff',
+            lineWidth: 1,
+          },
+        ],
+      },
+      {
+        margin: [12, -108, 12, 0],
+        stack: [
+          {
+            columns: [
+              {
+                text: toManifestText(order.order_number),
+                bold: true,
+                fontSize: 11,
+                color: '#1f2a44',
+              },
+              {
+                text: toManifestText(order.order_type).toUpperCase(),
+                fontSize: 8,
+                bold: true,
+                color: '#4c67a1',
+                alignment: 'right',
+              },
+            ],
+          },
+          {
+            text: `AWB: ${toManifestText(order.awb_number)}`,
+            fontSize: 9,
+            color: '#42506b',
+            margin: [0, 6, 0, 0],
+          },
+          {
+            text: `Consignee: ${toManifestText(order.buyer_name)}`,
+            fontSize: 9,
+            color: '#42506b',
+            margin: [0, 4, 0, 0],
+          },
+          {
+            columns: [
+              {
+                text: `Pincode: ${toManifestText(order.pincode)}`,
+                fontSize: 9,
+                color: '#42506b',
+              },
+              {
+                text: `Weight: ${Number(order.weight ?? 0).toFixed(0)} g`,
+                fontSize: 9,
+                color: '#42506b',
+                alignment: 'right',
+              },
+            ],
+            margin: [0, 4, 0, 0],
+          },
+          {
+            text: `City: ${toManifestText(order.city)}${
+              order.state ? `, ${toManifestText(order.state)}` : ''
+            }`,
+            fontSize: 9,
+            color: '#42506b',
+            margin: [0, 4, 0, 0],
+          },
+          {
+            text: `Address: ${toManifestText(order.address)}`,
+            fontSize: 8,
+            color: '#667085',
+            margin: [0, 8, 0, 0],
+          },
+        ],
+      },
+    ],
+  })
+
+  const manifestCards = orders.reduce((rows: any[], order, index) => {
+    if (index % 2 === 0) {
+      rows.push({
+        columns: [
+          createManifestCard(order),
+          orders[index + 1] ? createManifestCard(orders[index + 1]) : { width: '48%', text: '' },
+        ],
+        columnGap: 12,
+      })
+    }
+    return rows
+  }, [])
+
+  const pickupDetails = normalizePickupDetails(orders[0]?.pickup_details)
+  const manifestBranding = await loadRegeneratedManifestBranding()
+  const printer = new PdfPrinter(pdfFonts)
+  const docDefinition: any = {
+    defaultStyle: { font: 'Helvetica' },
+    pageSize: 'A4',
+    pageMargins: [30, 40, 30, 40],
+    ...(manifestBranding.images ? { images: manifestBranding.images } : {}),
+    content: [
+      manifestBranding.header,
+      {
+        columns: [
+          {
+            stack: [
+              { text: `Generated On: ${new Date().toLocaleString()}`, fontSize: 9 },
+              {
+                text: `Total Shipments: ${orders.length}`,
+                fontSize: 9,
+                margin: [0, 4, 0, 0],
+              },
+            ],
+          },
+          {
+            stack: [
+              {
+                text: `User ID: ${toManifestText(orders[0].user_id)}`,
+                fontSize: 9,
+                alignment: 'right',
+              },
+              {
+                text: `Pickup Location: ${toManifestText(pickupDetails?.warehouse_name)}`,
+                fontSize: 9,
+                alignment: 'right',
+                margin: [0, 4, 0, 0],
+              },
+            ],
+          },
+        ],
+        margin: [0, 0, 0, 12],
+      },
+      {
+        text: 'Shipments',
+        fontSize: 11,
+        bold: true,
+        color: '#24324d',
+        margin: [0, 0, 0, 10],
+      },
+      ...manifestCards,
+    ],
+  }
+
+  const pdfDoc = printer.createPdfKitDocument(docDefinition)
+  const chunks: Buffer[] = []
+  return await new Promise<Buffer>((resolve, reject) => {
+    pdfDoc.on('data', (chunk) => chunks.push(chunk))
+    pdfDoc.on('end', () => resolve(Buffer.concat(chunks)))
+    pdfDoc.on('error', (err) => reject(err))
+    pdfDoc.end()
+  })
+}
+
+const uploadRegeneratedPdf = async ({
+  buffer,
+  filename,
+  folderKey,
+  userId,
+}: {
+  buffer: Buffer
+  filename: string
+  folderKey: 'labels' | 'invoices' | 'manifests'
+  userId: string
+}) => {
+  const { uploadUrl, key } = await presignUpload({
+    filename,
+    contentType: 'application/pdf',
+    userId,
+    folderKey,
+  })
+  const finalUploadUrl = Array.isArray(uploadUrl) ? uploadUrl[0] : uploadUrl
+  await axios.put(finalUploadUrl, buffer, {
+    headers: { 'Content-Type': 'application/pdf' },
+    validateStatus: (status) => status >= 200 && status < 300,
+    timeout: 60000,
+  })
+  const finalKey = Array.isArray(key) ? key[0] : key
+  if (!finalKey || typeof finalKey !== 'string') {
+    throw new Error('PDF upload key missing')
+  }
+  return finalKey.trim()
+}
+
 export const regenerateOrderDocumentsServiceAdmin = async ({
   orderId,
   regenerateLabel = true,
   regenerateInvoice = true,
+  regenerateManifest = false,
   expectedUserId,
 }: {
   orderId: string
   regenerateLabel?: boolean
   regenerateInvoice?: boolean
+  regenerateManifest?: boolean
   expectedUserId?: string
 }) => {
-  if (!regenerateLabel && !regenerateInvoice) {
+  if (!regenerateLabel && !regenerateInvoice && !regenerateManifest) {
     throw new Error('At least one document must be selected for regeneration')
   }
 
@@ -243,8 +490,10 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
 
   let newLabelKey: string | null = null
   let newInvoiceKey: string | null = null
+  let newManifestKey: string | null = null
   let inlineLabelDataUrl: string | null = null
   let inlineInvoiceDataUrl: string | null = null
+  let inlineManifestDataUrl: string | null = null
 
   if (regenerateLabel) {
     const labelKey = await generateLabelForOrder(order, userId, db)
@@ -409,9 +658,32 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
     }
   }
 
+  if (regenerateManifest) {
+    const manifestBuffer = await generateRegeneratedManifestPdf([order])
+    try {
+      newManifestKey = await uploadRegeneratedPdf({
+        filename: `manifest-${order.id}.pdf`,
+        buffer: manifestBuffer,
+        userId,
+        folderKey: 'manifests',
+      })
+    } catch (uploadErr: any) {
+      const message = String(uploadErr?.message || '')
+      if (!/Storage is not configured/i.test(message)) {
+        throw uploadErr
+      }
+      console.warn(
+        `Storage unavailable while regenerating manifest for order ${order.order_number || order.id}. Using inline PDF data URL fallback.`,
+      )
+      inlineManifestDataUrl = `data:application/pdf;base64,${manifestBuffer.toString('base64')}`
+      newManifestKey = null
+    }
+  }
+
   const updates: Record<string, unknown> = { updated_at: new Date() }
   if (newLabelKey) updates.label = newLabelKey
   if (newInvoiceKey) updates.invoice_link = newInvoiceKey
+  if (newManifestKey) updates.manifest = newManifestKey
   if (newInvoiceKey && generatedInvoiceData) {
     updates.invoice_number = generatedInvoiceData.number
     updates.invoice_date = generatedInvoiceData.date
@@ -429,6 +701,7 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
     orderType,
     label: newLabelKey || inlineLabelDataUrl,
     invoice_link: newInvoiceKey || inlineInvoiceDataUrl,
+    manifest: newManifestKey || inlineManifestDataUrl,
   }
 }
 
