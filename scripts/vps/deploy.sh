@@ -120,9 +120,7 @@ pm2 save
 echo "Reloading Nginx..."
 NGINX_SITE="/etc/nginx/sites-available/dolphin"
 if [ -f "$NGINX_SITE" ]; then
-  if grep -q 'server_name _;' "$NGINX_SITE"; then
-    sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
-  fi
+  sed -i "s/server_name .*/server_name ${DOMAIN_NAMES};/" "$NGINX_SITE"
   if ! grep -q 'location = /admin {' "$NGINX_SITE"; then
     sed -i '/location \^~ \/admin\/static\/ {/i\
     location = /admin {\
