@@ -264,6 +264,23 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
     }
   }
 
+  const documentButtonSx = {
+    width: { xs: '100%', sm: 132 },
+    height: 28,
+    px: 1,
+    py: 0,
+    borderRadius: 1,
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'none',
+    whiteSpace: 'nowrap',
+  }
+
+  const documentSecondaryButtonSx = {
+    ...documentButtonSx,
+    width: { xs: '100%', sm: 112 },
+  }
+
   const renderDocAction = ({
     title,
     keyValue,
@@ -300,8 +317,15 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
           backgroundColor: '#FFFFFF',
         }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} flexWrap="wrap">
-          <Stack direction="row" alignItems="center" spacing={0.8} sx={{ minWidth: 120 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 1fr) auto' },
+            alignItems: 'center',
+            gap: 1,
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={0.8} sx={{ minWidth: 0 }}>
             <FaFilePdf size={14} color={ACCENT} />
             <Typography fontWeight={700} fontSize={12}>
               {title}
@@ -321,22 +345,22 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
             )}
           </Stack>
 
-          <Stack direction="row" spacing={0.6} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={0.6}
+            alignItems="center"
+            justifyContent="flex-end"
+            sx={{ width: { xs: '100%', sm: 'auto' } }}
+          >
             <Tooltip title={disabledReason || ''} arrow disableHoverListener={!disabledReason}>
-              <span>
+              <Box
+                component="span"
+                sx={{ display: 'inline-flex', width: { xs: '100%', sm: 'auto' } }}
+              >
                 <Button
                   size="small"
                   variant={hasDocument ? 'outlined' : 'contained'}
-                  sx={{
-                    minWidth: 0,
-                    height: 24,
-                    px: 0.9,
-                    py: 0,
-                    borderRadius: 1,
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    textTransform: 'none',
-                  }}
+                  sx={documentButtonSx}
                   onClick={() => {
                     if (urlValue && isDirectDownloadUrl(urlValue)) {
                       handleDirectDownload(urlValue, type)
@@ -358,22 +382,13 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
                         ? 'Download'
                         : `Generate ${title}`}
                 </Button>
-              </span>
+              </Box>
             </Tooltip>
             {canRegenerateExistingDocument && (
               <Button
                 size="small"
                 variant="contained"
-                sx={{
-                  minWidth: 0,
-                  height: 24,
-                  px: 0.9,
-                  py: 0,
-                  borderRadius: 1,
-                  fontSize: '11px',
-                  fontWeight: 700,
-                  textTransform: 'none',
-                }}
+                sx={documentSecondaryButtonSx}
                 onClick={() => handleGenerateDocument(type, true)}
                 disabled={isDocumentBusy}
               >
@@ -381,7 +396,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
               </Button>
             )}
           </Stack>
-        </Stack>
+        </Box>
       </Paper>
     )
   }
