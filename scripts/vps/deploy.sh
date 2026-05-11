@@ -4,8 +4,12 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
+CLIENT_DOMAIN="${CLIENT_DOMAIN:-client.$PRIMARY_DOMAIN}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.$PRIMARY_DOMAIN}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN $CLIENT_DOMAIN $ADMIN_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
+CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
+ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 
@@ -48,15 +52,16 @@ fi
 cat > apps/client/.env.production <<EOF
 VITE_API_URL=${API_ORIGIN}/api
 VITE_APP_SOCKET_URL=${API_ORIGIN}
-VITE_CLIENT_APP_URL=${PUBLIC_ORIGIN}/app
-VITE_AUTH_APP_URL=${PUBLIC_ORIGIN}/login
-VITE_ADMIN_APP_URL=${PUBLIC_ORIGIN}/admin
-VITE_ADMIN_AUTH_URL=${PUBLIC_ORIGIN}/auth/signin
+VITE_CLIENT_APP_URL=${CLIENT_ORIGIN}/app
+VITE_AUTH_APP_URL=${CLIENT_ORIGIN}/login
+VITE_ADMIN_APP_URL=${ADMIN_ORIGIN}/admin
+VITE_ADMIN_AUTH_URL=${ADMIN_ORIGIN}/auth/signin
 EOF
 
 cat > apps/admin/.env.production <<EOF
 REACT_APP_API_BASE_URL=${API_ORIGIN}/api
 REACT_APP_SOCKET_URL=${API_ORIGIN}
+REACT_APP_LANDING_URL=${CLIENT_ORIGIN}
 EOF
 
 echo "Installing backend dependencies..."
@@ -130,6 +135,23 @@ if [ -f "$NGINX_SITE" ]; then
         try_files /index.html =404;\
     }\
 ' "$NGINX_SITE"
+  fi
+  if ! grep -q 'return 302 /admin/dashboard;' "$NGINX_SITE"; then
+    awk -v admin_domain="$ADMIN_DOMAIN" '
+      /^[[:space:]]*location \/ \{/ && !inserted {
+        print "    location = / {"
+        print "        if ($host = " admin_domain ") {"
+        print "            return 302 /admin/dashboard;"
+        print "        }"
+        print "        add_header Clear-Site-Data \"\\\"cache\\\"\";"
+        print "        add_header Cache-Control \"no-cache, no-store, must-revalidate\";"
+        print "        try_files $uri $uri/ /index.html;"
+        print "    }"
+        print ""
+        inserted=1
+      }
+      { print }
+    ' "$NGINX_SITE" > "${NGINX_SITE}.tmp" && mv "${NGINX_SITE}.tmp" "$NGINX_SITE"
   fi
   sed -i 's#try_files \$uri \$uri/ /admin/index.html;#try_files $uri /admin/index.html;#g' "$NGINX_SITE"
   if ! grep -q 'gzip on;' "$NGINX_SITE"; then

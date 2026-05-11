@@ -1,11 +1,11 @@
 # Dolphin VPS Deployment
 
-This deploys the current monorepo to a single VPS with path routing:
+This deploys the current monorepo to a single VPS with domain routing:
 
-- Landing/client frontend: `https://shopnship.in/`
-- Client app entry: `https://shopnship.in/app`
-- Admin frontend: `https://shopnship.in/admin/`
-- Admin subdomain: `https://admin.shopnship.in/admin/`
+- Landing/client frontend: `https://client.shopnship.in/`
+- Client app entry: `https://client.shopnship.in/app`
+- Admin frontend: `https://admin.shopnship.in/`
+- Admin dashboard: `https://admin.shopnship.in/admin/dashboard`
 - API: `https://shopnship.in/api/`
 - pgAdmin: `https://shopnship.in/pgadmin/`
 
@@ -18,6 +18,7 @@ Type  Name   Value
 A     @      72.60.96.97
 A     www    72.60.96.97
 A     app    72.60.96.97
+A     client 72.60.96.97
 A     admin  72.60.96.97
 ```
 
@@ -32,6 +33,8 @@ Then run:
 
 ```bash
 PUBLIC_ORIGIN=https://shopnship.in \
+CLIENT_ORIGIN=https://client.shopnship.in \
+ADMIN_ORIGIN=https://admin.shopnship.in \
 PGADMIN_EMAIL=admin@shopnship.in \
 PGADMIN_PASSWORD='<strong-password>' \
 bash /var/www/dolphin/scripts/vps/bootstrap.sh
@@ -55,6 +58,8 @@ VPS_USER=root
 VPS_SSH_KEY=<private key allowed in /root/.ssh/authorized_keys>
 VPS_PASSWORD=<optional fallback if no SSH key is configured>
 PUBLIC_ORIGIN=https://shopnship.in
+CLIENT_ORIGIN=https://client.shopnship.in
+ADMIN_ORIGIN=https://admin.shopnship.in
 ```
 
 The workflow runs on every push to `main`, resets `/var/www/dolphin` to

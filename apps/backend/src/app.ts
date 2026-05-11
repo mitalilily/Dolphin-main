@@ -104,6 +104,7 @@ const localOrigins = [
   'https://admin.shopnship.in',
   'https://api.shopnship.in',
   'https://app.shopnship.in',
+  'https://client.shopnship.in',
   'https://shopnship.in',
   'https://www.shopnship.in',
 ]

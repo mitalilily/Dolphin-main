@@ -17,6 +17,8 @@ jobs:
       VPS_HOST: ${{ secrets.VPS_HOST || '72.60.96.97' }}
       VPS_USER: ${{ secrets.VPS_USER || 'root' }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
+      CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN || 'https://client.shopnship.in' }}
+      ADMIN_ORIGIN: ${{ secrets.ADMIN_ORIGIN || 'https://admin.shopnship.in' }}
       APP_DIR: /var/www/dolphin
     steps:
       - name: Deploy on VPS
@@ -71,7 +73,7 @@ jobs:
           REMOTE
 
           set +e
-          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
+          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' CLIENT_ORIGIN='${CLIENT_ORIGIN}' ADMIN_ORIGIN='${ADMIN_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
           deploy_status=$?
           set -e
           printf '%s\n' "$deploy_output"

@@ -4,8 +4,12 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 REPO_URL="${REPO_URL:-https://github.com/mitalilily/Dolphin-main.git}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
-DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN admin.$PRIMARY_DOMAIN}"
+CLIENT_DOMAIN="${CLIENT_DOMAIN:-client.$PRIMARY_DOMAIN}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.$PRIMARY_DOMAIN}"
+DOMAIN_NAMES="${DOMAIN_NAMES:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN app.$PRIMARY_DOMAIN $CLIENT_DOMAIN $ADMIN_DOMAIN}"
 PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
+CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
+ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-$PUBLIC_ORIGIN}"
 API_PORT="${API_PORT:-5002}"
 PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@$PRIMARY_DOMAIN}"
@@ -231,6 +235,15 @@ server {
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
+    location = / {
+        if ($host = admin.shopnship.in) {
+            return 302 /admin/dashboard;
+        }
+        add_header Clear-Site-Data "\"cache\"";
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        try_files $uri $uri/ /index.html;
+    }
+
     location / {
         add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
@@ -238,6 +251,7 @@ server {
     }
 }
 EOF
+sed -i "s/admin.shopnship.in/${ADMIN_DOMAIN}/g" /etc/nginx/sites-available/dolphin
 sed -i "s/server_name _;/server_name ${DOMAIN_NAMES};/" /etc/nginx/sites-available/dolphin
 
 rm -f /etc/nginx/sites-enabled/default
@@ -273,11 +287,11 @@ if [ "$ENABLE_SSL" = "true" ]; then
   fi
 fi
 
-PUBLIC_ORIGIN="$PUBLIC_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
+PUBLIC_ORIGIN="$PUBLIC_ORIGIN" CLIENT_ORIGIN="$CLIENT_ORIGIN" ADMIN_ORIGIN="$ADMIN_ORIGIN" API_ORIGIN="$API_ORIGIN" bash "$APP_DIR/scripts/vps/deploy.sh"
 pm2 startup systemd -u root --hp /root || true
 
 echo "Bootstrap complete."
-echo "Frontend: ${PUBLIC_ORIGIN}"
-echo "Admin: ${PUBLIC_ORIGIN}/admin/"
+echo "Frontend: ${CLIENT_ORIGIN}"
+echo "Admin: ${ADMIN_ORIGIN}"
 echo "API health: ${PUBLIC_ORIGIN}/api/health"
 echo "pgAdmin: ${PUBLIC_ORIGIN}/pgadmin/"
