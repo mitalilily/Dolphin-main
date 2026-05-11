@@ -9,7 +9,12 @@ import {
   type SetStateAction,
 } from 'react'
 import { logoutApi } from '../../api/auth'
-import { clearAuthTokens, getAuthTokens, setAuthTokens } from '../../api/tokenVault'
+import {
+  AUTH_TOKENS_CHANGED_EVENT,
+  clearAuthTokens,
+  getAuthTokens,
+  setAuthTokens,
+} from '../../api/tokenVault'
 import { useUserProfile } from '../../hooks/User/useUserProfile'
 import type { IUserProfileDB } from '../../types/user.types'
 import { emptyUserProfile } from '../../utils/utility'
@@ -65,6 +70,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return nextUserId
     })
   }
+
+  useEffect(() => {
+    const syncAuthTokens = () => {
+      const { accessToken: currentAccess, refreshToken: currentRefresh } = getAuthTokens()
+      const hasCurrentTokens = Boolean(currentAccess && currentRefresh)
+
+      setIsAuthenticated(hasCurrentTokens)
+
+      if (!hasCurrentTokens) {
+        localStorage.removeItem(USER_ID_STORAGE_KEY)
+        setUserIdState('')
+        queryClient.removeQueries({ queryKey: ['userInfo'] })
+        queryClient.removeQueries({ queryKey: ['userProfile'] })
+        queryClient.removeQueries({ queryKey: ['walletBalance'] })
+      }
+    }
+
+    window.addEventListener(AUTH_TOKENS_CHANGED_EVENT, syncAuthTokens)
+    window.addEventListener('storage', syncAuthTokens)
+
+    return () => {
+      window.removeEventListener(AUTH_TOKENS_CHANGED_EVENT, syncAuthTokens)
+      window.removeEventListener('storage', syncAuthTokens)
+    }
+  }, [queryClient])
 
   useEffect(() => {
     // If we successfully fetched a user, ensure auth is marked as true.

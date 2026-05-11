@@ -410,8 +410,17 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
     console.error('Error in requestEmailVerification:', err)
     const message = err instanceof Error ? err.message : 'Invalid credentials or token'
     const isEmailConfigError = message.includes('Email service is not configured')
-    return res.status(isEmailConfigError ? 500 : 401).json({
-      error: isEmailConfigError ? message : 'Invalid credentials or token',
+    const isGoogleTokenFlow = Boolean(req.body?.idToken)
+    const isLikelyTokenError =
+      isGoogleTokenFlow && /token|google|credential|invalid|audience/i.test(message)
+    const fallback =
+      intent === 'signup'
+        ? 'Could not create your account right now. Please try again.'
+        : 'Could not complete sign in right now. Please try again.'
+
+    return res.status(isLikelyTokenError ? 401 : 500).json({
+      error: isEmailConfigError ? message : isLikelyTokenError ? 'Invalid credentials or token' : fallback,
+      code: isLikelyTokenError ? 'INVALID_AUTH_TOKEN' : 'AUTH_FLOW_FAILED',
     })
   }
 }

@@ -30,33 +30,84 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl()
 
+const PUBLIC_AUTH_PATHS = [
+  '/auth/request-password-login',
+  '/auth/verify-user-email',
+  '/auth/request-otp',
+  '/auth/verify-otp',
+  '/auth/signin-with-google',
+  '/auth/admin/login',
+]
+
+const getPathname = (url?: string) => {
+  if (!url) return ''
+
+  try {
+    return new URL(url, window.location.origin).pathname
+  } catch {
+    return url.startsWith('/') ? url.split('?')[0] : `/${url.split('?')[0]}`
+  }
+}
+
+const isPublicAuthRequest = (url?: string) => {
+  const pathname = getPathname(url)
+  const apiPath = pathname.startsWith('/api/') ? pathname.slice(4) : pathname
+  return PUBLIC_AUTH_PATHS.some((path) => apiPath === path || apiPath.endsWith(path))
+}
+
+const isAuthScreen = () =>
+  typeof window !== 'undefined' &&
+  (window.location.pathname === '/login' || window.location.pathname === '/signup')
+
+const removeAuthorizationHeader = (headers: unknown) => {
+  if (!headers || typeof headers !== 'object') return
+
+  const maybeAxiosHeaders = headers as { delete?: (name: string) => void; Authorization?: string }
+  if (typeof maybeAxiosHeaders.delete === 'function') {
+    maybeAxiosHeaders.delete('Authorization')
+    return
+  }
+
+  delete maybeAxiosHeaders.Authorization
+}
+
+const redirectToLoginWhenNeeded = () => {
+  clearAuthTokens()
+  if (!isAuthScreen()) {
+    window.location.href = '/login'
+  }
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
   headers: { 'Content-Type': 'application/json' },
 })
 
-/* ----- attach access token to every request ----- */
+/* ----- attach access token to every protected request ----- */
 api.interceptors.request.use((cfg) => {
+  if (isPublicAuthRequest(cfg.url)) {
+    removeAuthorizationHeader(cfg.headers)
+    return cfg
+  }
+
   const { accessToken } = getAuthTokens()
   if (accessToken) cfg.headers.Authorization = `Bearer ${accessToken}`
   return cfg
 })
 
-/* ----- silent‑refresh once per 401 ----- */
+/* ----- silent refresh once per protected 401 ----- */
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config
 
-    // Skip refresh if:
-    // 1. Not a 401 error
-    // 2. Already retried
-    // 3. This is the refresh token endpoint itself (avoid infinite loop)
+    // Public auth failures are form errors, not session-expiry events.
     if (
       err.response?.status !== 401 ||
-      original._retry ||
-      original.url?.includes('/auth/refresh-token')
+      original?._retry ||
+      original?.url?.includes('/auth/refresh-token') ||
+      isPublicAuthRequest(original?.url)
     ) {
       return Promise.reject(err)
     }
@@ -65,20 +116,19 @@ api.interceptors.response.use(
 
     const { refreshToken } = getAuthTokens()
     if (!refreshToken) {
-      console.warn('⚠️ No refresh token available, redirecting to login')
-      clearAuthTokens()
-      window.location.href = '/login'
+      console.warn('No refresh token available; clearing stale auth state.')
+      redirectToLoginWhenNeeded()
       return Promise.reject(err)
     }
 
     try {
-      console.log('🔄 Attempting to refresh access token...')
+      console.log('Attempting to refresh access token...')
       const { data } = await axios.post(
         `${API_BASE_URL}/auth/refresh-token`,
         { refreshToken },
         {
           headers: {
-            'x-refresh-token': refreshToken, // ✅ Send in header for better security
+            'x-refresh-token': refreshToken,
           },
         },
       )
@@ -89,18 +139,13 @@ api.interceptors.response.use(
 
       setAuthTokens(data.accessToken, data.refreshToken)
       original.headers.Authorization = `Bearer ${data.accessToken}`
-      
-      console.log('✅ Token refreshed successfully, retrying original request')
-      return api(original) // retry original request with new token
+
+      console.log('Token refreshed successfully; retrying original request.')
+      return api(original)
     } catch (e: unknown) {
       const error = e as { response?: { data?: { error?: string } }; message?: string }
-      console.error('❌ Refresh token failed:', error?.response?.data?.error || error?.message || e)
-      clearAuthTokens()
-      
-      // Only redirect if not already on login page
-      if (!window.location.pathname.includes('/login')) {
-        window.location.href = '/login'
-      }
+      console.error('Refresh token failed:', error?.response?.data?.error || error?.message || e)
+      redirectToLoginWhenNeeded()
       return Promise.reject(e)
     }
   },
