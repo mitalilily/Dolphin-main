@@ -170,11 +170,11 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
   }
 
   const heading =
-    mode === 'signup' ? 'Create your Dolphin account' : 'Sign in with email and password'
+    mode === 'signup' ? 'Get started with Dolphin in minutes' : 'Safe & secure access'
   const description =
     mode === 'signup'
-      ? 'Set up your seller profile and start managing shipping, pickups, rates, labels, and invoices from one place.'
-      : 'Enter your account details to open your dashboard and continue shipping without friction.'
+      ? 'Create your account, add your warehouse details, and start shipping your orders from a single easy-to-use dashboard.'
+      : 'Verify your email, log in securely, and keep your shipping account protected.'
 
   return (
     <Stack spacing={2.2}>
@@ -344,8 +344,7 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
       <Stack direction="row" spacing={1} alignItems="center">
         <FiShield size={14} color={brand.success} />
         <Typography sx={{ color: brand.inkSoft, fontSize: '0.82rem', lineHeight: 1.6 }}>
-          Your shipping data, invoices, and courier settings stay protected behind secure account
-          access.
+          Handle shipping, billing, and order fulfillment smoothly from a single platform.
         </Typography>
       </Stack>
 

@@ -20,18 +20,18 @@ interface AuthShellProps {
 
 const authHighlights = [
   {
-    title: 'Smart shipping workspace',
-    text: 'Orders, couriers, tracking, billing, and support in one clean seller panel.',
+    title: 'Smart shipping dashboard',
+    text: 'Manage orders, couriers, tracking, payments, and support from one simple dashboard.',
     icon: <TbTruckDelivery size={18} />,
   },
   {
-    title: 'Secure seller access',
-    text: 'Your account opens with email verification and keeps your shipping operations protected.',
+    title: 'Safe & secure access',
+    text: 'Verify your email, log in securely, and keep your shipping account protected.',
     icon: <FiShield size={18} />,
   },
   {
-    title: 'Actionable insights',
-    text: 'See orders, wallet activity, courier performance, billing, and shipment status without switching tools.',
+    title: 'Clear business insights',
+    text: 'Track orders, payments, courier performance, and shipment updates in one place without jumping between different tools.',
     icon: <TbChartBar size={18} />,
   },
 ]
@@ -158,7 +158,7 @@ export default function AuthShell({
               >
                 <Stack spacing={3.2} sx={{ position: 'relative', zIndex: 1 }}>
                   <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                    {['Built for ecommerce teams', 'Secure account access', 'Dolphin dashboard'].map((pill) => (
+                    {['Built for growing businesses', 'Safe & secure access', 'Smart shipping dashboard'].map((pill) => (
                       <Chip
                         key={pill}
                         label={pill}
@@ -264,7 +264,7 @@ export default function AuthShell({
                         <Stack direction="row" spacing={0.8} alignItems="center" sx={{ mt: 1.25 }}>
                           <FiCheckCircle size={14} color={brand.success} />
                           <Typography sx={{ color: brand.ink, fontSize: '0.82rem', fontWeight: 600 }}>
-                            Built for daily shipping, billing, and fulfillment work
+                            Made for everyday shipping
                           </Typography>
                         </Stack>
                       </Box>

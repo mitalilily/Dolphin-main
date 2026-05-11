@@ -15,10 +15,10 @@ export default function Signup() {
   return (
     <AuthShell
       eyebrow="Create Account"
-      title="Start shipping with Dolphin."
-      subtitle="Create your seller account, complete onboarding, add your warehouse, and begin booking courier orders from one connected dashboard."
-      helperTitle="Made for growing sellers"
-      helperText="Dolphin brings rate cards, pickups, manifests, labels, invoices, tracking, and support together so your team can move faster."
+      title="Get started with Dolphin in minutes."
+      subtitle="Create your account, add your warehouse details, and start shipping your orders from a single easy-to-use dashboard."
+      helperTitle="Built for growing businesses"
+      helperText="Dolphin helps you manage pickups, shipping labels, invoices, tracking, and customer support faster and more easily."
       showChrome={false}
     >
       <Stack spacing={2.4}>
@@ -31,10 +31,10 @@ export default function Signup() {
               letterSpacing: '-0.05em',
             }}
           >
-            Create your account
+            Made for everyday shipping
           </Typography>
           <Typography sx={{ color: brand.inkSoft, lineHeight: 1.72 }}>
-            Enter your name, email, and password. We will guide you through onboarding after your account is verified.
+            Handle shipping, billing, and order fulfillment smoothly from a single platform.
           </Typography>
         </Stack>
 

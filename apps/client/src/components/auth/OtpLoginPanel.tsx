@@ -102,10 +102,10 @@ export default function OtpLoginPanel() {
     <Stack spacing={2.2}>
       <Stack spacing={0.8}>
         <Typography sx={{ color: brand.ink, fontWeight: 800, fontSize: '1.18rem' }}>
-          Continue with email code
+          Safe & secure access
         </Typography>
         <Typography sx={{ color: brand.inkSoft, lineHeight: 1.7, fontSize: '0.92rem' }}>
-          We will send a secure code to your registered email so you can get back to shipping quickly.
+          Verify your email, log in securely, and keep your shipping account protected.
         </Typography>
       </Stack>
 
@@ -215,8 +215,8 @@ export default function OtpLoginPanel() {
       <Stack direction="row" spacing={1} alignItems="center">
         <FiShield size={14} color={brand.success} />
         <Typography sx={{ color: brand.inkSoft, fontSize: '0.82rem', lineHeight: 1.6 }}>
-          Your account access is protected with email verification.
-    </Typography>
+          Manage orders, couriers, tracking, payments, and support from one simple dashboard.
+        </Typography>
       </Stack>
 
       <CustomModal

@@ -18,19 +18,19 @@ export default function Login() {
   return (
     <AuthShell
       eyebrow="Seller Login"
-      title="Welcome back to your shipping command center."
-      subtitle="Manage orders, couriers, invoices, pickups, and tracking from one simple workspace built for growing ecommerce teams."
-      helperTitle="Everything stays connected"
-      helperText="Sign in to continue where you left off, with your warehouses, rate cards, shipments, invoices, and reports ready in one place."
+      title="Get started with Dolphin in minutes."
+      subtitle="Create your account, add your warehouse details, and start shipping your orders from a single easy-to-use dashboard."
+      helperTitle="Built for growing businesses"
+      helperText="Dolphin helps you manage pickups, shipping labels, invoices, tracking, and customer support faster and more easily."
       showChrome={false}
     >
       <Stack spacing={2.4}>
         <Stack spacing={0.8}>
           <Typography sx={{ color: brand.ink, fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.05em' }}>
-            Login
+            Safe & secure access
           </Typography>
           <Typography sx={{ color: brand.inkSoft, lineHeight: 1.72 }}>
-            Use your registered email to securely access your Dolphin account.
+            Verify your email, log in securely, and keep your shipping account protected.
           </Typography>
         </Stack>
 
