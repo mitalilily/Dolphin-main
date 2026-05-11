@@ -11,7 +11,7 @@ import {
   Typography,
   alpha,
 } from '@mui/material'
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { MdArrowDropDown } from 'react-icons/md'
 import CustomInput from './CustomInput'
 
@@ -60,6 +60,10 @@ export default function CustomSelect({
   const [search, setSearch] = useState('')
 
   const selectedItem = items.find((item) => item?.key === value)
+
+  useEffect(() => {
+    if (value === undefined || value === null || value === '') setSearch('')
+  }, [value])
 
   const filteredItems = useMemo(() => {
     if (!searchable || !search) return items

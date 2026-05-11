@@ -1,4 +1,16 @@
-import { Box, Button, Card, CardContent, Chip, Grid, Stack, Typography } from '@mui/material'
+import {
+  Alert,
+  alpha,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Grid,
+  Skeleton,
+  Stack,
+  Typography,
+} from '@mui/material'
 import moment from 'moment'
 import { useState } from 'react'
 import {
@@ -9,6 +21,7 @@ import {
   MdHourglassEmpty,
   MdTrendingUp,
 } from 'react-icons/md'
+import type { CodRemittance } from '../../api/codRemittance'
 import { FilterBar, type FilterField } from '../../components/FilterBar'
 import PageHeading from '../../components/UI/heading/PageHeading'
 import DataTable, { type Column } from '../../components/UI/table/DataTable'
@@ -17,41 +30,80 @@ import {
   useCodRemittances,
   useCodStats,
 } from '../../hooks/useCodRemittance'
+import { brand, brandGradients } from '../../theme/brand'
+
+type CodFilterValue = string | Date | null | undefined
+
+interface CodFilterState {
+  status?: string
+  fromDate?: CodFilterValue
+  toDate?: CodFilterValue
+}
+
+const formatCurrency = (value: string | number | null | undefined) => {
+  const numericValue = Number(value ?? 0)
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 2,
+  }).format(Number.isFinite(numericValue) ? numericValue : 0)
+}
+
+const toApiDate = (value: CodFilterValue) => {
+  if (!value) return undefined
+  if (value instanceof Date) return value.toISOString()
+  const text = String(value).trim()
+  return text || undefined
+}
+
+const formatDate = (value?: string | null) => (value ? moment(value).format('DD MMM YYYY') : '-')
+const formatDateTime = (value?: string | null) =>
+  value ? moment(value).format('DD MMM YYYY, hh:mm A') : '-'
+
+const getStatusLabel = (status: string) => {
+  if (status === 'credited') return 'Credited'
+  if (status === 'pending') return 'Pending'
+  return status || 'Pending'
+}
+
+const getStatusColor = (status: string): 'success' | 'warning' | 'info' => {
+  if (status === 'credited') return 'success'
+  if (status === 'pending') return 'warning'
+  return 'info'
+}
+
+const getStatusIcon = (status: string) => {
+  return status === 'credited' ? <MdCheckCircle /> : <MdHourglassEmpty />
+}
 
 export default function CodRemittancesList() {
   const [page, setPage] = useState(1)
   const [rowsPerPage, setRowsPerPage] = useState(20)
-  const [filters, setFilters] = useState<{
-    status?: string
-    fromDate?: Date
-    toDate?: Date
-  }>({})
+  const [isExporting, setIsExporting] = useState(false)
+  const [filters, setFilters] = useState<CodFilterState>({
+    status: '',
+    fromDate: '',
+    toDate: '',
+  })
 
-  // Convert Date objects to ISO strings for API
   const apiFilters = {
-    status: filters.status,
-    fromDate: filters.fromDate?.toISOString(),
-    toDate: filters.toDate?.toISOString(),
+    status: filters.status || undefined,
+    fromDate: toApiDate(filters.fromDate),
+    toDate: toApiDate(filters.toDate),
   }
 
-  // Use custom hooks
-  const { data: stats } = useCodStats()
-  const { data, isLoading } = useCodRemittances(page, rowsPerPage, apiFilters)
+  const { data: stats, isLoading: statsLoading } = useCodStats()
+  const { data, isLoading, isError } = useCodRemittances(page, rowsPerPage, apiFilters)
 
   const handleExport = async () => {
     try {
+      setIsExporting(true)
       await handleCodRemittancesExport(apiFilters)
     } catch (error) {
       console.error('Export failed:', error)
+    } finally {
+      setIsExporting(false)
     }
-  }
-
-  const getStatusColor = (status: string) => {
-    return status === 'credited' ? 'success' : 'info'
-  }
-
-  const getStatusIcon = (status: string) => {
-    return status === 'credited' ? <MdCheckCircle /> : <MdHourglassEmpty />
   }
 
   const filterFields: FilterField[] = [
@@ -61,8 +113,8 @@ export default function CodRemittancesList() {
       type: 'select',
       options: [
         { label: 'All', value: '' },
-        { label: 'Processing', value: 'pending' },
-        { label: 'Settled Offline', value: 'credited' },
+        { label: 'Pending', value: 'pending' },
+        { label: 'Credited', value: 'credited' },
       ],
       placeholder: 'Select status',
     },
@@ -80,331 +132,286 @@ export default function CodRemittancesList() {
     },
   ]
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const columns: Column<any>[] = [
+  const columns: Column<CodRemittance>[] = [
     {
       id: 'orderNumber',
       label: 'Order Number',
-      minWidth: 150,
+      minWidth: 160,
       render: (_, row) => (
-        <Box>
-          <Typography variant="body2" fontWeight={600}>
-            {row.orderNumber}
+        <Stack spacing={0.25}>
+          <Typography variant="body2" sx={{ color: brand.ink, fontWeight: 800 }}>
+            {row.orderNumber || '-'}
           </Typography>
-          {row.awbNumber && (
-            <Typography variant="caption" color="text.secondary">
-              AWB: {row.awbNumber}
-            </Typography>
-          )}
-        </Box>
+          <Typography variant="caption" sx={{ color: brand.inkSoft, fontWeight: 600 }}>
+            {row.awbNumber ? `AWB: ${row.awbNumber}` : 'AWB not assigned'}
+          </Typography>
+        </Stack>
       ),
     },
     {
       id: 'courierPartner',
       label: 'Courier',
-      minWidth: 120,
-      render: (val) => <Typography variant="body2">{val || 'N/A'}</Typography>,
+      minWidth: 130,
+      render: (value) => (
+        <Typography variant="body2" sx={{ color: brand.ink, fontWeight: 700 }}>
+          {value || 'N/A'}
+        </Typography>
+      ),
     },
     {
       id: 'codAmount',
       label: 'COD Amount',
-      minWidth: 120,
-      render: (val) => (
-        <Typography variant="body2" fontWeight={600}>
-          ₹{Number(val).toLocaleString('en-IN')}
+      minWidth: 130,
+      render: (value) => (
+        <Typography variant="body2" sx={{ color: brand.ink, fontWeight: 800 }}>
+          {formatCurrency(value)}
         </Typography>
       ),
     },
     {
       id: 'deductions',
       label: 'Deductions',
-      minWidth: 120,
-      render: (val) => (
-        <Typography variant="body2" color="error.main">
-          -₹{Number(val).toLocaleString('en-IN')}
-        </Typography>
-      ),
+      minWidth: 130,
+      render: (value) => {
+        const amount = Number(value ?? 0)
+        return (
+          <Typography
+            variant="body2"
+            sx={{
+              color: amount > 0 ? brand.danger : brand.inkSoft,
+              fontWeight: 800,
+            }}
+          >
+            {amount > 0 ? `-${formatCurrency(amount)}` : formatCurrency(0)}
+          </Typography>
+        )
+      },
     },
     {
       id: 'remittableAmount',
       label: 'Remittable',
-      minWidth: 130,
-      render: (val) => (
-        <Typography variant="body2" fontWeight={700} color="success.main">
-          ₹{Number(val).toLocaleString('en-IN')}
+      minWidth: 140,
+      render: (value) => (
+        <Typography variant="body2" sx={{ color: brand.success, fontWeight: 900 }}>
+          {formatCurrency(value)}
         </Typography>
       ),
     },
     {
       id: 'status',
       label: 'Status',
-      minWidth: 130,
-      render: (val) => (
-        <Chip label={val} color={getStatusColor(val)} size="small" icon={getStatusIcon(val)} />
-      ),
+      minWidth: 140,
+      render: (value) => {
+        const status = String(value || 'pending')
+        return (
+          <Chip
+            label={getStatusLabel(status)}
+            color={getStatusColor(status)}
+            size="small"
+            icon={getStatusIcon(status)}
+            variant="outlined"
+            sx={{
+              bgcolor:
+                status === 'credited' ? alpha(brand.success, 0.1) : alpha(brand.warning, 0.1),
+              borderColor:
+                status === 'credited' ? alpha(brand.success, 0.34) : alpha(brand.warning, 0.34),
+            }}
+          />
+        )
+      },
     },
     {
       id: 'collectedAt',
       label: 'Collected',
-      minWidth: 120,
-      render: (val) => (
-        <Typography variant="body2">{val ? moment(val).format('DD MMM YYYY') : 'N/A'}</Typography>
+      minWidth: 130,
+      render: (value) => (
+        <Typography variant="body2" sx={{ color: brand.inkSoft, fontWeight: 700 }}>
+          {formatDate(value)}
+        </Typography>
       ),
     },
     {
       id: 'creditedAt',
-      label: 'Settled At',
-      minWidth: 150,
-      render: (val) => (
-        <Typography variant="body2">
-          {val ? moment(val).format('DD MMM YYYY HH:mm') : '-'}
+      label: 'Credited At',
+      minWidth: 170,
+      render: (value) => (
+        <Typography variant="body2" sx={{ color: brand.inkSoft, fontWeight: 700 }}>
+          {formatDateTime(value)}
         </Typography>
       ),
     },
   ]
 
+  const metrics = [
+    {
+      label: 'Remitted Till Date',
+      value: stats?.remittedTillDate,
+      caption: `${stats?.creditedCount ?? 0} credited remittances`,
+      icon: <MdTrendingUp size={24} />,
+      accent: brand.success,
+    },
+    {
+      label: 'Last Remittance',
+      value: stats?.lastRemittance,
+      caption: 'Most recent settlement',
+      icon: <MdCheckCircle size={24} />,
+      accent: brand.sky,
+    },
+    {
+      label: 'Next Remittance',
+      value: stats?.nextRemittance,
+      caption: `${stats?.pendingCount ?? 0} orders pending`,
+      icon: <MdAccountBalanceWallet size={24} />,
+      accent: brand.accent,
+    },
+    {
+      label: 'Total Due',
+      value: stats?.totalDue,
+      caption: 'Awaiting settlement',
+      icon: <MdAccessTime size={24} />,
+      accent: brand.warning,
+    },
+  ]
+
+  const appliedCount = Object.values(filters).filter(Boolean).length
+
   return (
-    <Box p={3}>
+    <Stack spacing={3} sx={{ py: { xs: 1, md: 1.5 } }}>
       <Stack
         direction={{ xs: 'column', lg: 'row' }}
         justifyContent="space-between"
         alignItems={{ xs: 'stretch', lg: 'center' }}
         gap={2}
-        mb={3}
       >
-        <PageHeading
-          eyebrow="Billing Panel"
-          title="COD Remittance"
-          subtitle="Track your cash-on-delivery settlements, settled batches, and payout progress in the shared workspace style."
-        />
-        <Button variant="contained" startIcon={<MdDownload />} onClick={handleExport}>
-          Export CSV
+        <Box sx={{ flex: 1 }}>
+          <PageHeading
+            eyebrow="Billing Panel"
+            title="COD Remittance"
+            subtitle="Track cash-on-delivery collections, deductions, and payout progress from one settlement ledger."
+          />
+        </Box>
+        <Button
+          variant="contained"
+          startIcon={<MdDownload />}
+          onClick={handleExport}
+          disabled={isExporting}
+          sx={{ alignSelf: { xs: 'stretch', sm: 'flex-start', lg: 'center' } }}
+        >
+          {isExporting ? 'Exporting...' : 'Export CSV'}
         </Button>
       </Stack>
 
-      {/* Statistics Cards */}
-      <Grid container spacing={3} mb={4}>
-        {/* Remitted Till Date */}
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <Card
-            elevation={0}
-            sx={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              position: 'relative',
-              overflow: 'hidden',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: -50,
-                right: -50,
-                width: 150,
-                height: 150,
-                borderRadius: '50%',
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-              },
-            }}
-          >
-            <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                <Box>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
-                    Remitted Till Date
-                  </Typography>
-                  <Typography variant="h4" fontWeight="bold">
-                    ₹{stats?.remittedTillDate.toLocaleString('en-IN') || 0}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: 2,
-                    p: 1,
-                    display: 'flex',
-                  }}
-                >
-                  <MdTrendingUp size={28} />
-                </Box>
-              </Stack>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  {stats?.creditedCount || 0} settled remittances
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Last Remittance */}
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <Card
-            elevation={0}
-            sx={{
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              '&:hover': {
-                boxShadow: 3,
-                transform: 'translateY(-2px)',
-                transition: 'all 0.2s ease-in-out',
-              },
-            }}
-          >
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" mb={0.5}>
-                    Last Remittance
-                  </Typography>
-                  <Typography variant="h4" fontWeight="bold" color="success.main">
-                    ₹{stats?.lastRemittance.toLocaleString('en-IN') || 0}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    bgcolor: 'success.lighter',
-                    color: 'success.main',
-                    borderRadius: 2,
-                    p: 1,
-                    display: 'flex',
-                  }}
-                >
-                  <MdCheckCircle size={28} />
-                </Box>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Most recent settlement
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Next Remittance (Expected) */}
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <Card
-            elevation={0}
-            sx={{
-              background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-              color: 'white',
-              position: 'relative',
-              overflow: 'hidden',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: -50,
-                right: -50,
-                width: 150,
-                height: 150,
-                borderRadius: '50%',
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-              },
-            }}
-          >
-            <CardContent sx={{ position: 'relative', zIndex: 1 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                <Box>
-                  <Typography variant="body2" sx={{ opacity: 0.9, mb: 0.5 }}>
-                    Next Remittance (Expected)
-                  </Typography>
-                  <Typography variant="h4" fontWeight="bold">
-                    ₹{stats?.nextRemittance.toLocaleString('en-IN') || 0}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: 2,
-                    p: 1,
-                    display: 'flex',
-                  }}
-                >
-                  <MdAccountBalanceWallet size={28} />
-                </Box>
-              </Stack>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
-                <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                  {stats?.pendingCount || 0} orders pending
-                </Typography>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Total Remittance Due */}
-        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-          <Card
-            elevation={0}
-            sx={{
-              bgcolor: 'background.paper',
-              border: '1px solid',
-              borderColor: 'divider',
-              '&:hover': {
-                boxShadow: 3,
-                transform: 'translateY(-2px)',
-                transition: 'all 0.2s ease-in-out',
-              },
-            }}
-          >
-            <CardContent>
-              <Stack direction="row" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary" mb={0.5}>
-                    Total Remittance Due
-                  </Typography>
-                  <Typography variant="h4" fontWeight="bold" color="warning.main">
-                    ₹{stats?.totalDue.toLocaleString('en-IN') || 0}
-                  </Typography>
-                </Box>
-                <Box
-                  sx={{
-                    bgcolor: 'warning.lighter',
-                    color: 'warning.main',
-                    borderRadius: 2,
-                    p: 1,
-                    display: 'flex',
-                  }}
-                >
-                  <MdAccessTime size={28} />
-                </Box>
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                Awaiting settlement
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+      <Grid container spacing={2}>
+        {metrics.map((metric) => (
+          <Grid key={metric.label} size={{ xs: 12, sm: 6, lg: 3 }}>
+            <Card
+              elevation={0}
+              sx={{
+                height: '100%',
+                position: 'relative',
+                overflow: 'hidden',
+                background: brandGradients.surface,
+                border: `1px solid ${alpha(brand.ink, 0.08)}`,
+                boxShadow: '0 18px 38px rgba(15,44,67,0.06)',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: '0 0 auto 0',
+                  height: 4,
+                  bgcolor: metric.accent,
+                },
+              }}
+            >
+              <CardContent sx={{ p: 2.3 }}>
+                <Stack direction="row" justifyContent="space-between" alignItems="flex-start" gap={2}>
+                  <Stack spacing={0.8} minWidth={0}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: brand.inkSoft,
+                        fontSize: '0.78rem',
+                        fontWeight: 800,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                      }}
+                    >
+                      {metric.label}
+                    </Typography>
+                    {statsLoading ? (
+                      <Skeleton variant="text" width={140} height={38} />
+                    ) : (
+                      <Typography
+                        sx={{
+                          color: brand.ink,
+                          fontSize: { xs: '1.45rem', md: '1.65rem' },
+                          fontWeight: 900,
+                          lineHeight: 1.1,
+                        }}
+                      >
+                        {formatCurrency(metric.value)}
+                      </Typography>
+                    )}
+                    <Typography variant="caption" sx={{ color: brand.inkSoft, fontWeight: 700 }}>
+                      {statsLoading ? 'Loading settlement data' : metric.caption}
+                    </Typography>
+                  </Stack>
+                  <Box
+                    sx={{
+                      width: 42,
+                      height: 42,
+                      flexShrink: 0,
+                      borderRadius: 2,
+                      display: 'grid',
+                      placeItems: 'center',
+                      color: brand.ink,
+                      bgcolor: alpha(metric.accent, 0.18),
+                      border: `1px solid ${alpha(metric.accent, 0.28)}`,
+                    }}
+                  >
+                    {metric.icon}
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
       </Grid>
 
-      {/* Filters */}
-      <Box mb={3}>
-        <FilterBar
-          fields={filterFields}
-          onApply={(appliedFilters) => {
-            setFilters(appliedFilters)
-            setPage(1) // Reset to first page when filters change
-          }}
-          defaultValues={{
-            status: '',
-            fromDate: undefined,
-            toDate: undefined,
-          }}
-        />
-      </Box>
+      <FilterBar<CodFilterState>
+        fields={filterFields}
+        onApply={(appliedFilters) => {
+          setFilters({
+            status: appliedFilters.status || '',
+            fromDate: appliedFilters.fromDate || '',
+            toDate: appliedFilters.toDate || '',
+          })
+          setPage(1)
+        }}
+        defaultValues={filters}
+        appliedCount={appliedCount}
+      />
 
-      {/* Data Table */}
-      {isLoading ? (
-        <Box display="flex" justifyContent="center" py={4}>
-          <Typography>Loading remittances...</Typography>
-        </Box>
+      {isError ? (
+        <Alert severity="error">
+          COD remittances could not be loaded. Please refresh the page or try again shortly.
+        </Alert>
+      ) : isLoading ? (
+        <Stack alignItems="center" justifyContent="center" py={5}>
+          <Typography sx={{ color: brand.inkSoft, fontWeight: 700 }}>
+            Loading remittances...
+          </Typography>
+        </Stack>
       ) : (
         <DataTable
           rows={data?.remittances || []}
           columns={columns}
-          title="All Remittances"
+          title="Settlement Ledger"
+          subTitle="Each row represents a delivered COD order and the amount available for payout."
           pagination
           currentPage={page}
           defaultRowsPerPage={rowsPerPage}
           totalCount={data?.totalCount || 0}
+          minTableWidth={1080}
           onPageChange={(newPage) => setPage(newPage)}
           onRowsPerPageChange={(newRowsPerPage) => {
             setRowsPerPage(newRowsPerPage)
@@ -412,6 +419,6 @@ export default function CodRemittancesList() {
           }}
         />
       )}
-    </Box>
+    </Stack>
   )
 }

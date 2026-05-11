@@ -168,11 +168,11 @@ export const FilterBar = <T extends Record<string, any>>({
       <Stack gap={1.2}>
         <Stack
           direction={{ xs: 'column', lg: 'row' }}
-          alignItems={{ xs: 'stretch', lg: 'center' }}
+          alignItems={{ xs: 'stretch', lg: 'flex-end' }}
           justifyContent="space-between"
           gap={1.2}
         >
-          <Grid container spacing={1.4} sx={{ flex: 1 }}>
+          <Grid container spacing={1.4} sx={{ flex: 1, alignItems: 'flex-end' }}>
             {primaryFields.map((field) => (
               <Grid size={{ md: 4, xs: 12 }} key={field.name}>
                 <Controller
@@ -185,7 +185,7 @@ export const FilterBar = <T extends Record<string, any>>({
           </Grid>
 
           {!isMobile ? (
-            <Stack mt={{ lg: 1.6 }} gap={0.8} direction="row" alignItems="center">
+            <Stack gap={0.8} direction="row" alignItems="center" sx={{ pb: { lg: 0.15 } }}>
               {advancedFields.length ? (
                 <Tooltip title={showAdvanced ? 'Hide advanced filters' : 'Show advanced filters'}>
                   <IconButton

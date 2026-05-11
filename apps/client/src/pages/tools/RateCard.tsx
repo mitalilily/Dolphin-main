@@ -2,6 +2,7 @@
 
 import {
   Avatar,
+  Box,
   Button,
   Card,
   CardContent,
@@ -257,38 +258,59 @@ const RateCard = () => {
         onChange={(value) => setBusinessType(value)}
       />
 
-      <FilterBar
-        fields={filterFields}
-        defaultValues={filters}
-        onApply={(applied) => {
-          const selectedCouriers = Array.isArray(applied?.courier)
-            ? applied.courier
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                .map((courier) => (typeof courier === 'string' ? courier : (courier as any)?.value))
-                .map((courier) => String(courier || '').trim())
-                .filter(Boolean)
-            : []
+      <Stack
+        direction={{ xs: 'column', lg: 'row' }}
+        alignItems={{ xs: 'stretch', lg: 'flex-end' }}
+        gap={2}
+      >
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <FilterBar
+            fields={filterFields}
+            defaultValues={filters}
+            onApply={(applied) => {
+              const selectedCouriers = Array.isArray(applied?.courier)
+                ? applied.courier
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    .map((courier) => (typeof courier === 'string' ? courier : (courier as any)?.value))
+                    .map((courier) => String(courier || '').trim())
+                    .filter(Boolean)
+                : []
 
-          setFilters((prev) => ({
-            ...prev,
-            ...applied,
-            courier: selectedCouriers,
-            min_weight: applied?.min_weight ? String(applied.min_weight).trim() : '',
-          }))
-        }}
-      />
+              setFilters((prev) => ({
+                ...prev,
+                ...applied,
+                courier: selectedCouriers,
+                min_weight: applied?.min_weight ? String(applied.min_weight).trim() : '',
+              }))
+            }}
+          />
+        </Box>
 
-      <Stack justifyContent="flex-end" gap={2.5} alignItems="center" direction="row">
-        <Button
-          startIcon={<MdCalculate />}
-          variant="contained"
-          onClick={() => navigate('/tools/rate_calculator')}
+        <Stack
+          justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}
+          gap={1.2}
+          alignItems="center"
+          direction={{ xs: 'column', sm: 'row' }}
+          sx={{
+            flexShrink: 0,
+            pb: { lg: 3 },
+            '& .MuiButton-root': {
+              width: { xs: '100%', sm: 'auto' },
+              whiteSpace: 'nowrap',
+            },
+          }}
         >
-          Calculate Rates
-        </Button>
-        <Button startIcon={<MdDownload />} variant="contained" onClick={handleExportCSV}>
-          Download Rate Card
-        </Button>
+          <Button
+            startIcon={<MdCalculate />}
+            variant="contained"
+            onClick={() => navigate('/tools/rate_calculator')}
+          >
+            Calculate Rates
+          </Button>
+          <Button startIcon={<MdDownload />} variant="contained" onClick={handleExportCSV}>
+            Download Rate Card
+          </Button>
+        </Stack>
       </Stack>
 
       {isLoading ? (
