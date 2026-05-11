@@ -59,6 +59,10 @@ const extractWebhookMeta = (payload: any) => {
     event?.trackingId ||
     event?.wbn ||
     event?.shipment_id ||
+    event?.refrence_id ||
+    event?.reference_id ||
+    event?.reference_number ||
+    event?.order_id ||
     null
   const status =
     firstNdrEvent?.type ||
@@ -68,6 +72,8 @@ const extractWebhookMeta = (payload: any) => {
     event?.status ||
     event?.event ||
     event?.event_name ||
+    event?.status_feed?.scan?.[0]?.status ||
+    event?.statusFeed?.scan?.[0]?.status ||
     'unknown'
   return { awb, status }
 }

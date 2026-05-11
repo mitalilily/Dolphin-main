@@ -39,6 +39,7 @@ SHIPMOZO_PRIVATE_KEY=<shipmozo-private-key>
 SHIPMOZO_USERNAME=<shipmozo-username>
 SHIPMOZO_PASSWORD=<shipmozo-password>
 SHIPMOZO_DEFAULT_WAREHOUSE_ID=<optional>
+SHIPMOZO_WEBHOOK_TOKEN=<recommended-secret-token>
 
 # iCarry
 ICARRY_API_BASE=https://www.icarry.in
@@ -86,12 +87,21 @@ Token to configure in iCarry panel should match:
 - `ICARRY_WEBHOOK_TOKEN` (preferred), or
 - `ICARRY_API_KEY` fallback.
 
-## 6) Redeploy order
+## 6) Webhook setup in Shipmozo dashboard
+Set callback/webhook URL to:
+
+`https://<your-active-backend-domain>/api/v1/webhook/shipmozo/callback`
+
+If Shipmozo lets you send a token or custom header, configure it to match:
+- `SHIPMOZO_WEBHOOK_TOKEN` (preferred), or
+- the Shipmozo webhook secret saved in Admin Courier Credentials.
+
+## 7) Redeploy order
 1. Redeploy backend
 2. Redeploy client
 3. Redeploy admin
 
-## 7) Post-deploy smoke tests
+## 8) Post-deploy smoke tests
 Use admin API tools / Postman / internal test scripts.
 
 ### Serviceability
@@ -113,14 +123,14 @@ Use admin API tools / Postman / internal test scripts.
 - `POST /api/admin/couriers/icarry/pickup-address/add`
 - `POST /api/admin/couriers/icarry/pickup-address/edit`
 
-## 8) UI verification checklist
+## 9) UI verification checklist
 After deploy, verify:
 1. Admin `Courier Credentials` page shows an iCarry card and can save credentials.
 2. Admin `Couriers` page provider filter includes `iCarry`.
 3. iCarry appears under service provider management when provider records exist.
 4. Client login opens and auth requests hit backend domain (not frontend domain).
 
-## 9) Known external blocker
+## 10) Known external blocker
 iCarry live API may return:
 `Direct API access restricted due to excessive requests / plan does not support it.`
 

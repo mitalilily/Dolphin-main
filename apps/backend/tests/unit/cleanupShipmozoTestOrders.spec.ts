@@ -106,7 +106,7 @@ describe('cleanupShipmozoTestOrders', () => {
 
     expect(cancelOrderMock).toHaveBeenCalledTimes(2)
     expect(cancelOrderMock).toHaveBeenNthCalledWith(1, {
-      order_id: 'ORD-123',
+      order_id: 'SHIP-123',
       awb_number: 'AWB-123',
     })
     expect(cancelOrderMock).toHaveBeenNthCalledWith(2, {
@@ -115,4 +115,3 @@ describe('cleanupShipmozoTestOrders', () => {
     })
   })
 })
-

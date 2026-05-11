@@ -143,6 +143,54 @@ const shouldSkipDuplicateNdrEvent = async (params: {
   )
 }
 
+const shouldSkipDuplicateRtoEvent = async (params: {
+  orderId: string
+  status: string
+  reason?: string | null
+  remarks?: string | null
+  dedupeKey?: string | null
+}) => {
+  if (params.dedupeKey) {
+    const [existingByDedupeKey] = await db
+      .select({ id: rto_events.id })
+      .from(rto_events)
+      .where(
+        and(
+          eq(rto_events.order_id, params.orderId),
+          sql`${rto_events.payload}->>'__dedupe_key' = ${params.dedupeKey}`,
+        ),
+      )
+      .limit(1)
+
+    if (existingByDedupeKey) return true
+  }
+
+  const [latest] = await db
+    .select({
+      id: rto_events.id,
+      created_at: rto_events.created_at,
+      status: rto_events.status,
+      reason: rto_events.reason,
+      remarks: rto_events.remarks,
+    })
+    .from(rto_events)
+    .where(eq(rto_events.order_id, params.orderId))
+    .orderBy(sql`${rto_events.created_at} desc`)
+    .limit(1)
+
+  if (!latest?.created_at) return false
+
+  const ageMs = Date.now() - new Date(latest.created_at).getTime()
+  const withinDuplicateWindow = ageMs >= 0 && ageMs <= 10 * 60 * 1000
+  if (!withinDuplicateWindow) return false
+
+  return (
+    normalizeComparableText(latest.status) === normalizeComparableText(params.status) &&
+    normalizeComparableText(latest.reason) === normalizeComparableText(params.reason) &&
+    normalizeComparableText(latest.remarks) === normalizeComparableText(params.remarks)
+  )
+}
+
 const captureNdrEventFromWebhook = async (params: {
   order: any
   awbNumber?: string | null
@@ -1889,9 +1937,12 @@ const mapGenericWebhookStatus = (status: string): string => {
   const s = (status || '').toLowerCase().trim()
   if (!s) return 'in_transit'
   if (s.includes('cancel')) return 'cancelled'
-  if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
+  if (s.includes('returned to origin')) return 'rto_delivered'
+  if (s.includes('return') && s.includes('origin') && s.includes('deliver')) return 'rto_delivered'
+  if (s.includes('return') && s.includes('origin')) return 'rto_in_transit'
   if (s.includes('rto') && s.includes('deliver')) return 'rto_delivered'
   if (s.includes('rto')) return 'rto_in_transit'
+  if (s.includes('ndr') || s.includes('undelivered') || s.includes('attempt')) return 'ndr'
   if (s.includes('out for delivery') || s.includes('ofd')) return 'out_for_delivery'
   if (s === 'delivered' || s.includes(' delivered') || s.includes('delivered ')) return 'delivered'
   if (s.includes('pickup scheduled') || s.includes('pickup requested')) return 'pickup_initiated'
@@ -1995,6 +2046,20 @@ const normalizeDimensions = (source: any, fallback: any) => ({
   height: Number(firstPresent(source?.height, source?.h, fallback?.height, 0)) || 0,
 })
 
+const parseWebhookDate = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return undefined
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? undefined : value
+
+  const raw = String(value).trim()
+  if (!raw) return undefined
+
+  const normalized = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}/.test(raw)
+    ? raw.replace(' ', 'T')
+    : raw
+  const parsed = new Date(normalized)
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed
+}
+
 const normalizeIcarryNdrType = (value: unknown) =>
   String(value || '')
     .trim()
@@ -2071,6 +2136,131 @@ const getGenericCourierEvent = (payload: any) =>
     ? payload.data
     : payload
 
+const getWebhookScanEvents = (event: any) => {
+  const candidates = [
+    event?.status_feed?.scan,
+    event?.statusFeed?.scan,
+    event?.tracking_feed?.scan,
+    event?.trackingFeed?.scan,
+    event?.scan,
+    event?.scans,
+    event?.tracking_history,
+    event?.trackingHistory,
+    event?.history,
+    event?.events,
+  ]
+
+  const rawItems = candidates.find(Array.isArray) || []
+  return rawItems
+    .filter((item: any) => item && typeof item === 'object')
+    .map((item: any) => {
+      const status = firstPresent(
+        item?.status,
+        item?.current_status,
+        item?.scan_status,
+        item?.event,
+        item?.event_name,
+        item?.remarks,
+        item?.message,
+      )
+      const date = firstPresent(
+        item?.date,
+        item?.status_time,
+        item?.statusTime,
+        item?.scan_time,
+        item?.scanTime,
+        item?.event_time,
+        item?.eventTime,
+        item?.timestamp,
+        item?.created_at,
+        item?.createdAt,
+      )
+      const location = firstPresent(
+        item?.location,
+        item?.current_location,
+        item?.scan_location,
+        item?.scanLocation,
+        item?.hub_name,
+        item?.hubName,
+        item?.city,
+      )
+
+      return {
+        status: status === undefined ? null : String(status),
+        date: date === undefined ? null : String(date),
+        location: location === undefined ? null : String(location),
+        raw: item,
+      }
+    })
+    .filter((item) => item.status || item.date || item.location)
+}
+
+const normalizeShipmozoWebhookEvent = (payload: any) => {
+  const event = getGenericCourierEvent(payload)
+  const scans = getWebhookScanEvents(event)
+  const latestScan = scans[0]
+  const referenceId = firstPresent(
+    event?.refrence_id,
+    event?.reference_id,
+    event?.reference_number,
+    event?.order_number,
+    event?.client_order_id,
+    event?.ref_no,
+  )
+  const providerOrderId = firstPresent(
+    event?.shipment_id,
+    event?.shipmentId,
+    event?.shipment?.id,
+    event?.shipmozo_order_id,
+    event?.order_id,
+    event?.orderId,
+  )
+  const status = firstPresent(
+    event?.current_status,
+    event?.shipment_status,
+    event?.status,
+    event?.event,
+    latestScan?.status,
+  )
+  const statusTime = firstPresent(
+    event?.status_time,
+    event?.statusTime,
+    event?.event_time,
+    event?.eventTime,
+    event?.updated_at,
+    event?.updatedAt,
+    latestScan?.date,
+  )
+  const location = firstPresent(
+    event?.current_location,
+    event?.location,
+    event?.scan_location,
+    event?.scanLocation,
+    latestScan?.location,
+  )
+  const carrier = firstPresent(
+    event?.carrier,
+    event?.courier,
+    event?.courier_name,
+    event?.courierName,
+  )
+
+  return {
+    ...event,
+    shipment_id: firstPresent(event?.shipment_id, event?.shipmentId, providerOrderId),
+    order_number: firstPresent(event?.order_number, referenceId),
+    reference_number: firstPresent(event?.reference_number, referenceId),
+    current_status: status,
+    status: firstPresent(event?.status, status),
+    status_time: statusTime,
+    date: firstPresent(event?.date, statusTime),
+    current_location: location,
+    location: firstPresent(event?.location, location),
+    courier_remarks: firstPresent(event?.courier_remarks, event?.remarks, event?.message, status),
+    carrier,
+  }
+}
+
 const extractCourierRefs = (event: any) => {
   const awb = firstPresent(
     event?.awb_number,
@@ -2085,6 +2275,9 @@ const extractCourierRefs = (event: any) => {
   const shipmentId = firstPresent(
     event?.shipment_id,
     event?.shipmentId,
+    event?.provider_order_id,
+    event?.providerOrderId,
+    event?.shipmozo_order_id,
     event?.shipment?.id,
     event?.id,
   )
@@ -2093,6 +2286,8 @@ const extractCourierRefs = (event: any) => {
     event?.order_id,
     event?.orderId,
     event?.client_order_id,
+    event?.refrence_id,
+    event?.reference_id,
     event?.reference_number,
     event?.tracking_ref,
     event?.ref_no,
@@ -2133,19 +2328,29 @@ const findB2cOrderForCourierWebhook = async (
 }
 
 const resolveWebhookWeights = (provider: string, event: any, order: any) => {
-  const isIcarry = String(provider || '').trim().toLowerCase() === 'icarry'
+  const normalizedProvider = String(provider || '').trim().toLowerCase()
+  const isIcarry = normalizedProvider === 'icarry'
+  const isShipmozo = normalizedProvider === 'shipmozo'
   const gramsUnit = firstPresent(
     event?.weight_unit,
     event?.weightUnit,
     event?.charged_weight_unit,
     event?.chargeable_weight_unit,
+    event?.billing_weight_unit,
   )
   const actualWeight = normalizeWeightKg(
     firstPresent(
       event?.actual_weight,
       event?.actualWeight,
+      event?.actual_wt,
       event?.dead_weight,
       event?.deadWeight,
+      event?.physical_weight,
+      event?.physicalWeight,
+      event?.weighed_weight,
+      event?.weighedWeight,
+      event?.scanned_weight,
+      event?.scannedWeight,
       event?.measured_weight,
       event?.measuredWeight,
     ),
@@ -2153,7 +2358,14 @@ const resolveWebhookWeights = (provider: string, event: any, order: any) => {
     false,
   )
   const volumetricWeight = normalizeWeightKg(
-    firstPresent(event?.volumetric_weight, event?.volumetricWeight, event?.vol_weight),
+    firstPresent(
+      event?.volumetric_weight,
+      event?.volumetricWeight,
+      event?.volumetric_wt,
+      event?.vol_weight,
+      event?.volWeight,
+      event?.vol_weight_kg,
+    ),
     firstPresent(event?.volumetric_weight_unit, event?.weight_unit),
     false,
   )
@@ -2161,11 +2373,20 @@ const resolveWebhookWeights = (provider: string, event: any, order: any) => {
     firstPresent(
       event?.charged_weight,
       event?.chargedWeight,
+      event?.charged_wt,
       event?.chargeable_weight,
       event?.chargeableWeight,
+      event?.chargeable_wt,
       event?.billing_weight,
+      event?.billingWeight,
+      event?.billing_wt,
       event?.billed_weight,
+      event?.billedWeight,
+      event?.billed_wt,
+      event?.applied_weight,
+      event?.appliedWeight,
       isIcarry ? event?.weight : undefined,
+      isShipmozo ? event?.weight : undefined,
     ),
     gramsUnit,
     isIcarry,
@@ -2234,7 +2455,18 @@ const maybeCreateWeightDiscrepancyFromWebhook = async (params: {
     courierWeightSlipUrl: proofSlipUrl || undefined,
     courierWeightProofImages: proofImages,
     weighingMetadata: {
-      timestamp: String(firstPresent(event?.date, event?.date_added, event?.updated_at, '') || ''),
+      timestamp: String(
+        firstPresent(
+          event?.status_time,
+          event?.statusTime,
+          event?.event_time,
+          event?.eventTime,
+          event?.date,
+          event?.date_added,
+          event?.updated_at,
+          '',
+        ) || '',
+      ),
       location: String(firstPresent(event?.location, event?.city, event?.hub_name, '') || ''),
       source: `${String(provider || '').toLowerCase()}_webhook`,
     },
@@ -2281,10 +2513,14 @@ const emitTrackingWebhook = async (params: {
 
 export const __webhookProcessorTestUtils = {
   describeIcarryNdrType,
+  getWebhookScanEvents,
   getIcarryNdrItems,
+  mapGenericWebhookStatus,
   mapIcarryStatus,
   normalizeIcarryNdrType,
+  normalizeShipmozoWebhookEvent,
   normalizeWeightKg,
+  parseWebhookDate,
   resolveWebhookWeights,
 }
 
@@ -2326,6 +2562,8 @@ const processSingleCourierWebhookEvent = async (params: {
     }
   }
 
+  const scanEvents = getWebhookScanEvents(event)
+  const latestScan = scanEvents[0]
   const statusRaw = firstPresent(
     event?.current_status,
     event?.shipment_status,
@@ -2334,6 +2572,7 @@ const processSingleCourierWebhookEvent = async (params: {
     event?.event_name,
     event?.scan_status,
     event?.remarks_status,
+    latestScan?.status,
     ndrType,
     '',
   )
@@ -2349,6 +2588,7 @@ const processSingleCourierWebhookEvent = async (params: {
       event?.remark,
       event?.message,
       event?.description,
+      latestScan?.status,
       ndrReason,
       '',
     ) || '',
@@ -2359,8 +2599,21 @@ const processSingleCourierWebhookEvent = async (params: {
     event?.scan_location,
     event?.hub_name,
     event?.city,
+    latestScan?.location,
     null,
   ) as string | null
+  const eventTime = parseWebhookDate(
+    firstPresent(
+      event?.status_time,
+      event?.statusTime,
+      event?.event_time,
+      event?.eventTime,
+      event?.updated_at,
+      event?.updatedAt,
+      event?.date,
+      latestScan?.date,
+    ),
+  )
   const isRtoEvent =
     mappedStatus.includes('rto') ||
     Boolean(ndrType && (ndrType.startsWith('RTO-') || ndrType.includes('RTO') || ndrType.includes('RETURN')))
@@ -2368,6 +2621,22 @@ const processSingleCourierWebhookEvent = async (params: {
   const statusLower = internalStatus.toLowerCase()
   const statusText =
     ndrType && ndrReason ? `${ndrType}: ${ndrReason}` : mappedStatusText || internalStatus
+  const scanOperationalEvents = scanEvents.map((scan, index) => {
+    const rawStatus = String(firstPresent(scan.status, '') || '')
+    const mapped = resolveProviderStatus(provider, rawStatus)
+    return {
+      ...scan,
+      index,
+      rawStatus,
+      internalStatus: mapped.internalStatus,
+      statusText: mapped.statusText || rawStatus || mapped.internalStatus,
+      eventTime: parseWebhookDate(scan.date),
+    }
+  })
+  const hasScanNdr = scanOperationalEvents.some((scan) =>
+    hasNdrSignal(scan.internalStatus, scan.statusText, scan.rawStatus),
+  )
+  const hasScanRto = scanOperationalEvents.some((scan) => scan.internalStatus.includes('rto'))
   const { actualWeight, volumetricWeight, chargedWeight } = resolveWebhookWeights(provider, event, order)
 
   const updateData: any = {
@@ -2379,6 +2648,26 @@ const processSingleCourierWebhookEvent = async (params: {
   if (remarks || statusText) updateData.delivery_message = String(remarks || statusText).slice(0, 100)
   if (refs.awb && !order.awb_number) updateData.awb_number = refs.awb
   if (refs.shipmentId && !order.shipment_id) updateData.shipment_id = refs.shipmentId
+
+  const expectedDeliveryDate = firstPresent(
+    event?.expected_delivery_date,
+    event?.expectedDeliveryDate,
+    event?.estimated_delivery_date,
+    event?.estimatedDeliveryDate,
+    event?.edd,
+    event?.eta,
+  )
+  if (expectedDeliveryDate) updateData.edd = String(expectedDeliveryDate).slice(0, 120)
+
+  const carrierName = firstPresent(
+    event?.carrier,
+    event?.courier,
+    event?.courier_name,
+    event?.courierName,
+    event?.courier_company,
+    event?.courierCompany,
+  )
+  if (carrierName) updateData.courier_partner = String(carrierName).slice(0, 50)
 
   const courierCost = toNumberOrUndefined(
     firstPresent(
@@ -2403,16 +2692,37 @@ const processSingleCourierWebhookEvent = async (params: {
     })
 
     try {
-      await logTrackingEvent({
-        orderId: order.id,
-        userId: order.user_id,
-        awbNumber: refs.awb || order.awb_number,
-        courier: providerLabel,
-        statusCode: internalStatus,
-        statusText,
-        location,
-        raw: payload,
-      })
+      if (scanOperationalEvents.length) {
+        for (const scan of scanOperationalEvents) {
+          await logTrackingEvent({
+            orderId: order.id,
+            userId: order.user_id,
+            awbNumber: refs.awb || order.awb_number,
+            courier: providerLabel,
+            statusCode: scan.internalStatus,
+            statusText: scan.statusText,
+            location: scan.location || null,
+            raw: {
+              provider: String(provider || '').toLowerCase(),
+              scan: scan.raw,
+              raw: payload,
+            },
+            createdAt: scan.eventTime,
+          })
+        }
+      } else {
+        await logTrackingEvent({
+          orderId: order.id,
+          userId: order.user_id,
+          awbNumber: refs.awb || order.awb_number,
+          courier: providerLabel,
+          statusCode: internalStatus,
+          statusText,
+          location,
+          raw: payload,
+          createdAt: eventTime,
+        })
+      }
       await emitTrackingWebhook({
         order,
         awbNumber: refs.awb || order.awb_number,
@@ -2436,11 +2746,11 @@ const processSingleCourierWebhookEvent = async (params: {
     }
   })
 
-  if (forceNdr || hasNdrSignal(statusLower, statusText, remarks)) {
+  if (forceNdr || (!hasScanNdr && hasNdrSignal(statusLower, statusText, remarks))) {
     const explicitAttemptNo = String(
       firstPresent(event?.attempt_no, event?.attempt, event?.attempt_count, '') || '',
     )
-    const attemptNo = explicitAttemptNo || (forceNdr ? await resolveNextNdrAttemptNo(order.id) : undefined)
+    const attemptNo = explicitAttemptNo || (await resolveNextNdrAttemptNo(order.id))
 
     await captureNdrEventFromWebhook({
       order,
@@ -2467,22 +2777,93 @@ const processSingleCourierWebhookEvent = async (params: {
     }).catch((err) => console.error(`Failed NDR capture for ${providerLabel}:`, err))
   }
 
-  if (isRtoEvent || statusLower.includes('rto')) {
+  if ((isRtoEvent || statusLower.includes('rto')) && !hasScanRto) {
     try {
-      const rtoCharge = await applyRtoChargeOnce(tx, order, providerLabel)
-      await recordRtoEvent({
+      const rtoStatus = isRtoEvent && !statusLower.includes('rto') ? 'rto_in_transit' : statusLower
+      const duplicate = await shouldSkipDuplicateRtoEvent({
         orderId: order.id,
-        userId: order.user_id,
-        awbNumber: refs.awb || order.awb_number || undefined,
-        status: isRtoEvent && !statusLower.includes('rto') ? 'rto_in_transit' : statusLower,
+        status: rtoStatus,
         reason: remarks || ndrReason || null,
         remarks: statusText || null,
-        rtoCharges: rtoCharge,
-        payload,
-        tx,
       })
+      if (!duplicate) {
+        const rtoCharge = await applyRtoChargeOnce(tx, order, providerLabel)
+        await recordRtoEvent({
+          orderId: order.id,
+          userId: order.user_id,
+          awbNumber: refs.awb || order.awb_number || undefined,
+          status: rtoStatus,
+          reason: remarks || ndrReason || null,
+          remarks: statusText || null,
+          rtoCharges: rtoCharge,
+          payload,
+          tx,
+        })
+      }
     } catch (err) {
       console.error(`Failed RTO capture for ${providerLabel}:`, err)
+    }
+  }
+
+  if (scanOperationalEvents.length) {
+    for (const scan of [...scanOperationalEvents].reverse()) {
+      const scanDedupeKey = `${String(provider || '').toLowerCase()}:${
+        refs.awb || order.awb_number || refs.shipmentId || order.id
+      }:scan:${scan.internalStatus}:${scan.date || scan.index}`
+
+      if (hasNdrSignal(scan.internalStatus, scan.statusText, scan.rawStatus)) {
+        const attemptNo = await resolveNextNdrAttemptNo(order.id)
+        await captureNdrEventFromWebhook({
+          order,
+          awbNumber: refs.awb || order.awb_number || undefined,
+          status: scan.internalStatus,
+          reason: scan.rawStatus || scan.statusText || null,
+          remarks: scan.statusText || null,
+          attemptNo,
+          dedupeKey: scanDedupeKey,
+          payload: {
+            provider: String(provider || '').toLowerCase(),
+            event: scan.raw,
+            raw: payload,
+            __dedupe_key: scanDedupeKey,
+          },
+          courierLabel: providerLabel,
+          signalParts: [scan.rawStatus, scan.statusText],
+        }).catch((err) => console.error(`Failed scan NDR capture for ${providerLabel}:`, err))
+      }
+
+      if (scan.internalStatus.includes('rto')) {
+        try {
+          const duplicate = await shouldSkipDuplicateRtoEvent({
+            orderId: order.id,
+            status: scan.internalStatus,
+            reason: scan.rawStatus || scan.statusText || null,
+            remarks: scan.statusText || null,
+            dedupeKey: scanDedupeKey,
+          })
+          if (duplicate) continue
+
+          const rtoCharge = await applyRtoChargeOnce(tx, order, providerLabel)
+          await recordRtoEvent({
+            orderId: order.id,
+            userId: order.user_id,
+            awbNumber: refs.awb || order.awb_number || undefined,
+            status: scan.internalStatus,
+            reason: scan.rawStatus || scan.statusText || null,
+            remarks: scan.statusText || null,
+            rtoCharges: rtoCharge,
+            payload: {
+              provider: String(provider || '').toLowerCase(),
+              event: scan.raw,
+              raw: payload,
+              __dedupe_key: scanDedupeKey,
+            },
+            tx,
+          })
+        } catch (err) {
+          console.error(`Failed scan RTO capture for ${providerLabel}:`, err)
+        }
+      }
     }
   }
 
@@ -2609,10 +2990,22 @@ const processIcarryCourierWebhook = async (payload: any, tx: any) => {
   })
 }
 
+const processShipmozoCourierWebhook = async (payload: any, tx: any) =>
+  processSingleCourierWebhookEvent({
+    provider: 'shipmozo',
+    providerLabel: normalizeProviderLabel('shipmozo'),
+    event: normalizeShipmozoWebhookEvent(payload),
+    payload,
+    tx,
+  })
+
 export async function processGenericCourierWebhook(provider: string, payload: any, tx = db) {
   const normalizedProvider = String(provider || '').trim().toLowerCase()
   if (normalizedProvider === 'icarry') {
     return processIcarryCourierWebhook(payload, tx)
+  }
+  if (normalizedProvider === 'shipmozo') {
+    return processShipmozoCourierWebhook(payload, tx)
   }
 
   const event = getGenericCourierEvent(payload)
@@ -2787,7 +3180,7 @@ export async function processGenericCourierWebhook(provider: string, payload: an
 }
 
 export const processShipmozoWebhook = (payload: any, tx = db) =>
-  processGenericCourierWebhook('shipmozo', payload, tx)
+  processShipmozoCourierWebhook(payload, tx)
 export const processShiprocketWebhook = (payload: any, tx = db) =>
   processGenericCourierWebhook('shiprocket', payload, tx)
 export const processTruxcargoWebhook = (payload: any, tx = db) =>

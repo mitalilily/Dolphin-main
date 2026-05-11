@@ -1,6 +1,16 @@
 import nock from 'nock'
 import { ShiprocketCourierService } from '../../src/models/services/couriers/shiprocket.service'
 
+jest.mock('../../src/models/client', () => ({
+  db: {
+    update: jest.fn(() => ({
+      set: jest.fn(() => ({
+        where: jest.fn(async () => []),
+      })),
+    })),
+  },
+}))
+
 jest.mock('../../src/models/services/courierCredentials.service', () => ({
   getEffectiveCourierConfig: jest.fn().mockResolvedValue(null),
 }))
