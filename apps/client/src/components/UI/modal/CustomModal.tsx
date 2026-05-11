@@ -34,7 +34,7 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
   title,
   children,
   maxWidth = 'sm',
-  borderRadius = 24,
+  borderRadius = 8,
   footer,
   fullScreen,
   width,
@@ -84,7 +84,7 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
             left: 0,
             right: 0,
             height: 4,
-            borderRadius: 999,
+            borderRadius: 1,
             background: `linear-gradient(90deg, ${alpha(CLAY, 0.9)} 0%, ${alpha(CLAY, 0.22)} 60%, transparent 100%)`,
             opacity: fullScreen ? 0 : 1,
           },
@@ -138,7 +138,7 @@ const CustomDialog: React.FC<CustomDialogProps> = ({
               sx={{
                 width: 54,
                 height: 4,
-                borderRadius: 999,
+                borderRadius: 1,
                 background: `linear-gradient(90deg, ${CLAY} 0%, ${alpha(CLAY, 0.18)} 100%)`,
               }}
             />

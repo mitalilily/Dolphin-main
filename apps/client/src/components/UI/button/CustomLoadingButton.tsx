@@ -45,7 +45,7 @@ export default function CustomIconLoadingButton({
         textTransform: 'none',
         fontWeight: 700,
         gap: 1,
-        borderRadius: 999,
+        borderRadius: 1,
         background: variant === 'solid' ? brandGradients.button : 'rgba(255,255,255,0.72)',
         color: textColor ?? (variant === 'solid' ? brand.ink : brand.ink),
         border:

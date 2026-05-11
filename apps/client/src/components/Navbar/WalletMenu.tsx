@@ -33,7 +33,7 @@ const WalletMenu = () => {
           gap: 0.85,
           px: { xs: 0.95, sm: 1.05 },
           py: 0.78,
-          borderRadius: 3,
+          borderRadius: 1,
           border: `1px solid ${alpha(INK, 0.08)}`,
           bgcolor: alpha('#FFFFFF', 0.84),
           minWidth: { xs: 'auto', sm: 156 },
@@ -49,7 +49,7 @@ const WalletMenu = () => {
           sx={{
             width: 32,
             height: 32,
-            borderRadius: 2.5,
+            borderRadius: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',

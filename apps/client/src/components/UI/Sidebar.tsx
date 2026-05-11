@@ -259,7 +259,7 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
   const navItemSx = {
     mx: 0,
     my: 0.35,
-    borderRadius: 999,
+    borderRadius: 1,
     py: 0.95,
     px: 1.6,
     color: brand.inkSoft,
@@ -375,7 +375,7 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
                         sx={{
                           py: 0.65,
                           px: 1.3,
-                          borderRadius: 999,
+                          borderRadius: 1,
                           color: subActive ? brand.ink : alpha(brand.ink, 0.72),
                           bgcolor: subActive ? alpha(brand.sky, 0.46) : 'transparent',
                           '&:hover': {
@@ -428,7 +428,7 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
         <Box
           sx={{
             p: isSidebarExpanded ? 1.7 : 1,
-            borderRadius: '30px',
+            borderRadius: 1,
             background: brandGradients.hero,
             color: brand.ink,
             minHeight: isSidebarExpanded ? 118 : 58,
@@ -472,7 +472,7 @@ export default function Sidebar({ role = 'customer', pinned, hovered, setHovered
         <Box
           sx={{
             p: isSidebarExpanded ? 0.7 : 0.2,
-            borderRadius: '30px',
+            borderRadius: 1,
             bgcolor: alpha('#FFFFFF', 0.52),
             border: `1px solid ${alpha(brand.ink, 0.05)}`,
           }}

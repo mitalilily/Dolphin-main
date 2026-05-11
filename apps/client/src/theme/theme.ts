@@ -65,7 +65,7 @@ const theme = createTheme({
     divider: alpha(brand.ink, 0.08),
   },
   shape: {
-    borderRadius: 10,
+    borderRadius: 6,
   },
   typography: {
     fontFamily: brandFonts.body,
@@ -160,6 +160,30 @@ const theme = createTheme({
           backgroundColor: alpha(brand.sky, 0.92),
           color: brand.ink,
         },
+        '.MuiButton-root': {
+          borderRadius: '6px !important',
+        },
+        '.MuiIconButton-root': {
+          borderRadius: '8px !important',
+        },
+        '.MuiCard-root': {
+          borderRadius: '8px !important',
+        },
+        '.MuiPaper-root': {
+          borderRadius: '8px',
+        },
+        '.MuiOutlinedInput-root': {
+          borderRadius: '8px !important',
+        },
+        '.MuiChip-root': {
+          borderRadius: '6px !important',
+        },
+        '.MuiGrid-root > .MuiGrid-root': {
+          alignSelf: 'stretch',
+        },
+        '.MuiGrid-root > .MuiGrid-root > .MuiCard-root': {
+          width: '100%',
+        },
       },
     },
     MuiCard: {
@@ -168,9 +192,10 @@ const theme = createTheme({
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: 10,
-          boxShadow: brand.shadow,
-          border: `1px solid ${alpha('#FFFFFF', 0.82)}`,
+          alignSelf: 'stretch',
+          borderRadius: 8,
+          boxShadow: '0 16px 34px rgba(15, 44, 67, 0.07)',
+          border: `1px solid ${alpha(brand.ink, 0.08)}`,
           background: brandGradients.surface,
         },
       },
@@ -179,6 +204,8 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           flexGrow: 1,
+          display: 'flex',
+          flexDirection: 'column',
         },
       },
     },
@@ -186,7 +213,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           background: brandGradients.surface,
-          borderRadius: 10,
+          borderRadius: 8,
         },
         elevation1: {
           boxShadow: '0 18px 38px rgba(15, 44, 67, 0.06)',
@@ -199,7 +226,7 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 6,
           padding: '11px 22px',
           fontSize: '0.88rem',
           fontWeight: 700,
@@ -242,7 +269,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 20,
+            borderRadius: 8,
             backgroundColor: alpha('#FFFFFF', 0.88),
             '& fieldset': {
               borderColor: alpha(brand.ink, 0.12),
@@ -270,7 +297,7 @@ const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 999,
+          borderRadius: 6,
           fontWeight: 700,
         },
         filled: {
@@ -286,7 +313,7 @@ const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 10,
+          borderRadius: 8,
           border: `1px solid ${alpha(brand.ink, 0.1)}`,
           boxShadow: '0 32px 68px rgba(15, 44, 67, 0.16)',
           background: brandGradients.surface,

@@ -23,7 +23,8 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 18px;
+  gap: 0;
+  width: min(320px, 76vw);
 }
 
 .logo-container {
@@ -31,13 +32,15 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 320px;
-  height: 160px;
+  width: 100%;
+  min-height: 220px;
 }
 
 .loader-logo {
-  width: 240px;
+  width: min(260px, 72vw);
+  max-height: 220px;
   height: auto;
   display: block;
+  object-fit: contain;
   filter: drop-shadow(0 20px 30px rgba(15, 44, 67, 0.12));
 }

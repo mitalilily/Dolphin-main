@@ -207,7 +207,7 @@ export default function EmailVerificationForm({
                 gap: 0.8,
                 px: 1.2,
                 py: 0.8,
-                borderRadius: 999,
+                borderRadius: 1,
                 bgcolor: alpha(DE_BLUE, 0.05),
                 color: DE_BLUE,
                 cursor: 'pointer',

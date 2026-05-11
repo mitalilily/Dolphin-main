@@ -105,7 +105,7 @@ export default function AuthShell({
                 variant="soft"
                 sx={{
                   p: 1.8,
-                  borderRadius: '24px',
+                  borderRadius: 1,
                   border: `1px solid ${alpha(brand.sky, 0.34)}`,
                 }}
               >
@@ -211,13 +211,13 @@ export default function AuthShell({
                   <Grid container spacing={1.6}>
                     {authHighlights.map((item) => (
                       <Grid key={item.title} size={{ xs: 12, sm: 4 }}>
-                        <BrandSurface variant="soft" sx={{ height: '100%', p: 2.1, borderRadius: '28px' }}>
+                        <BrandSurface variant="soft" sx={{ height: '100%', p: 2.1, borderRadius: 1 }}>
                           <Stack spacing={1.2}>
                             <Box
                               sx={{
                                 width: 42,
                                 height: 42,
-                                borderRadius: '16px',
+                                borderRadius: 1,
                                 display: 'grid',
                                 placeItems: 'center',
                                 bgcolor: alpha(brand.sky, 0.76),
@@ -238,13 +238,13 @@ export default function AuthShell({
                     ))}
                   </Grid>
 
-                  <BrandSurface variant="glass" sx={{ p: 2.1, borderRadius: '28px' }}>
+                  <BrandSurface variant="glass" sx={{ p: 2.1, borderRadius: 1 }}>
                     <Stack direction="row" spacing={1.2} alignItems="flex-start">
                       <Box
                         sx={{
                           width: 42,
                           height: 42,
-                          borderRadius: '16px',
+                          borderRadius: 1,
                           display: 'grid',
                           placeItems: 'center',
                           bgcolor: alpha(brand.warning, 0.16),

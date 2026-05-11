@@ -104,7 +104,7 @@ export default function LoginForm() {
                     sx={{
                       px: 1.35,
                       py: 0.7,
-                      borderRadius: 999,
+                      borderRadius: 1,
                       border: `1px solid ${alpha(SKY, 0.1)}`,
                       bgcolor: alpha('#ffffff', 0.76),
                     }}
@@ -306,7 +306,7 @@ export default function LoginForm() {
                     sx={{
                       px: 1.15,
                       py: 0.58,
-                      borderRadius: 999,
+                      borderRadius: 1,
                       border: `1px solid ${alpha(SKY, 0.1)}`,
                       bgcolor: alpha(SKY, 0.03),
                     }}

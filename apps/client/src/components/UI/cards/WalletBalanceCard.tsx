@@ -31,7 +31,7 @@ const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({
     <>
       <Box
         sx={{
-          borderRadius: 6,
+          borderRadius: 1,
           p: { xs: 2.7, md: 3.2 },
           border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
           boxShadow: `0 24px 46px ${alpha(theme.palette.text.primary, 0.08)}`,
@@ -49,7 +49,7 @@ const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({
             <Box
               sx={{
                 background: `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.2)} 0%, ${alpha(theme.palette.secondary.main, 0.2)} 100%)`,
-                borderRadius: '24px',
+                borderRadius: 1,
                 p: 1.5,
                 display: 'flex',
                 alignItems: 'center',
@@ -95,7 +95,7 @@ const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({
                 bgcolor: alpha(theme.palette.secondary.main, 0.14),
                 color: theme.palette.secondary.dark,
                 fontWeight: 800,
-                borderRadius: '999px',
+                borderRadius: 1,
                 fontSize: '0.72rem',
                 border: `1px solid ${alpha(theme.palette.secondary.main, 0.24)}`,
               }}
@@ -129,7 +129,7 @@ const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({
             sx={{
               background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
               color: '#ffffff',
-              borderRadius: '999px',
+              borderRadius: 1,
               py: 1.25,
               fontWeight: 800,
               textTransform: 'none',
@@ -148,7 +148,7 @@ const WalletBalanceCard: React.FC<WalletBalanceCardProps> = ({
               sx={{
                 backgroundColor: alpha(theme.palette.secondary.main, 0.08),
                 p: 1.25,
-                borderRadius: 4,
+                borderRadius: 1,
                 border: `1px dashed ${alpha(theme.palette.secondary.main, 0.28)}`,
                 display: 'flex',
                 alignItems: 'center',

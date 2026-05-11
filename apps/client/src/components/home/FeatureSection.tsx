@@ -46,7 +46,7 @@ const FeatureSection: React.FC = () => {
         py: { xs: 3, md: 3.6 },
         px: { xs: 2.4, md: 3.2 },
         background: 'linear-gradient(180deg, #fffdf8 0%, #fff4e8 100%)',
-        borderRadius: 6,
+        borderRadius: 1,
         border: `1px solid ${alpha(NAVY, 0.08)}`,
         boxShadow: `0 16px 34px ${alpha(TEXT_PRIMARY, 0.05)}`,
         my: 4,
@@ -64,7 +64,7 @@ const FeatureSection: React.FC = () => {
         <Box
           sx={{
             p: { xs: 2.4, md: 3.2 },
-            borderRadius: 5,
+            borderRadius: 1,
             background: `
               radial-gradient(circle at 12% 10%, ${alpha('#2C8FFF', 0.16)} 0%, transparent 34%),
               radial-gradient(circle at 88% 12%, ${alpha(ORANGE, 0.14)} 0%, transparent 30%),
@@ -79,7 +79,7 @@ const FeatureSection: React.FC = () => {
                 sx={{
                   width: 36,
                   height: 36,
-                  borderRadius: 3,
+                  borderRadius: 1,
                   bgcolor: alpha(ORANGE, 0.12),
                   color: ORANGE,
                   display: 'flex',
@@ -128,7 +128,7 @@ const FeatureSection: React.FC = () => {
                   sx={{
                     px: 1.8,
                     py: 1.1,
-                    borderRadius: 999,
+                    borderRadius: 1,
                     bgcolor: alpha('#ffffff', 0.92),
                     border: `1px solid ${alpha(NAVY, 0.08)}`,
                     fontWeight: 700,
@@ -162,7 +162,7 @@ const FeatureSection: React.FC = () => {
               <Box
                 sx={{
                   height: '100%',
-                  borderRadius: 5,
+                  borderRadius: 1,
                   p: 2.4,
                   background: '#fffdf8',
                   border: `1px solid ${alpha(NAVY, 0.08)}`,
@@ -180,7 +180,7 @@ const FeatureSection: React.FC = () => {
                       sx={{
                         width: 42,
                         height: 42,
-                        borderRadius: 3.5,
+                        borderRadius: 1,
                         bgcolor: feature.tone,
                         color: NAVY,
                         display: 'flex',
@@ -194,7 +194,7 @@ const FeatureSection: React.FC = () => {
                       sx={{
                         px: 1.1,
                         py: 0.55,
-                        borderRadius: 999,
+                        borderRadius: 1,
                         bgcolor: alpha(ORANGE, 0.1),
                         color: ORANGE,
                         fontSize: '0.7rem',

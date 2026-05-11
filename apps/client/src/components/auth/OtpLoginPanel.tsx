@@ -173,7 +173,7 @@ export default function OtpLoginPanel() {
           <Box
             sx={{
               p: 1.5,
-              borderRadius: '24px',
+              borderRadius: 1,
               border: `1px solid ${alpha(brand.ink, 0.08)}`,
               backgroundColor: alpha(brand.sky, 0.18),
             }}

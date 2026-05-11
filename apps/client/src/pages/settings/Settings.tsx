@@ -218,7 +218,7 @@ const SettingCard = ({ item, tone }: { item: SettingItem; tone: string }) => {
             sx={{
               width: 28,
               height: 28,
-              borderRadius: 999,
+              borderRadius: 1,
               display: 'grid',
               placeItems: 'center',
               bgcolor: alpha(tone, 0.08),

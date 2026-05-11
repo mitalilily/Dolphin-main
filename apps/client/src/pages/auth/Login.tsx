@@ -37,7 +37,7 @@ export default function Login() {
         <Box
           sx={{
             p: 0.6,
-            borderRadius: 999,
+            borderRadius: 1,
             backgroundColor: 'rgba(198,231,255,0.18)',
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
@@ -53,7 +53,7 @@ export default function Login() {
               type="button"
               onClick={() => setMode(item.value as 'otp' | 'password')}
               sx={{
-                borderRadius: 999,
+                borderRadius: 1,
                 py: 1.2,
                 background: mode === item.value ? brandGradients.button : 'transparent',
                 color: brand.ink,

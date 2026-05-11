@@ -18,7 +18,7 @@ export default function AuthCodePreview({ title, code, helper }: AuthCodePreview
       variant="soft"
       sx={{
         p: 1.6,
-        borderRadius: '24px',
+        borderRadius: 1,
         border: `1px solid ${alpha(brand.warning, 0.22)}`,
         background: 'linear-gradient(180deg, rgba(255,248,239,0.96) 0%, rgba(255,255,255,0.98) 100%)',
       }}
@@ -29,7 +29,7 @@ export default function AuthCodePreview({ title, code, helper }: AuthCodePreview
             sx={{
               width: 34,
               height: 34,
-              borderRadius: '14px',
+              borderRadius: 1,
               display: 'grid',
               placeItems: 'center',
               bgcolor: alpha(brand.warning, 0.16),
@@ -50,7 +50,7 @@ export default function AuthCodePreview({ title, code, helper }: AuthCodePreview
           sx={{
             px: 1.3,
             py: 1.2,
-            borderRadius: '18px',
+            borderRadius: 1,
             bgcolor: alpha('#FFFFFF', 0.8),
             border: `1px dashed ${alpha(brand.ink, 0.18)}`,
           }}

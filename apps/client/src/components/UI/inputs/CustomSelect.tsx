@@ -111,7 +111,7 @@ export default function CustomSelect({
                     elevation={8}
                     sx={{
                       bgcolor: '#ffffff',
-                      borderRadius: 2,
+                      borderRadius: 1,
                       border: '1px solid rgba(12,59,128,0.12)',
                       boxShadow: '0 12px 24px rgba(12,59,128,0.12)',
                       width: anchorRef.current
@@ -139,7 +139,7 @@ export default function CustomSelect({
                               my: 0.35,
                               px: 1.2,
                               py: 0.9,
-                              borderRadius: 2,
+                              borderRadius: 1,
                               transition: 'all 0.2s ease',
                               '&:hover': {
                                 bgcolor: alpha(item.key === value ? NAVY : ORANGE, 0.06),

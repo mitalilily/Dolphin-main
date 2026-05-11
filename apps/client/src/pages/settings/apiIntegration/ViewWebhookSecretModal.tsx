@@ -87,7 +87,7 @@ This file contains sensitive credentials. Store it securely and never commit it 
           sx={{
             p: 2,
             bgcolor: 'rgba(255, 248, 239, 0.96)',
-            borderRadius: '22px',
+            borderRadius: 1,
             border: '1px solid',
             borderColor: 'rgba(245, 158, 11, 0.24)',
           }}

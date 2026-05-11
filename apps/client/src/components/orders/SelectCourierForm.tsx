@@ -437,7 +437,7 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                 bgcolor: alpha(ACCENT, 0.08),
                 color: ACCENT,
                 fontWeight: 700,
-                borderRadius: '999px',
+                borderRadius: 1,
               }}
             />
           </Stack>

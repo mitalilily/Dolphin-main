@@ -74,7 +74,7 @@ const QuickActions = () => {
           sx={{
             width: 42,
             height: 42,
-            borderRadius: 3,
+            borderRadius: 1,
             border: `1px solid ${alpha(INK, 0.08)}`,
             bgcolor: alpha('#FFFFFF', 0.82),
             color: ACCENT,
@@ -158,7 +158,7 @@ const QuickActions = () => {
                             gap: 1.2,
                             px: 1.2,
                             py: 1.05,
-                            borderRadius: 2,
+                            borderRadius: 1,
                             cursor: 'pointer',
                             transition: 'all 0.2s ease',
                             '&:hover': {
@@ -170,7 +170,7 @@ const QuickActions = () => {
                             sx={{
                               width: 36,
                               height: 36,
-                              borderRadius: 2,
+                              borderRadius: 1,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',

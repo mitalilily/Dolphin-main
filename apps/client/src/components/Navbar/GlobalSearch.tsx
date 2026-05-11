@@ -138,7 +138,7 @@ const GlobalSearch = () => {
           sx={{
             '& .MuiOutlinedInput-root': {
               bgcolor: alpha(SURFACE, 0.96),
-              borderRadius: 999,
+              borderRadius: 1,
               border: `1px solid ${alpha(INK, 0.1)}`,
               boxShadow: `0 10px 24px ${alpha(INK, 0.05)}`,
               transition: 'all 0.2s ease',
@@ -224,7 +224,7 @@ const GlobalSearch = () => {
                   elevation={0}
                   sx={{
                     mt: 1,
-                    borderRadius: 3,
+                    borderRadius: 1,
                     bgcolor: SURFACE,
                     border: `1px solid ${alpha(INK, 0.08)}`,
                     boxShadow: `0 18px 34px ${alpha(INK, 0.1)}`,
@@ -261,7 +261,7 @@ const GlobalSearch = () => {
                           key={`${result.type}-${idx}`}
                           onClick={() => handleResultClick(result)}
                           sx={{
-                            borderRadius: 2.5,
+                            borderRadius: 1,
                             py: 1.25,
                             px: 1.5,
                             mb: 0.5,

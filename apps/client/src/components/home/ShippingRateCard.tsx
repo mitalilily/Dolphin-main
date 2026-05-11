@@ -16,7 +16,7 @@ const ShippingRateCard = () => {
       sx={{
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: 3,
+        borderRadius: 1,
         px: isMobile ? 2 : 4,
         py: isMobile ? 3 : 4,
         color: '#fff',

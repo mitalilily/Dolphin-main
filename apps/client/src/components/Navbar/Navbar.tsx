@@ -72,7 +72,7 @@ export default function Navbar({ handleDrawerToggle, pinned }: NavbarProps) {
               onClick={handleDrawerToggle}
               sx={{
                 bgcolor: alpha('#FFFFFF', 0.72),
-                borderRadius: '18px',
+                borderRadius: 1,
                 border: `1px solid ${alpha(brand.ink, 0.08)}`,
                 color: brand.ink,
                 width: 42,
@@ -141,7 +141,7 @@ export default function Navbar({ handleDrawerToggle, pinned }: NavbarProps) {
                   minWidth: 'fit-content',
                   px: 1.7,
                   py: 0.95,
-                  borderRadius: 999,
+                  borderRadius: 1,
                   textTransform: 'none',
                   fontWeight: 700,
                   fontSize: '0.84rem',

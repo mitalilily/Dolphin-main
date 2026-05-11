@@ -51,7 +51,7 @@ const iconMap: Record<AlertColor, React.ReactNode> = {
 const GlassAlert = styled(Alert)<{ severity: AlertColor }>(({ severity }) => ({
   background: bgMap[severity] ?? bgMap.info,
   boxShadow: '0 20px 42px rgba(15,44,67,0.12)',
-  borderRadius: 24,
+  borderRadius: 8,
   padding: '10px 16px',
   border: '1px solid rgba(255,255,255,0.72)',
   color: '#10324A',
@@ -68,7 +68,7 @@ const GlassAlert = styled(Alert)<{ severity: AlertColor }>(({ severity }) => ({
     top: 6,
     bottom: 6,
     width: 4,
-    borderRadius: 999,
+    borderRadius: 1,
     background: accentMap[severity] ?? accentMap.info,
   },
   '& .MuiAlert-icon': {

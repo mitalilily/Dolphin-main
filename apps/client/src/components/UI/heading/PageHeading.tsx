@@ -26,7 +26,7 @@ const PageHeading: React.FC<PageHeadingProps> = ({
       sx={{
         position: 'relative',
         overflow: 'hidden',
-        borderRadius: '30px',
+        borderRadius: 1.25,
         border: `1px solid ${alpha('#FFFFFF', 0.7)}`,
         background: brandGradients.surface,
         px: { xs: 1.8, sm: 2.4 },
@@ -53,7 +53,7 @@ const PageHeading: React.FC<PageHeadingProps> = ({
               sx={{
                 width: 36,
                 height: 36,
-                borderRadius: '16px',
+                borderRadius: 1,
                 background: brandGradients.button,
                 color: brand.ink,
                 display: 'flex',

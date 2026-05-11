@@ -91,7 +91,7 @@ export default function ClientPreview() {
                     sx={{
                       width: 30,
                       height: 30,
-                      borderRadius: 999,
+                      borderRadius: 1,
                       bgcolor: alpha(MINT, 0.18),
                       color: '#2F8E77',
                       display: 'flex',
@@ -123,7 +123,7 @@ export default function ClientPreview() {
                     bgcolor: alpha(PLUM, 0.08),
                     color: PLUM,
                     fontWeight: 700,
-                    borderRadius: 999,
+                    borderRadius: 1,
                   }}
                 />
                 <Chip
@@ -132,7 +132,7 @@ export default function ClientPreview() {
                     bgcolor: alpha(MINT, 0.14),
                     color: '#2F8E77',
                     fontWeight: 700,
-                    borderRadius: 999,
+                    borderRadius: 1,
                   }}
                 />
               </Stack>

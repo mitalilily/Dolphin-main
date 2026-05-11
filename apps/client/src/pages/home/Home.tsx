@@ -30,7 +30,7 @@ const TEAL = brand.success
 const TEXT_SECONDARY = brand.inkSoft
 
 const shellCard = {
-  borderRadius: '30px',
+  borderRadius: 1,
   border: `1px solid ${alpha(INK, 0.08)}`,
   background: brandGradients.surface,
   boxShadow: `0 18px 38px ${alpha(INK, 0.06)}`,
@@ -201,7 +201,7 @@ export default function Home() {
                   sx={{
                     background: brandGradients.button,
                     color: brand.ink,
-                    borderRadius: 999,
+                    borderRadius: 1,
                     fontWeight: 800,
                     px: 3,
                     '&:hover': { background: brandGradients.button },
@@ -214,7 +214,7 @@ export default function Home() {
                   size="large"
                   onClick={() => navigate('/orders/list')}
                   sx={{
-                    borderRadius: 999,
+                    borderRadius: 1,
                     borderColor: alpha(INK, 0.18),
                     color: INK,
                     bgcolor: alpha('#fff', 0.72),
@@ -237,7 +237,7 @@ export default function Home() {
                   sx={{
                     px: 1.4,
                     py: 0.9,
-                    borderRadius: 999,
+                    borderRadius: 1,
                     bgcolor: alpha('#fff', 0.8),
                     border: `1px solid ${alpha(INK, 0.08)}`,
                     color: INK,
@@ -262,7 +262,7 @@ export default function Home() {
                   key={metric.label}
                   sx={{
                     p: 2,
-                    borderRadius: 3.5,
+                    borderRadius: 1,
                     bgcolor: alpha('#fff', 0.86),
                     border: `1px solid ${alpha(INK, 0.08)}`,
                     boxShadow: `0 12px 22px ${alpha(INK, 0.04)}`,
@@ -273,7 +273,7 @@ export default function Home() {
                       sx={{
                         width: 38,
                         height: 38,
-                        borderRadius: 2.5,
+                        borderRadius: 1,
                         bgcolor: alpha(metric.tone, 0.12),
                         color: metric.tone,
                         display: 'flex',
@@ -335,7 +335,7 @@ export default function Home() {
                   sx={{
                     width: 42,
                     height: 42,
-                    borderRadius: 3,
+                    borderRadius: 1,
                     bgcolor: alpha(action.tone, 0.12),
                     color: action.tone,
                     display: 'flex',

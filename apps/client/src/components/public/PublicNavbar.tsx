@@ -59,7 +59,7 @@ export default function PublicNavbar({
                 sx={{
                   px: 2,
                   py: 1,
-                  borderRadius: 999,
+                  borderRadius: 1,
                   color: isActive ? brand.ink : brand.inkSoft,
                   fontSize: '0.88rem',
                   fontWeight: 600,

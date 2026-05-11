@@ -46,7 +46,7 @@ const CTACard: React.FC<CTACardProps> = ({
       elevation={0}
       sx={{
         p: { xs: 2.5, sm: 3 },
-        borderRadius: 6,
+        borderRadius: 1,
         background: `
           radial-gradient(circle at top left, ${alpha(theme.palette.primary.light, 0.16)} 0%, transparent 32%),
           radial-gradient(circle at bottom right, ${alpha(theme.palette.secondary.main, 0.18)} 0%, transparent 34%),
@@ -69,7 +69,7 @@ const CTACard: React.FC<CTACardProps> = ({
           <Box
             sx={{
               background: `linear-gradient(135deg, ${alpha(theme.palette.primary.light, 0.2)} 0%, ${alpha(theme.palette.secondary.main, 0.22)} 100%)`,
-              borderRadius: '22px',
+              borderRadius: 1,
               p: 1.35,
               display: 'flex',
               alignItems: 'center',
@@ -126,7 +126,7 @@ const CTACard: React.FC<CTACardProps> = ({
             sx={{
               background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
               color: '#ffffff',
-              borderRadius: '999px',
+              borderRadius: 1,
               py: 1.15,
               fontWeight: 800,
               textTransform: 'none',

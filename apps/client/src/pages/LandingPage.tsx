@@ -184,7 +184,7 @@ export default function LandingPage() {
                         variant="glass"
                         sx={{
                           p: 2.1,
-                          borderRadius: '28px',
+                          borderRadius: 1,
                           minHeight: { xs: 260, sm: 320 },
                           display: 'flex',
                           alignItems: 'center',
@@ -211,7 +211,7 @@ export default function LandingPage() {
                           { label: 'Delivery health', value: '92%', note: 'Based on recent operations' },
                           { label: 'Courier savings', value: '18%', note: 'Average route optimization' },
                         ].map((card) => (
-                          <BrandSurface key={card.label} variant="soft" sx={{ p: 1.7, borderRadius: '24px' }}>
+                          <BrandSurface key={card.label} variant="soft" sx={{ p: 1.7, borderRadius: 1 }}>
                             <Typography sx={{ color: brand.inkSoft, fontSize: '0.76rem', fontWeight: 700 }}>
                               {card.label}
                             </Typography>
@@ -265,7 +265,7 @@ export default function LandingPage() {
                         variant="soft"
                         sx={{
                           p: 1.2,
-                          borderRadius: '22px',
+                          borderRadius: 1,
                           textAlign: 'center',
                           transform: {
                             xs: 'none',
@@ -436,7 +436,7 @@ export default function LandingPage() {
                     <Grid container spacing={1.6}>
                       {intelligenceStats.map((stat) => (
                         <Grid key={stat.label} size={{ xs: 12, sm: 4 }}>
-                          <BrandSurface variant="glass" sx={{ p: 1.5, borderRadius: '24px', height: '100%' }}>
+                          <BrandSurface variant="glass" sx={{ p: 1.5, borderRadius: 1, height: '100%' }}>
                             <Stack spacing={0.8}>
                               <Box
                                 sx={{
@@ -463,7 +463,7 @@ export default function LandingPage() {
                       ))}
                     </Grid>
 
-                    <BrandSurface variant="soft" sx={{ mt: 1.8, p: 2, borderRadius: '28px' }}>
+                    <BrandSurface variant="soft" sx={{ mt: 1.8, p: 2, borderRadius: 1 }}>
                       <Typography sx={{ color: brand.ink, fontWeight: 700, mb: 1.5 }}>
                         Operational snapshot
                       </Typography>

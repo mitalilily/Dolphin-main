@@ -9,7 +9,7 @@ const TEXT_PRIMARY = '#241A1B'
 const TEXT_SECONDARY = '#6A5E59'
 
 const cardSx = {
-  borderRadius: 4,
+  borderRadius: 1,
   p: { xs: 2, md: 2.3 },
   border: `1px solid ${alpha(DE_BLUE, 0.08)}`,
   bgcolor: '#fffdf8',
@@ -66,7 +66,7 @@ const GettingStarted = () => {
                   sx={{
                     bgcolor: DE_BLUE,
                     '&:hover': { bgcolor: '#082A57' },
-                    borderRadius: 999,
+                    borderRadius: 1,
                     textTransform: 'none',
                     fontWeight: 800,
                     fontSize: '12px',

@@ -86,7 +86,7 @@ const CustomInput = forwardRef<HTMLInputElement, CustomInputProps>(
           sx={{
             width,
             '& .MuiOutlinedInput-root': {
-              borderRadius: '24px',
+              borderRadius: '8px',
               bgcolor: alpha('#FFFFFF', 0.9),
               backgroundImage:
                 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,251,255,0.98) 100%)',

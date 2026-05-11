@@ -48,7 +48,7 @@ const AccountSetup = () => {
           sx={{
             px: 1.2,
             py: 0.6,
-            borderRadius: 999,
+            borderRadius: 1,
             fontSize: '10px',
             fontWeight: 800,
             letterSpacing: 0.5,
@@ -65,7 +65,7 @@ const AccountSetup = () => {
       <Box
         sx={{
           p: 1.5,
-          borderRadius: 4,
+          borderRadius: 1,
           border: `1px solid ${alpha(DE_BLUE, 0.08)}`,
           bgcolor: '#fffdf8',
         }}
@@ -95,7 +95,7 @@ const AccountSetup = () => {
               onClick={() => !step.done && navigate(step.path)}
               sx={{
                 p: 1.8,
-                borderRadius: 4,
+                borderRadius: 1,
                 border: `1px solid ${step.done ? alpha('#178A68', 0.15) : alpha(DE_BLUE, 0.08)}`,
                 bgcolor: step.done ? alpha('#178A68', 0.04) : '#fffdf8',
                 cursor: step.done ? 'default' : 'pointer',
@@ -111,7 +111,7 @@ const AccountSetup = () => {
                   sx={{
                     width: 24,
                     height: 24,
-                    borderRadius: 2,
+                    borderRadius: 1,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',

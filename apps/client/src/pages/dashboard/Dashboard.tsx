@@ -321,7 +321,7 @@ export default function Dashboard() {
         sx={{
           pt: 1.2,
           '& .MuiCard-root': {
-            borderRadius: '30px',
+            borderRadius: 1,
             border: `1px solid ${alpha('#FFFFFF', 0.7)}`,
             boxShadow: '0 20px 42px rgba(15,44,67,0.08)',
           },

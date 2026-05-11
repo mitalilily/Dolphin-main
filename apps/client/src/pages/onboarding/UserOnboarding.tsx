@@ -212,7 +212,7 @@ export default function UserOnboarding() {
         sx={{
           width: '100%',
           maxWidth: 840,
-          borderRadius: '34px',
+          borderRadius: 1,
           border: `1px solid ${alpha('#FFFFFF', 0.72)}`,
           overflow: 'hidden',
           display: 'flex',
@@ -401,7 +401,7 @@ export default function UserOnboarding() {
                 flex: 1,
                 background: brandGradients.button,
                 color: brand.ink,
-                borderRadius: 999,
+                borderRadius: 1,
                 fontWeight: 800,
                 fontSize: '1rem',
                 py: 1.2,

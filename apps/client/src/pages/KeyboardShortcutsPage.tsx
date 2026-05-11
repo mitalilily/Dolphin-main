@@ -101,7 +101,7 @@ export default function KeyboardShortcutsPage() {
               sx={{
                 p: 3,
                 height: '100%',
-                borderRadius: '28px',
+                borderRadius: 1,
                 border: `1px solid ${alpha('#FFFFFF', 0.72)}`,
                 background: brandGradients.surface,
                 boxShadow: '0 18px 38px rgba(15, 44, 67, 0.08)',

@@ -53,7 +53,7 @@ const StatusChip: React.FC<StatusChipProps> = ({ status, label, ...props }) => {
         backgroundColor: meta.bg,
         color: meta.fg,
         border: `1px solid ${alpha(meta.fg, 0.16)}`,
-        borderRadius: '999px',
+        borderRadius: 1,
         boxShadow: `0 8px 18px ${alpha(theme.palette.text.primary, 0.05)}`,
         '& .MuiChip-icon': {
           color: meta.fg,

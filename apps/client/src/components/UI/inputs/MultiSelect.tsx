@@ -99,7 +99,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
         boxShadow: '0 16px 34px rgba(15,44,67,0.14)',
         zIndex: 9999,
         p: 1,
-        borderRadius: 2,
+        borderRadius: 1,
       }}
     >
       {filteredOptions.map((opt) => {
@@ -113,7 +113,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
               gap: 1,
               px: 1,
               py: 0.5,
-              borderRadius: 1.5,
+              borderRadius: 1,
               cursor: 'pointer',
               '&:hover': { bgcolor: alpha(accentColor, 0.08) },
             }}
@@ -156,7 +156,7 @@ const MultiSelect: React.FC<MultiSelectProps> = ({
                 gap: 1,
                 px: 1,
                 py: 1,
-                borderRadius: 1.5,
+                borderRadius: 1,
                 cursor: 'pointer',
                 '&:hover': { bgcolor: alpha(accentColor, 0.08) },
               }}

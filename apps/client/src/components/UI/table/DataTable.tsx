@@ -186,7 +186,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
         position: 'relative',
         width: '100%',
         overflow: 'hidden',
-        borderRadius: 5,
+        borderRadius: 1.5,
         border: `1px solid ${borderColor}`,
         background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(252,247,241,0.98) 100%)',
         boxShadow: `0 20px 42px ${alpha(textPrimary, 0.07)}`,
@@ -258,7 +258,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                 onPageChange={handleChangePage}
                 onRowsPerPageChange={handleChangeRowsPerPage}
                 sx={{
-                  borderRadius: 999,
+                  borderRadius: 1,
                   px: 1.2,
                   backgroundColor: alpha('#ffffff', 0.92),
                   border: `1px solid ${borderColor}`,
@@ -292,7 +292,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
             sx={{
               minHeight: 300,
               py: 5,
-              borderRadius: 4,
+              borderRadius: 1.5,
               border: `1px dashed ${alpha(primary, 0.16)}`,
               background: 'linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(247,241,235,0.92) 100%)',
             }}
@@ -343,7 +343,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                   key={row.id}
                   variant="outlined"
                   sx={{
-                    borderRadius: 4,
+                    borderRadius: 1.5,
                     border: `1px solid ${borderColor}`,
                     background: mobileCardBg,
                     boxShadow: `0 14px 28px ${alpha(textPrimary, 0.05)}`,
@@ -425,7 +425,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
           <Box
             sx={{
               overflow: 'hidden',
-              borderRadius: 5,
+              borderRadius: 1.5,
             }}
           >
             <TableContainer
@@ -438,7 +438,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                 maxHeight,
                 overflowX: 'auto',
                 boxShadow: 'none',
-                borderRadius: 4,
+                borderRadius: 1.5,
                 backdropFilter: 'none',
                 '&::-webkit-scrollbar': {
                   height: 10,
@@ -449,7 +449,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                 },
                 '&::-webkit-scrollbar-thumb': {
                   backgroundColor: alpha(primary, 0.34),
-                  borderRadius: 999,
+                  borderRadius: 1,
                 },
               }}
             >

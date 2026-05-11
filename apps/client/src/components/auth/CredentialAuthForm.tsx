@@ -270,7 +270,7 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
           <Box
             sx={{
               p: 1.5,
-              borderRadius: '24px',
+              borderRadius: 1,
               border: `1px solid rgba(16,50,74,0.08)`,
               backgroundColor: 'rgba(198,231,255,0.18)',
             }}

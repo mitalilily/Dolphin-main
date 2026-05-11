@@ -19,7 +19,7 @@ export default function DashboardHeader({
       sx={{
         mb: 2.8,
         p: { xs: 2.2, md: 2.8 },
-        borderRadius: '34px',
+        borderRadius: 1,
         border: `1px solid ${alpha('#FFFFFF', 0.76)}`,
         background: `
           radial-gradient(circle at 100% 0%, rgba(255,221,174,0.6), transparent 24%),
