@@ -7,6 +7,12 @@ import {
   updateUser,
 } from '../models/services/userService'
 
+const normalizeEmailInput = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : ''
+
+const normalizePhoneInput = (value: unknown) =>
+  typeof value === 'string' && value.trim() ? value.replace(/\D/g, '') : ''
+
 export const getCurrentUser = async (req: any, res: Response): Promise<any> => {
   try {
     const { sub: userId } = req?.user
@@ -61,9 +67,39 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
       data.businessLegal.businessCategory.length === 1 &&
       data.businessLegal.businessCategory[0]?.toLowerCase() === 'b2b'
 
-    const phoneRaw = data?.basicInfo?.phone ?? ''
-    const phoneDigits = phoneRaw.replace(/\D/g, '') // keep 10 digits
-    const emailLower = (data?.basicInfo?.email ?? '').toLowerCase().trim()
+    const phoneDigits = normalizePhoneInput(data?.basicInfo?.phone)
+    const profilePhoneDigits = normalizePhoneInput(userProfile?.companyInfo?.contactNumber)
+    const userPhoneDigits = normalizePhoneInput(user.phone)
+    const canonicalPhone = phoneDigits || profilePhoneDigits || userPhoneDigits || null
+
+    const emailLower = normalizeEmailInput(data?.basicInfo?.email)
+    const profileEmailLower = normalizeEmailInput(userProfile?.companyInfo?.contactEmail)
+    const userEmailLower = normalizeEmailInput(user.email)
+    const canonicalEmail = emailLower || profileEmailLower || userEmailLower
+
+    if (phoneDigits && !/^\d{10}$/.test(phoneDigits)) {
+      return res.status(400).json({ error: 'Enter a valid 10-digit phone number' })
+    }
+
+    if (canonicalPhone) {
+      const other = await findUserByPhone(canonicalPhone)
+      if (other && other.id !== userId) {
+        return res.status(400).json({
+          error: 'Phone already linked to another account',
+          user: {},
+        })
+      }
+    }
+
+    if (canonicalEmail) {
+      const other = await findUserByEmail(canonicalEmail)
+      if (other && other.id !== userId) {
+        return res.status(400).json({
+          error: 'Email already linked to another account',
+          user: {},
+        })
+      }
+    }
 
     switch (step) {
       /* ─────────────────────────── STEP 1 ─────────────────────────── */
@@ -97,8 +133,8 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
         updates = {
           companyInfo: {
             contactPerson: `${data?.basicInfo?.firstName} ${data?.basicInfo?.lastName}`,
-            contactEmail: emailLower || user.email,
-            contactNumber: phoneDigits || user.phone,
+            contactEmail: canonicalEmail || '',
+            contactNumber: canonicalPhone || '',
             pincode: data?.basicInfo?.pincode,
             state: data?.basicInfo?.state,
             POCEmailVerified: user?.emailVerified,
@@ -140,8 +176,8 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
             contactPerson:
               `${data?.basicInfo?.firstName ?? ''} ${data?.basicInfo?.lastName ?? ''}`.trim() ||
               userProfile?.companyInfo?.contactPerson,
-            contactEmail: emailLower || userProfile?.companyInfo?.contactEmail || user.email,
-            contactNumber: phoneDigits || userProfile?.companyInfo?.contactNumber || user.phone,
+            contactEmail: canonicalEmail || '',
+            contactNumber: canonicalPhone || '',
             pincode: data?.basicInfo?.pincode || userProfile?.companyInfo?.pincode,
             state: data?.basicInfo?.state || userProfile?.companyInfo?.state,
             businessName: data?.basicInfo?.companyName || userProfile?.companyInfo?.businessName,
@@ -158,8 +194,8 @@ export const completeRegistration = async (req: any, res: Response): Promise<any
 
     const updatedUser = await upsertUserProfile(userId, updates)
     await updateUser(userId, {
-      email: emailLower || user.email,
-      phone: phoneDigits || user.phone,
+      email: canonicalEmail || user.email,
+      phone: canonicalPhone,
     })
 
     return res.json({
