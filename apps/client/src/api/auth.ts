@@ -42,9 +42,13 @@ export const verifyEmailOtpApi = async (
   return data;
 };
 
-export const googleLoginApi = async (code: string) => {
+export const googleLoginApi = async (
+  code: string,
+  intent: 'login' | 'signup' = 'login',
+) => {
   const { data } = await axiosInstance.post("/auth/signin-with-google", {
     code,
+    intent,
   });
   return data;
 };

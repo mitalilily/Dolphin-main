@@ -64,7 +64,7 @@ function GoogleSocialLogin({ termsChecked }: { termsChecked: boolean }) {
         return
       }
 
-      googleLogin(code, {
+      googleLogin({ code, intent: 'login' }, {
         onSuccess: ({ token, refreshToken, user }) => {
           if (user?.email) sessionStorage.setItem('activeEmail', user.email)
           setUserId(user?.id)

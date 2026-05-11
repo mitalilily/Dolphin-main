@@ -52,6 +52,7 @@ const sanitizeAuthUser = (user: any) => {
 
   return {
     id: user.id,
+    profileId: user.profileId,
     email: user.email,
     phone: user.phone,
     emailVerified: user.emailVerified,
@@ -59,6 +60,9 @@ const sanitizeAuthUser = (user: any) => {
     accountVerified: user.accountVerified,
     role: user.role,
     profilePicture: user.profilePicture,
+    onboardingStep: user.onboardingStep,
+    onboardingComplete: user.onboardingComplete,
+    approved: user.approved,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   }
@@ -326,18 +330,15 @@ export const verifyOtp = async (req: Request, res: Response): Promise<any> => {
 
     /* ---------- persist newest refresh token ---------- */
     await saveRefreshToken(user.id, refreshToken, ONE_WEEK_MS)
+    const authUser = (await findUserById(user.id)) || user
 
     return res.json({
       message: 'OTP verified successfully',
       token: accessToken,
       refreshToken,
       user: {
-        id: user.id,
-        phone: user.phone,
-        phoneVerified: user.phoneVerified,
-        email: user.email,
+        ...sanitizeAuthUser(authUser),
         emailVerified: true,
-        role: user.role,
       },
     })
   } catch (error) {
@@ -392,15 +393,16 @@ export const requestEmailVerification = async (req: Request, res: Response): Pro
 
     // ── If the flow returned a user (authenticated / verified)
     if (user) {
-      const accessToken = signAccessToken(user.id, user.role ?? 'customer')
-      const { token: refreshToken } = signRefreshToken(user.id, user.role ?? 'customer')
+      const authUser = (await findUserById(user.id)) || user
+      const accessToken = signAccessToken(authUser.id, authUser.role ?? 'customer')
+      const { token: refreshToken } = signRefreshToken(authUser.id, authUser.role ?? 'customer')
 
       // Save refresh token to DB
-      await saveRefreshToken(user.id, refreshToken, ONE_WEEK_MS)
+      await saveRefreshToken(authUser.id, refreshToken, ONE_WEEK_MS)
 
       result.data.token = accessToken
       result.data.refreshToken = refreshToken
-      result.data.user = sanitizeAuthUser(user)
+      result.data.user = sanitizeAuthUser(authUser)
     }
 
     return res.status(result.status).json(result.data)
@@ -446,16 +448,15 @@ export const verifyEmailToken = async (req: Request, res: Response): Promise<any
 
     /* ---------- persist newest refresh token ---------- */
     await saveRefreshToken(user.id, refreshToken, ONE_WEEK_MS)
+    const authUser = (await findUserById(user.id)) || user
 
     return res.json({
       message: 'Email verified successfully',
       token: accessToken,
       refreshToken,
       user: {
-        id: user.id,
-        email: user.email,
+        ...sanitizeAuthUser(authUser),
         emailVerified: true,
-        role: user.role,
       },
     })
   } catch (error) {
@@ -469,6 +470,7 @@ const googleClient = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID || proc
 
 export const googleOAuthLogin = async (req: Request, res: Response): Promise<any> => {
   const { code } = req.body
+  const intent = req.body?.intent === 'signup' ? 'signup' : 'login'
 
   if (!code) return res.status(400).json({ error: 'Missing authorization code' })
 
@@ -533,6 +535,13 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
           emailVerified: true,
         })) || user
     } else {
+      if (intent === 'login') {
+        return res.status(404).json({
+          code: 'ACCOUNT_NOT_FOUND',
+          error: 'No account found for this Google email. Please sign up first.',
+        })
+      }
+
       user = await createUserWithWallet({
         email,
         googleId,
@@ -561,18 +570,7 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
         message: 'Google login successful',
         token: accessToken,
         refreshToken,
-        user: {
-          id: user?.id,
-          email: user?.email,
-          emailVerified: user?.emailVerified,
-          phone: user?.phone,
-          phoneVerified: user?.phoneVerified,
-          profilePicture: user?.profilePicture,
-          role: user?.role,
-          onboardingStep: user?.onboardingStep,
-          onboardingComplete: user?.onboardingComplete,
-          approved: user?.approved,
-        },
+        user: sanitizeAuthUser(user),
       })
     } else {
       return res.status(500).json({ error: 'User not found' })

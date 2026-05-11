@@ -14,7 +14,7 @@ export default function RequireAuth({ children }: { children: ReactNode }) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (user?.id && !user.onboardingComplete && location.pathname !== "/onboarding-questions") {
+  if (!user.onboardingComplete && location.pathname !== "/onboarding-questions") {
     return <Navigate to="/onboarding-questions" state={{ from: location }} replace />;
   }
 

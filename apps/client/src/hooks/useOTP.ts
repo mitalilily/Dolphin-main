@@ -14,5 +14,11 @@ export const useVerifyOtp = () =>
 
 export const useGoogleLoginMutation = () =>
   useMutation({
-    mutationFn: (code: string) => googleLoginApi(code),
+    mutationFn: ({
+      code,
+      intent = 'login',
+    }: {
+      code: string
+      intent?: 'login' | 'signup'
+    }) => googleLoginApi(code, intent),
   });

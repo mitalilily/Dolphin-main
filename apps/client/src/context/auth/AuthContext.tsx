@@ -70,7 +70,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // If we successfully fetched a user, ensure auth is marked as true.
     if (user?.id) {
       setIsAuthenticated(true)
-      setUserId(user.id)
+      setUserId(user.userId || user.id)
     }
     // Do NOT automatically mark user as unauthenticated on generic errors here.
     // Auth state should primarily follow presence of valid tokens; 401 handling
@@ -79,6 +79,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const setTokens = (access: string, refresh: string) => {
     setAuthTokens(access, refresh)
+    queryClient.resetQueries({ queryKey: ['userProfile'] })
+    queryClient.resetQueries({ queryKey: ['userInfo'] })
     setIsAuthenticated(true)
     refetchUser()
   }
