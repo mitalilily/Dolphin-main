@@ -30,7 +30,6 @@ export default function PublicFooter() {
           <Stack direction="row" spacing={2.25} flexWrap="wrap" useFlexGap>
             {[
               { label: 'Home', to: '/' },
-              { label: 'Signup', to: '/signup' },
               { label: 'Login', to: '/login' },
               { label: 'Tracking', to: '/tracking' },
             ].map((item) => (

@@ -21,7 +21,7 @@ interface PublicNavbarProps {
 export default function PublicNavbar({
   links = [],
   primaryLabel = 'Get Started',
-  primaryTo = '/signup',
+  primaryTo = '/login',
   secondaryLabel = 'Login',
   secondaryTo = '/login',
 }: PublicNavbarProps) {
@@ -79,21 +79,23 @@ export default function PublicNavbar({
         </Stack>
 
         <Stack direction="row" spacing={1.1} alignItems="center">
-          <Button
-            component={RouterLink}
-            to={secondaryTo}
-            variant="text"
-            sx={{
-              display: { xs: 'none', sm: 'inline-flex' },
-              color: brand.ink,
-              fontWeight: 700,
-              '&:hover': {
-                backgroundColor: alpha('#FFFFFF', 0.62),
-              },
-            }}
-          >
-            {secondaryLabel}
-          </Button>
+          {secondaryLabel && secondaryTo !== primaryTo ? (
+            <Button
+              component={RouterLink}
+              to={secondaryTo}
+              variant="text"
+              sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
+                color: brand.ink,
+                fontWeight: 700,
+                '&:hover': {
+                  backgroundColor: alpha('#FFFFFF', 0.62),
+                },
+              }}
+            >
+              {secondaryLabel}
+            </Button>
+          ) : null}
           <Button
             component={RouterLink}
             to={primaryTo}

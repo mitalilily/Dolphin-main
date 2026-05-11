@@ -244,8 +244,8 @@ export default function PhoneForm() {
           Secure Authentication
         </Typography>
         <Typography variant="body2" sx={{ color: '#6A616A', lineHeight: 1.6, fontWeight: 500 }}>
-          Access your logistics dashboard using your registered work email. Verification codes
-          are sent through the actual login flow to your email.
+          Enter your business email once. Existing users open the dashboard, and first-time users
+          continue to onboarding after verification.
         </Typography>
 
         <Chip

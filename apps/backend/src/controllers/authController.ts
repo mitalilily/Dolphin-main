@@ -207,8 +207,9 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
       env,
     })
 
-    // 1. Look up user by email
-    const user = await findUserByEmail(normalizedEmail)
+    // 1. Look up or create the customer account by email. This keeps OTP as the
+    // single entry path for existing and first-time users.
+    let user = await findUserByEmail(normalizedEmail)
 
     if (user && user.role === 'employee') {
       const [employeeRecord] = await db
@@ -225,18 +226,30 @@ export const requestOtp = async (req: Request, res: Response): Promise<any> => {
       }
     }
 
-    if (!user) {
-      return res.status(404).json({
-        code: 'ACCOUNT_NOT_FOUND',
-        error: 'No account found for this email. Please sign up first.',
+    if (user) {
+      await updateUserOtpByEmail(normalizedEmail, otp, expiry)
+      console.log('[Auth OTP] Updated existing user OTP', {
+        email: maskEmailForLog(normalizedEmail),
+        userId: user.id,
+      })
+    } else {
+      user = await createUserWithWallet({
+        email: normalizedEmail,
+        phone: '',
+        otp,
+        otpExpiresAt: expiry,
+        onboardingStep: 0,
+        onboardingComplete: false,
+        emailVerified: false,
+      })
+      if (!user?.id) {
+        throw new Error('Could not create user for OTP flow')
+      }
+      console.log('[Auth OTP] Created new user for OTP flow', {
+        email: maskEmailForLog(normalizedEmail),
+        userId: user.id,
       })
     }
-
-    await updateUserOtpByEmail(normalizedEmail, otp, expiry)
-    console.log('[Auth OTP] Updated existing user OTP', {
-      email: maskEmailForLog(normalizedEmail),
-      userId: user.id,
-    })
 
     if (!exposeAuthCodes && !emailConfigError) {
       console.log('[Auth OTP] Sending OTP email', {
@@ -544,13 +557,6 @@ export const googleOAuthLogin = async (req: Request, res: Response): Promise<any
           emailVerified: true,
         })) || user
     } else {
-      if (intent === 'login') {
-        return res.status(404).json({
-          code: 'ACCOUNT_NOT_FOUND',
-          error: 'No account found for this Google email. Please sign up first.',
-        })
-      }
-
       user = await createUserWithWallet({
         email,
         googleId,

@@ -173,8 +173,8 @@ export default function PasswordLoginForm({ setStep, step, setOpenTerms }: IPass
         }}
       >
         <Typography variant="body2" sx={{ color: '#6A616A', lineHeight: 1.6, fontWeight: 500 }}>
-          Enter your registered email and password. If verification is required, the code will be
-          sent to your email.
+          Enter your business email and password. New emails are verified and sent to onboarding;
+          existing accounts continue to the dashboard.
         </Typography>
       </Box>
 

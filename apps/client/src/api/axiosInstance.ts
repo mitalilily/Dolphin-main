@@ -57,7 +57,7 @@ const isPublicAuthRequest = (url?: string) => {
 
 const isAuthScreen = () =>
   typeof window !== 'undefined' &&
-  (window.location.pathname === '/login' || window.location.pathname === '/signup')
+  window.location.pathname === '/login'
 
 const removeAuthorizationHeader = (headers: unknown) => {
   if (!headers || typeof headers !== 'object') return

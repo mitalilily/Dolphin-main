@@ -19,9 +19,9 @@ const MUTED = '#68758B'
 const DISPLAY_FONT = '"Plus Jakarta Sans", "Barlow", "Segoe UI", "Helvetica Neue", Arial, sans-serif'
 
 const commandNotes = [
-  'Sign in with your registered email to access your Dolphin account.',
-  'Use OTP login or email and password based on your account access.',
-  'Access orders, billing, support, channels, and courier tools after sign in.',
+  'Enter your business email to access Dolphin or start a new account.',
+  'Use OTP login or email and password from the same secure entry point.',
+  'Existing users open the dashboard; first-time users continue to onboarding.',
 ]
 
 export default function LoginForm() {
@@ -138,7 +138,7 @@ export default function LoginForm() {
                     maxWidth: 760,
                   }}
                 >
-                  Sign in to your
+                  Access your
                   <Box component="span" sx={{ color: CLAY, display: 'block' }}>
                     Dolphin account.
                   </Box>
@@ -151,8 +151,8 @@ export default function LoginForm() {
                     maxWidth: 620,
                   }}
                 >
-                  Access your account and continue with orders, billing, support,
-                  and shipping operations in Dolphin.
+                  Use one secure path for existing and first-time users, then continue with
+                  orders, billing, support, and shipping operations in Dolphin.
                 </Typography>
               </Stack>
             </Stack>
@@ -279,7 +279,7 @@ export default function LoginForm() {
                     letterSpacing: '-0.04em',
                   }}
                 >
-                  Welcome back.
+                  Welcome to Dolphin.
                 </Typography>
                 <Typography
                   sx={{
@@ -289,7 +289,8 @@ export default function LoginForm() {
                     maxWidth: 470,
                   }}
                 >
-                  Sign in with OTP or password to access your Dolphin dashboard and account tools.
+                  Sign in or start with OTP or password. Verified existing users go to the
+                  dashboard, and first-time users continue to onboarding.
                 </Typography>
               </Stack>
 

@@ -6,7 +6,6 @@ export const loadRateCalculatorLandingPage = () => import('../landing/pages/Rate
 export const loadTrackingLandingPage = () => import('../landing/pages/TrackingPage.jsx')
 export const loadVolumetricCalculatorPage = () => import('../landing/pages/VolumetricCalculatorPage.jsx')
 export const loadLogin = () => import('../pages/auth/Login')
-export const loadSignup = () => import('../pages/auth/Signup')
 export const loadClientPreview = () => import('../pages/preview/ClientPreview')
 export const loadLayout = () => import('../components/UI/Layout')
 export const loadUserOnboarding = () => import('../pages/onboarding/UserOnboarding')
@@ -112,7 +111,6 @@ const routePreloaders: Array<{
     ],
   },
   { match: (pathname) => pathname === '/login', loaders: [['login', loadLogin]] },
-  { match: (pathname) => pathname === '/signup', loaders: [['signup', loadSignup]] },
   { match: (pathname) => pathname === '/preview', loaders: [['preview', loadClientPreview]] },
   {
     match: (pathname) => pathname === '/tracking',

@@ -495,7 +495,8 @@ export const verifyGoogleToken = async (idToken: string) => {
  * â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜
  */
 
-// Current rule: only signup may create a user; login never creates accounts.
+// Unified rule: password access is a single entry path. A new email creates a
+// pending account, while an existing email continues through password auth.
 
 export const handleEmailVerificationRequest = async (
   email: string,
@@ -641,16 +642,6 @@ export const handleEmailVerificationRequest = async (
     }
 
     // BRAND NEW USER
-
-    if (intent === 'login') {
-      return {
-        status: 404,
-        data: {
-          code: 'ACCOUNT_NOT_FOUND',
-          error: 'No account found for this email. Please sign up first.',
-        },
-      }
-    }
 
     if (googleId) {
       const user = await createUserWithWallet(

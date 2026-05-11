@@ -140,7 +140,7 @@ export default function LandingPage() {
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 4 }}>
                     <Button
                       component={RouterLink}
-                      to="/signup"
+                      to="/tracking"
                       variant="contained"
                       endIcon={<FiArrowRight size={16} />}
                       sx={{
@@ -170,7 +170,7 @@ export default function LandingPage() {
                         },
                       }}
                     >
-                      Login
+                      Track shipment
                     </Button>
                   </Stack>
                 </Box>
@@ -362,7 +362,7 @@ export default function LandingPage() {
                   </Typography>
                   <Button
                     component={RouterLink}
-                    to="/signup"
+                    to="/login"
                     variant="contained"
                     sx={{
                       mt: 2.4,

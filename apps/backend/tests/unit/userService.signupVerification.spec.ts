@@ -61,6 +61,11 @@ const makeCreateUserTransaction = () => {
   const insertValues: Record<string, unknown>[] = []
 
   const tx = {
+    query: {
+      users: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    },
     insert: jest.fn(),
     select: jest.fn(),
   }
@@ -197,5 +202,29 @@ describe('handleEmailVerificationRequest signup verification', () => {
       contactEmail: 'new@example.com',
       contactNumber: '',
     })
+  })
+
+  it('creates a pending account from the password login path for a new email', async () => {
+    const { insertValues } = makeCreateUserTransaction()
+    ;(bcrypt.hash as jest.Mock).mockResolvedValue('hashed-password')
+
+    const result = await handleEmailVerificationRequest(
+      ' New@Example.com ',
+      'secret123',
+      null,
+      'login',
+    )
+
+    expect(result.status).toBe(201)
+    expect(result.data).toMatchObject({ message: 'Verification email sent' })
+    expect(bcrypt.hash).toHaveBeenCalledWith('secret123', 10)
+    expect(insertValues[0]).toMatchObject({
+      email: 'new@example.com',
+      passwordHash: 'hashed-password',
+      emailVerificationToken: 'ABC12345',
+      emailVerified: false,
+      onboardingStep: 0,
+    })
+    expect(sendVerificationEmail).toHaveBeenCalledWith('new@example.com', 'ABC12345')
   })
 })
