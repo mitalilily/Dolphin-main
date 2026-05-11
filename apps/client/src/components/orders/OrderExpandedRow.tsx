@@ -1,6 +1,6 @@
 import { alpha, Box, Button, Chip, Divider, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { FaFilePdf } from 'react-icons/fa'
 import {
   MdInventory2,
@@ -262,16 +262,16 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
       <Paper
         elevation={0}
         sx={{
-          p: 1.5,
-          borderRadius: 2,
+          p: 1,
+          borderRadius: 1.25,
           border: `1px solid ${alpha(ACCENT, 0.14)}`,
           backgroundColor: '#FFFFFF',
         }}
       >
-        <Stack direction="row" alignItems="center" justifyContent="flex-start" gap={1.25}>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <FaFilePdf size={16} color={ACCENT} />
-            <Typography fontWeight={600} fontSize={13}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1} flexWrap="wrap">
+          <Stack direction="row" alignItems="center" spacing={0.8} sx={{ minWidth: 120 }}>
+            <FaFilePdf size={14} color={ACCENT} />
+            <Typography fontWeight={700} fontSize={12}>
               {title}
             </Typography>
             {sortCodeValue && type === 'label' && (
@@ -279,51 +279,76 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
                 size="small"
                 variant="outlined"
                 label={`Sort Code: ${sortCodeValue}`}
-                sx={{ fontSize: 11, borderColor: alpha(ACCENT, 0.3), color: ACCENT }}
+                sx={{
+                  height: 22,
+                  fontSize: 10,
+                  borderColor: alpha(ACCENT, 0.3),
+                  color: ACCENT,
+                }}
               />
             )}
           </Stack>
 
-          <Tooltip title={disabledReason || ''} arrow disableHoverListener={!disabledReason}>
-            <span>
+          <Stack direction="row" spacing={0.6} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Tooltip title={disabledReason || ''} arrow disableHoverListener={!disabledReason}>
+              <span>
+                <Button
+                  size="small"
+                  variant={hasDocument ? 'outlined' : 'contained'}
+                  sx={{
+                    minWidth: 0,
+                    height: 24,
+                    px: 0.9,
+                    py: 0,
+                    borderRadius: 1,
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'none',
+                  }}
+                  onClick={() => {
+                    if (urlValue && isDirectDownloadUrl(urlValue)) {
+                      handleDirectDownload(urlValue, type)
+                      return
+                    }
+                    if (keyValue) {
+                      handleDownload(keyValue, type)
+                      return
+                    }
+                    handleGenerateDocument(type)
+                  }}
+                  disabled={Boolean(disabledReason || isDocumentBusy)}
+                >
+                  {isGenerating
+                    ? 'Generating'
+                    : isDownloading
+                      ? 'Downloading'
+                      : hasDocument
+                        ? 'Download'
+                        : `Generate ${title}`}
+                </Button>
+              </span>
+            </Tooltip>
+            {canRegenerateExistingDocument && (
               <Button
                 size="small"
-                variant={hasDocument ? 'outlined' : 'contained'}
-                sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
-                onClick={() => {
-                  if (urlValue && isDirectDownloadUrl(urlValue)) {
-                    handleDirectDownload(urlValue, type)
-                    return
-                  }
-                  if (keyValue) {
-                    handleDownload(keyValue, type)
-                    return
-                  }
-                  handleGenerateDocument(type)
+                variant="contained"
+                sx={{
+                  minWidth: 0,
+                  height: 24,
+                  px: 0.9,
+                  py: 0,
+                  borderRadius: 1,
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  textTransform: 'none',
                 }}
-                disabled={Boolean(disabledReason || isDocumentBusy)}
+                onClick={() => handleGenerateDocument(type, true)}
+                disabled={isDocumentBusy}
               >
-                {isGenerating
-                  ? 'Generating...'
-                  : isDownloading
-                    ? 'Downloading...'
-                    : hasDocument
-                      ? 'Download'
-                      : `Generate ${title}`}
+                {isGenerating ? 'Regenerating' : 'Regenerate'}
               </Button>
-            </span>
-          </Tooltip>
-          {canRegenerateExistingDocument && (
-            <Button
-              size="small"
-              variant="contained"
-              sx={{ minWidth: 0, px: 1.25, py: 0.25, textTransform: 'none' }}
-              onClick={() => handleGenerateDocument(type, true)}
-              disabled={isDocumentBusy}
-            >
-              {isGenerating ? 'Regenerating...' : 'Regenerate'}
-            </Button>
-          )}
+            )}
+          </Stack>
         </Stack>
       </Paper>
     )
@@ -332,95 +357,161 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
   const labelDoc = getDocumentReference(row, 'label')
   const manifestDoc = getDocumentReference(row, 'manifest')
   const invoiceDoc = getDocumentReference(row, 'invoice')
-
-  return (
-    <Stack spacing={2} p={1.5}>
-      <Typography fontWeight={700} fontSize={16}>
-        Order Details
-      </Typography>
-      <Divider />
-
-      <Stack direction="row" spacing={1} alignItems="center">
-        <MdPerson size={20} />
-        <Typography>
-          <strong>Customer:</strong> {row.buyer_name} ({row.buyer_phone})
-        </Typography>
-      </Stack>
-
-      <Stack direction="row" spacing={1} alignItems="center">
-        <MdLocationOn size={20} />
-        <Typography>
-          <strong>Address:</strong> {row.address}, {row.city}, {row.state} - {row.pincode}
-        </Typography>
-      </Stack>
-
-      <Stack direction="row" spacing={1} alignItems="flex-start">
-        <MdShoppingBag size={20} style={{ marginTop: 4 }} />
-        <Stack spacing={0.5}>
-          <Typography fontWeight={500}>Products:</Typography>
-          {row.products?.map(
-            (
-              p: {
-                name: string
-                qty: number
-                price: string
-                box_name?: string
-                height?: string
-                length?: string
-                breadth?: string
-              },
-              i: number,
-            ) =>
-              type === 'b2c' ? (
-                <Typography key={i} fontSize={13}>
-                  {p?.name} x {p?.qty} - Rs.{p?.price}
-                </Typography>
-              ) : (
-                <Stack key={i}>
-                  <Typography fontSize={13}>{p?.box_name}</Typography>
-                  <Typography fontSize={13}>
-                    {p?.length} x {p?.height} x {p?.breadth}
-                  </Typography>
-                </Stack>
-              ),
+  const products = Array.isArray(row.products) ? row.products : []
+  const textValue = (value: unknown, fallback = '-') => {
+    const text = String(value ?? '').trim()
+    return text || fallback
+  }
+  const detailCardSx = {
+    p: 1.15,
+    borderRadius: 1.25,
+    border: `1px solid ${alpha(ACCENT, 0.12)}`,
+    backgroundColor: '#FFFFFF',
+  }
+  const detailLabelSx = {
+    color: 'text.secondary',
+    fontSize: '11px',
+    fontWeight: 700,
+    lineHeight: 1.2,
+  }
+  const detailValueSx = {
+    color: 'text.primary',
+    fontSize: '12px',
+    fontWeight: 700,
+    lineHeight: 1.35,
+  }
+  const renderDetailCard = ({
+    icon,
+    label,
+    value,
+    wide = false,
+  }: {
+    icon: ReactNode
+    label: string
+    value: ReactNode
+    wide?: boolean
+  }) => (
+    <Paper elevation={0} sx={{ ...detailCardSx, gridColumn: wide ? { md: 'span 2' } : undefined }}>
+      <Stack direction="row" spacing={0.9} alignItems="flex-start">
+        <Box sx={{ color: ACCENT, mt: 0.15, lineHeight: 0 }}>{icon}</Box>
+        <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+          <Typography sx={detailLabelSx}>{label}</Typography>
+          {typeof value === 'string' || typeof value === 'number' ? (
+            <Typography sx={detailValueSx}>{value}</Typography>
+          ) : (
+            value
           )}
         </Stack>
       </Stack>
+    </Paper>
+  )
 
-      <Stack direction="row" spacing={1} alignItems="center">
-        <MdLocalShipping size={20} />
-        <Typography>
-          <strong>Pickup Location:</strong> {row?.pickup_details?.name},{' '}
-          {row?.pickup_details?.address}, {row?.pickup_details?.city} -{' '}
-          {row?.pickup_details?.pincode}
+  return (
+    <Stack spacing={1.2} p={{ xs: 0.8, md: 1 }}>
+      <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+        <Typography fontWeight={800} fontSize={14}>
+          Order Details
+        </Typography>
+        <Typography sx={{ color: 'text.secondary', fontSize: '11px', fontWeight: 700 }}>
+          {textValue(row.order_number)}
         </Typography>
       </Stack>
+      <Divider sx={{ borderColor: alpha(ACCENT, 0.1) }} />
 
-      <Stack direction="row" spacing={2}>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdReceipt size={20} />
-          <Typography>
-            <strong>AWB:</strong> {row.awb_number}
-          </Typography>
-        </Stack>
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdLocalShipping size={20} />
-          <Typography>
-            <strong>Courier:</strong> {row.courier_partner}
-          </Typography>
-        </Stack>
-      </Stack>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+          gap: 1,
+        }}
+      >
+        {renderDetailCard({
+          icon: <MdPerson size={16} />,
+          label: 'Customer',
+          value: `${textValue(row.buyer_name)} (${textValue(row.buyer_phone)})`,
+        })}
+        {renderDetailCard({
+          icon: <MdReceipt size={16} />,
+          label: 'AWB',
+          value: textValue(row.awb_number),
+        })}
+        {renderDetailCard({
+          icon: <MdLocalShipping size={16} />,
+          label: 'Courier',
+          value: textValue(row.courier_partner),
+        })}
+        {renderDetailCard({
+          icon: <MdLocalShipping size={16} />,
+          label: 'Pickup Location',
+          value: `${textValue(row?.pickup_details?.name)}, ${textValue(
+            row?.pickup_details?.address,
+          )}, ${textValue(row?.pickup_details?.city)} - ${textValue(
+            row?.pickup_details?.pincode,
+          )}`,
+        })}
+        {renderDetailCard({
+          icon: <MdLocationOn size={16} />,
+          label: 'Address',
+          wide: true,
+          value: `${textValue(row.address)}, ${textValue(row.city)}, ${textValue(
+            row.state,
+          )} - ${textValue(row.pincode)}`,
+        })}
+        {renderDetailCard({
+          icon: <MdShoppingBag size={16} />,
+          label: 'Products',
+          wide: true,
+          value: (
+            <Stack spacing={0.35}>
+              {products.length ? (
+                products.map(
+                  (
+                    p: {
+                      name?: string
+                      productName?: string
+                      qty?: number
+                      quantity?: number
+                      price?: string | number
+                      box_name?: string
+                      height?: string
+                      length?: string
+                      breadth?: string
+                    },
+                    i: number,
+                  ) =>
+                    type === 'b2c' ? (
+                      <Typography key={i} sx={detailValueSx}>
+                        {textValue(p?.name || p?.productName || 'Product')} x {textValue(p?.qty ?? p?.quantity ?? 1)} - Rs.{textValue(p?.price ?? 0)}
+                      </Typography>
+                    ) : (
+                      <Stack key={i} spacing={0.15}>
+                        <Typography sx={detailValueSx}>{textValue(p?.box_name || 'Box')}</Typography>
+                        <Typography sx={detailLabelSx}>
+                          {textValue(p?.length)} x {textValue(p?.height)} x {textValue(p?.breadth)}
+                        </Typography>
+                      </Stack>
+                    ),
+                )
+              ) : (
+                <Typography sx={detailValueSx}>-</Typography>
+              )}
+            </Stack>
+          ),
+        })}
+      </Box>
 
       {sortCodeValue && (
-        <Stack direction="row" spacing={1} alignItems="center">
-          <MdInventory2 size={20} />
-          <Typography>
-            <strong>Sort Code:</strong>{' '}
-            <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
+        <Paper elevation={0} sx={detailCardSx}>
+          <Stack direction="row" spacing={0.9} alignItems="center">
+            <Box sx={{ color: ACCENT, lineHeight: 0 }}>
+              <MdInventory2 size={16} />
+            </Box>
+            <Typography sx={detailLabelSx}>Sort Code</Typography>
+            <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '12px' }}>
               {sortCodeValue}
             </Box>
-          </Typography>
-        </Stack>
+          </Stack>
+        </Paper>
       )}
 
       {String(row?.order_status || '').toLowerCase() === 'manifest_failed' && (
@@ -455,16 +546,16 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
           elevation={0}
           sx={{
             mt: 0.5,
-            p: 2,
-            borderRadius: 2.5,
+            p: 1.15,
+            borderRadius: 1.25,
             border: `1px solid ${alpha(ACCENT, 0.16)}`,
             backgroundColor: alpha(ACCENT, 0.03),
           }}
         >
-          <Typography fontWeight={700} fontSize={14} mb={1.25}>
+          <Typography fontWeight={800} fontSize={13} mb={0.9}>
             Documents
           </Typography>
-          <Stack spacing={1}>
+          <Stack spacing={0.75}>
             {renderDocAction({
               title: 'Label',
               keyValue: labelDoc.key || undefined,

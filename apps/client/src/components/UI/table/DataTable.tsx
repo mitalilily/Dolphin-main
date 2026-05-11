@@ -61,6 +61,7 @@ export interface DataTableProps<T extends { id: string | number }> {
   onRowClick?: (row: T) => void
   selectionResetToken?: number | string
   minTableWidth?: number | string
+  density?: 'standard' | 'compact'
 }
 
 export default function DataTable<T extends { id: string | number }>(props: DataTableProps<T>) {
@@ -86,10 +87,12 @@ export default function DataTable<T extends { id: string | number }>(props: Data
     onRowClick,
     selectionResetToken,
     minTableWidth = 1100,
+    density = 'standard',
   } = props
 
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isCompact = density === 'compact'
   const primary = theme.palette.primary.main
   const textPrimary = theme.palette.text.primary
   const textSecondary = theme.palette.text.secondary
@@ -100,6 +103,10 @@ export default function DataTable<T extends { id: string | number }>(props: Data
   const rowHover = alpha(primary, 0.045)
   const mobileCardBg = 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(249,244,238,0.96) 100%)'
   const tableMinWidth = typeof minTableWidth === 'number' ? `${minTableWidth}px` : minTableWidth
+  const desktopCellPx = isCompact ? 1.05 : 2
+  const desktopHeaderPy = isCompact ? 0.85 : 1.4
+  const desktopCellPy = isCompact ? 0.85 : 1.45
+  const detailsColumnWidth = isCompact ? 52 : 76
 
   const [localPage, setLocalPage] = React.useState(0)
   const [localRowsPerPage, setLocalRowsPerPage] = React.useState(defaultRowsPerPage)
@@ -227,7 +234,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                   sx={{
                     fontSize: { xs: '1.02rem', sm: '1.18rem' },
                     fontWeight: 800,
-                    letterSpacing: '-0.03em',
+                    letterSpacing: 0,
                     color: textPrimary,
                   }}
                 >
@@ -372,7 +379,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                             <Typography
                               fontSize="11px"
                               fontWeight={800}
-                              sx={{ color: alpha(textSecondary, 0.92), textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                              sx={{ color: alpha(textSecondary, 0.92), textTransform: 'uppercase', letterSpacing: 0 }}
                             >
                               {col.label}
                             </Typography>
@@ -441,8 +448,8 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                 borderRadius: 1.5,
                 backdropFilter: 'none',
                 '&::-webkit-scrollbar': {
-                  height: 10,
-                  width: 10,
+                  height: isCompact ? 7 : 10,
+                  width: isCompact ? 7 : 10,
                 },
                 '&::-webkit-scrollbar-track': {
                   backgroundColor: alpha(textPrimary, 0.06),
@@ -465,7 +472,8 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                           background: headerBg,
                           borderBottom: `1px solid ${borderColor}`,
                           zIndex: theme.zIndex.appBar + 1,
-                          py: 1.4,
+                          py: desktopHeaderPy,
+                          px: isCompact ? 0.6 : undefined,
                         }}
                       >
                         <CustomCheckbox
@@ -484,15 +492,15 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                           background: headerBg,
                           color: alpha(textPrimary, 0.86),
                           borderBottom: `1px solid ${borderColor}`,
-                          width: 76,
-                          minWidth: 76,
+                          minWidth: detailsColumnWidth,
+                          width: detailsColumnWidth,
                           fontWeight: 800,
-                          fontSize: '11px',
+                          fontSize: isCompact ? '10.5px' : '11px',
                           textTransform: 'uppercase',
-                          letterSpacing: '0.09em',
+                          letterSpacing: 0,
                           zIndex: theme.zIndex.appBar + 1,
-                          py: 1.4,
-                          px: 2,
+                          py: desktopHeaderPy,
+                          px: desktopCellPx,
                         }}
                       >
                         Details
@@ -509,15 +517,15 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                             top: 0,
                             background: headerBg,
                             color: alpha(textPrimary, 0.86),
-                            minWidth: col.minWidth || 100,
+                            minWidth: col.minWidth || (isCompact ? 80 : 100),
                             fontWeight: 800,
-                            fontSize: '11px',
+                            fontSize: isCompact ? '10.5px' : '11px',
                             textTransform: 'uppercase',
-                            letterSpacing: '0.09em',
+                            letterSpacing: 0,
                             zIndex: col.sticky ? theme.zIndex.appBar + 3 : theme.zIndex.appBar + 1,
                             borderBottom: `1px solid ${borderColor}`,
-                            py: 1.4,
-                            px: 2,
+                            py: desktopHeaderPy,
+                            px: desktopCellPx,
                             ...(col.sticky === 'right'
                               ? {
                                   right: col.stickyOffset ?? 0,
@@ -537,7 +545,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                         >
                           {col.label}
                           {col.label_desc ? (
-                            <Typography fontSize="10px" fontWeight={600} sx={{ color: alpha(textSecondary, 0.92), mt: 0.45 }}>
+                            <Typography fontSize="10px" fontWeight={600} sx={{ color: alpha(textSecondary, 0.92), mt: 0.35 }}>
                               {col.label_desc}
                             </Typography>
                           ) : null}
@@ -574,7 +582,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                           }}
                         >
                           {selectable && (
-                            <TableCell padding="checkbox">
+                            <TableCell padding="checkbox" sx={{ py: desktopCellPy, px: isCompact ? 0.6 : undefined }}>
                               <CustomCheckbox
                                 checked={selectedIds.includes(row.id)}
                                 onChange={() => handleSelect(row.id)}
@@ -584,7 +592,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                           )}
 
                           {expandable && renderExpandedRow && (
-                            <TableCell sx={{ py: 1.5, px: 2, width: 76 }}>
+                            <TableCell sx={{ py: desktopCellPy, px: desktopCellPx, width: detailsColumnWidth }}>
                               <Tooltip title={isExpanded ? 'Hide details' : 'Show details'} arrow>
                                 <IconButton
                                   size="small"
@@ -597,6 +605,8 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                                     color: primary,
                                     bgcolor: alpha(primary, 0.08),
                                     border: `1px solid ${alpha(primary, 0.14)}`,
+                                    width: isCompact ? 30 : 34,
+                                    height: isCompact ? 30 : 34,
                                     '&:hover': { backgroundColor: alpha(primary, 0.12) },
                                   }}
                                 >
@@ -626,14 +636,14 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                                 sx={{
                                   position: col.sticky ? 'sticky' : 'static',
                                   color: textPrimary,
-                                  fontSize: '13px',
+                                  fontSize: isCompact ? '12px' : '13px',
                                   fontWeight: 600,
                                   whiteSpace: shouldTruncate ? 'nowrap' : 'normal',
                                   overflow: shouldTruncate ? 'hidden' : 'visible',
                                   textOverflow: shouldTruncate ? 'ellipsis' : 'clip',
-                                  maxWidth: shouldTruncate ? 240 : 'none',
-                                  py: 1.45,
-                                  px: 2,
+                                  maxWidth: shouldTruncate ? (isCompact ? 190 : 240) : 'none',
+                                  py: desktopCellPy,
+                                  px: desktopCellPx,
                                   borderBottom: 'none',
                                   backgroundColor: col.sticky ? '#FFFFFF' : undefined,
                                   zIndex: col.sticky ? 2 : 1,
@@ -679,7 +689,7 @@ export default function DataTable<T extends { id: string | number }>(props: Data
                               <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                                 <Box
                                   ref={expandedRef}
-                                  p={2.8}
+                                  p={isCompact ? 1.4 : 2.8}
                                   sx={{
                                     background: 'linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,242,236,0.98) 100%)',
                                   }}

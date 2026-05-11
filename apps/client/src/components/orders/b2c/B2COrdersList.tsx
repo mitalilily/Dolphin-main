@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import {
   Alert,
   AlertTitle,
+  alpha,
   Box,
   Button,
   Link,
@@ -584,92 +585,196 @@ const B2COrdersList = () => {
   const hasInvoiceGenerated = (row: B2COrder) =>
     Boolean(String(row.invoice_url || row.invoice_key || row.invoice_link || '').trim())
 
+  const compactChipSx = {
+    height: 22,
+    px: 0.35,
+    fontSize: '10px',
+    fontWeight: 800,
+    borderRadius: 1,
+    boxShadow: 'none',
+    '& .MuiChip-icon': {
+      color: 'currentColor',
+      ml: 0.35,
+      mr: -0.2,
+    },
+    '& .MuiChip-label': {
+      px: 0.65,
+    },
+  }
+
+  const primaryCellTextSx = {
+    color: theme.palette.text.primary,
+    fontSize: '12px',
+    fontWeight: 800,
+    lineHeight: 1.25,
+  }
+
+  const secondaryCellTextSx = {
+    color: theme.palette.text.secondary,
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1.25,
+  }
+
+  const compactButtonSx = {
+    minWidth: 0,
+    height: 24,
+    px: 0.85,
+    py: 0,
+    borderRadius: 1,
+    fontSize: '11px',
+    fontWeight: 700,
+    textTransform: 'none',
+    lineHeight: 1,
+  }
+
+  const formatMoney = (value: unknown) => `Rs.${Number(value ?? 0).toFixed(2)}`
+  const formatDate = (value: unknown) =>
+    value ? moment(value).format('DD MMM, hh:mm A') : '-'
+  const compactStatusLabels: Record<string, string> = {
+    cancellation_requested: 'Cancel Req.',
+    manifest_failed: 'Manifest Failed',
+    out_for_delivery: 'OFD',
+    pickup_initiated: 'Manifested',
+    rto_in_transit: 'RTO Transit',
+    rto_delivered: 'RTO Done',
+  }
+
+  const renderDocPill = (label: string, generated: boolean) => {
+    const color = generated ? '#147A56' : '#A15C00'
+    const bg = generated ? '#E4F6EE' : '#FFF0DE'
+
+    return (
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          height: 22,
+          px: 0.8,
+          borderRadius: 1,
+          border: `1px solid ${alpha(color, 0.16)}`,
+          backgroundColor: bg,
+          color,
+          fontSize: '10px',
+          fontWeight: 800,
+          lineHeight: 1,
+        }}
+      >
+        {label}
+      </Box>
+    )
+  }
+
   const columns: Column<B2COrder>[] = [
     {
-      label: 'Source',
-      id: 'is_external_api',
-      render: (_, row) => (
-        <StatusChip
-          label={row.is_external_api ? 'API' : 'Local'}
-          status={row.is_external_api ? 'info' : 'success'}
-        />
-      ),
-    },
-    { label: 'Order #', id: 'order_number' },
-    { label: 'AWB', id: 'awb_number' },
-    {
-      label: 'Docs',
-      id: 'id',
-      minWidth: 220,
-      sticky: 'right',
-      stickyOffset: 140,
+      label: 'Order',
+      id: 'order_number',
+      minWidth: 160,
       render: (_v, row) => (
-        <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
-          <StatusChip
-            label={hasLabelGenerated(row) ? 'Label Generated' : 'Label Pending'}
-            status={hasLabelGenerated(row) ? 'success' : 'pending'}
-          />
-          <StatusChip
-            label={hasInvoiceGenerated(row) ? 'Invoice Generated' : 'Invoice Pending'}
-            status={hasInvoiceGenerated(row) ? 'success' : 'pending'}
-          />
+        <Stack spacing={0.45}>
+          <Stack direction="row" spacing={0.55} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography sx={primaryCellTextSx}>{row.order_number || '-'}</Typography>
+            <StatusChip
+              label={row.is_external_api ? 'API' : 'Local'}
+              status={row.is_external_api ? 'info' : 'success'}
+              sx={compactChipSx}
+            />
+          </Stack>
+          <Typography sx={secondaryCellTextSx}>AWB: {row.awb_number || '-'}</Typography>
+          <Typography sx={secondaryCellTextSx}>Created: {formatDate(row.created_at)}</Typography>
         </Stack>
       ),
+      truncate: false,
     },
-    { label: 'Buyer', id: 'buyer_name' },
     {
-      label: 'Order Total',
+      label: 'Buyer',
+      id: 'buyer_name',
+      minWidth: 130,
+      render: (_v, row) => (
+        <Stack spacing={0.3}>
+          <Typography sx={primaryCellTextSx}>{row.buyer_name || '-'}</Typography>
+          <Typography sx={secondaryCellTextSx}>{row.buyer_phone || '-'}</Typography>
+        </Stack>
+      ),
+      truncate: false,
+    },
+    {
+      label: 'Courier',
+      id: 'courier_partner',
+      minWidth: 110,
+      render: (value) => (
+        <Typography sx={{ ...primaryCellTextSx, fontWeight: 700 }}>
+          {String(value || '-')}
+        </Typography>
+      ),
+    },
+    {
+      label: 'Financials',
       id: 'order_amount',
+      minWidth: 124,
       render: (_v, row) => {
         const orderAmount = Number(row.order_amount ?? 0)
         const cod = Number(row.cod_charges ?? 0)
         const customerTotal = Math.max(orderAmount - cod, 0)
-        return `₹${customerTotal.toFixed(2)}`
-      },
-    },
-    {
-      label: 'Shipping Charge',
-      id: 'shipping_charges',
-      render: (v) => `₹${Number(v ?? 0).toFixed(2)}`,
-    },
-    {
-      label: 'COD Charge',
-      id: 'cod_charges',
-      render: (v) => `₹${Number(v ?? 0).toFixed(2)}`,
-    },
-    {
-      label: 'Other Charge',
-      id: 'other_charges',
-      render: (v) => `₹${Number(v ?? 0).toFixed(2)}`,
-    },
-    { label: 'Courier', id: 'courier_partner' },
+        const chargeRow = (label: string, value: unknown) => (
+          <Stack direction="row" justifyContent="space-between" gap={1}>
+            <Typography sx={secondaryCellTextSx}>{label}</Typography>
+            <Typography sx={{ ...secondaryCellTextSx, color: theme.palette.text.primary }}>
+              {formatMoney(value)}
+            </Typography>
+          </Stack>
+        )
 
+        return (
+          <Stack spacing={0.45}>
+            <Typography sx={primaryCellTextSx}>{formatMoney(customerTotal)}</Typography>
+            <Stack spacing={0.2}>
+              {chargeRow('Ship', row.shipping_charges)}
+              {chargeRow('COD', row.cod_charges)}
+              {chargeRow('Other', row.other_charges)}
+            </Stack>
+          </Stack>
+        )
+      },
+      truncate: false,
+    },
     {
-      label: 'Source',
-      id: 'is_external_api',
+      label: 'Docs',
+      id: 'id',
+      minWidth: 100,
       render: (_v, row) => (
-        <StatusChip
-          label={row.is_external_api ? 'API' : 'Local'}
-          status={row.is_external_api ? 'info' : 'success'}
-        />
+        <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+          {renderDocPill('Label', hasLabelGenerated(row))}
+          {renderDocPill('Invoice', hasInvoiceGenerated(row))}
+        </Stack>
       ),
+      truncate: false,
     },
     {
       label: 'Status',
       id: 'order_status',
-      minWidth: 150,
-      sticky: 'right',
-      stickyOffset: 360,
-      render: (v) => <StatusChip label={v} status={statusColorMap[v] || 'info'} />,
+      minWidth: 110,
+      render: (v) => (
+        <StatusChip
+          label={
+            compactStatusLabels[String(v || '').toLowerCase()] ||
+            shippingStatusMap[String(v || '').toLowerCase()] ||
+            String(v || '-')
+          }
+          status={statusColorMap[String(v || '').toLowerCase()] || 'info'}
+          sx={compactChipSx}
+        />
+      ),
+      truncate: false,
     },
-    { label: 'Created At', id: 'created_at', render: (v) => moment(v).format('DD MMM YYYY, hh:mm A') },
-    { label: 'Last Updated', id: 'updated_at', render: (v) => moment(v).format('DD MMM YYYY, hh:mm A') },
     {
       label: 'Actions',
       id: 'id',
-      minWidth: 280,
+      minWidth: 142,
       sticky: 'right',
       stickyOffset: 0,
+      truncate: false,
       render: (_, row) => {
         const actions: ReactNode[] = []
         const currentStatus = String(row.order_status || '').toLowerCase()
@@ -678,12 +783,11 @@ const B2COrdersList = () => {
         const manifestComplete = isB2CManifestComplete(row)
         const hasManifest = hasManifestDocument(row)
         const manifestButtonText = bulkManifesting
-          ? 'Manifesting...'
+          ? 'Manifesting'
           : manifestComplete
             ? 'Manifested'
             : 'Manifest'
 
-        // Show Reverse for delivered (all providers)
         if (currentStatus === 'delivered') {
           actions.push(
             <Button
@@ -691,7 +795,7 @@ const B2COrdersList = () => {
               size="small"
               variant="outlined"
               onClick={() => setReverseOrder(row)}
-              sx={{ px: 1.25, minWidth: 0 }}
+              sx={compactButtonSx}
             >
               Reverse
             </Button>,
@@ -707,7 +811,7 @@ const B2COrdersList = () => {
                 color={manifestComplete ? 'success' : 'primary'}
                 disabled={bulkManifesting || Boolean(manifestDisabledReason)}
                 onClick={() => handleGenerateManifest(row)}
-                sx={{ px: 1.25, minWidth: 0 }}
+                sx={compactButtonSx}
               >
                 {manifestButtonText}
               </Button>
@@ -727,7 +831,7 @@ const B2COrdersList = () => {
                 target="_blank"
                 rel="noopener"
                 underline="hover"
-                sx={{ alignSelf: 'center', fontSize: 13, fontWeight: 700 }}
+                sx={{ alignSelf: 'center', fontSize: 11, fontWeight: 800 }}
               >
                 View
               </Link>,
@@ -744,7 +848,7 @@ const B2COrdersList = () => {
                 color="error"
                 disabled={cancellingShipment || Boolean(cancelDisabledReason)}
                 onClick={() => cancelShipment(row.id as unknown as string)}
-                sx={{ px: 1.25, minWidth: 0 }}
+                sx={compactButtonSx}
               >
                 Cancel
               </Button>
@@ -766,15 +870,15 @@ const B2COrdersList = () => {
               color="warning"
               disabled={retryingManifest}
               onClick={() => handleRetryManifest(row)}
-              sx={{ px: 1.25, minWidth: 0 }}
+              sx={compactButtonSx}
             >
-              {retryingManifest ? 'Retrying...' : `Retry (${retriesRemaining} left)`}
+              {retryingManifest ? 'Retrying' : `Retry ${retriesRemaining}`}
             </Button>,
           )
         }
 
         return (
-          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={0.55} flexWrap="wrap" useFlexGap>
             {actions}
           </Stack>
         )
@@ -933,6 +1037,9 @@ const B2COrdersList = () => {
           rows={orders}
           columns={columns}
           title="My B2C Orders"
+          density="compact"
+          maxHeight={680}
+          minTableWidth={980}
           pagination
           selectable
           currentPage={page}
