@@ -21,8 +21,29 @@ const getSurfaceFromMode = (): DeploymentSurface | null => {
   return null
 }
 
+const getSurfaceFromHost = (): DeploymentSurface | null => {
+  if (typeof window === 'undefined') return null
+
+  const host = window.location.hostname.trim().toLowerCase()
+  if (host === 'app.shopnship.in' || host === 'client.shopnship.in') return 'app'
+  if (host === 'app.dolphinenterprises.in') return 'app'
+  if (
+    host === 'shopnship.in' ||
+    host === 'www.shopnship.in' ||
+    host === 'dolphinenterprises.in' ||
+    host === 'www.dolphinenterprises.in'
+  ) {
+    return 'marketing'
+  }
+
+  return null
+}
+
 export const DEPLOYMENT_SURFACE: DeploymentSurface =
-  getSurfaceFromValue(import.meta.env.VITE_APP_SURFACE) || getSurfaceFromMode() || 'full'
+  getSurfaceFromHost() ||
+  getSurfaceFromValue(import.meta.env.VITE_APP_SURFACE) ||
+  getSurfaceFromMode() ||
+  'full'
 
 export const isMarketingSurface = DEPLOYMENT_SURFACE === 'marketing'
 export const isSellerAppSurface = DEPLOYMENT_SURFACE === 'app'
