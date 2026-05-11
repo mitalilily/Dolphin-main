@@ -123,19 +123,25 @@ export default function PasswordLoginForm({ setStep, step, setOpenTerms }: IPass
           password: emailForm.password,
         },
         {
-          onSuccess: ({ message, token, refreshToken, user, verificationToken }) => {
+          onSuccess: ({ message, token, refreshToken, user, verificationToken, emailDelivery }) => {
             if (message) {
+              const emailDeliveryFailed = emailDelivery === 'failed'
+
               toast.open({
-                message:
-                  verificationToken || message.includes('Verification code generated')
+                message: emailDeliveryFailed
+                  ? message
+                  : verificationToken || message.includes('Verification code generated')
                     ? 'Verification code sent to your email.'
                     : message,
-                severity: 'success',
+                severity: emailDeliveryFailed ? 'warning' : 'success',
                 position: { vertical: 'top', horizontal: 'center' },
               })
             }
 
-            if (message.includes('Verification email sent') || message.includes('Verification code generated')) {
+            if (
+              message.includes('Verification email sent') ||
+              message.includes('Verification code generated')
+            ) {
               setStep(1)
               return
             }
@@ -167,8 +173,8 @@ export default function PasswordLoginForm({ setStep, step, setOpenTerms }: IPass
         }}
       >
         <Typography variant="body2" sx={{ color: '#6A616A', lineHeight: 1.6, fontWeight: 500 }}>
-          Enter your registered email and password. If verification is required, the code will
-          be sent to your email.
+          Enter your registered email and password. If verification is required, the code will be
+          sent to your email.
         </Typography>
       </Box>
 
@@ -202,7 +208,13 @@ export default function PasswordLoginForm({ setStep, step, setOpenTerms }: IPass
               }
               arrow
             >
-              <Box sx={{ display: 'inline-flex', alignItems: 'center', color: '#FFAB00' }}>
+              <Box
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  color: '#FFAB00',
+                }}
+              >
                 <MdInfoOutline size={17} />
               </Box>
             </Tooltip>

@@ -29,6 +29,7 @@ type PasswordAccessResponse = {
     id?: string
   }
   message?: string
+  emailDelivery?: string
 }
 
 export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
@@ -110,13 +111,17 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
           }
 
           if (verificationCode || authResponse?.message?.includes('Verification')) {
+            const emailDeliveryFailed = authResponse?.emailDelivery === 'failed'
+
             setStep('verify')
             setCode('')
             toast.open({
               message: verificationCode
                 ? 'Verification code generated. Use the inline preview below.'
-                : 'Verification code sent to your email.',
-              severity: 'success',
+                : emailDeliveryFailed
+                  ? (authResponse.message ?? 'Verification email could not be sent right now.')
+                  : 'Verification code sent to your email.',
+              severity: emailDeliveryFailed ? 'warning' : 'success',
             })
             return
           }
@@ -240,7 +245,14 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
           />
 
           {error ? (
-            <Typography sx={{ color: brand.danger, fontSize: '0.82rem', fontWeight: 700, mt: 0.5 }}>
+            <Typography
+              sx={{
+                color: brand.danger,
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                mt: 0.5,
+              }}
+            >
               {error}
             </Typography>
           ) : null}
@@ -296,7 +308,14 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
           <CodeInput length={8} mode="alphanumeric" value={code} onChange={setCode} />
 
           {error ? (
-            <Typography sx={{ color: brand.danger, textAlign: 'center', fontSize: '0.82rem', fontWeight: 700 }}>
+            <Typography
+              sx={{
+                color: brand.danger,
+                textAlign: 'center',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+              }}
+            >
               {error}
             </Typography>
           ) : null}
@@ -325,7 +344,8 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
       <Stack direction="row" spacing={1} alignItems="center">
         <FiShield size={14} color={brand.success} />
         <Typography sx={{ color: brand.inkSoft, fontSize: '0.82rem', lineHeight: 1.6 }}>
-          Your shipping data, invoices, and courier settings stay protected behind secure account access.
+          Your shipping data, invoices, and courier settings stay protected behind secure account
+          access.
         </Typography>
       </Stack>
 

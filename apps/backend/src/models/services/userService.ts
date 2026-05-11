@@ -45,6 +45,85 @@ const runWithTransaction = async <T>(executor: any, work: (tx: any) => Promise<T
   return work(executor)
 }
 
+type VerificationEmailJob = {
+  email: string
+  token: string
+  existingUser: boolean
+}
+
+const getPgErrorCode = (err: any) => err?.code || err?.cause?.code || err?.original?.code
+
+const getSafeErrorMessage = (err: any) => {
+  if (!err) return 'Unknown error'
+  return typeof err?.message === 'string' ? err.message : String(err)
+}
+
+const optionalSignupSetupErrorCodes = new Set([
+  '42P01', // undefined_table
+  '42703', // undefined_column
+  '23505', // unique_violation, for deployments with DB triggers/default rows
+])
+
+const runOptionalSignupSetup = async (
+  step: string,
+  userId: string,
+  executor: any,
+  work: (tx: any) => Promise<void>,
+) => {
+  try {
+    if (typeof executor?.transaction === 'function') {
+      await executor.transaction(work)
+    } else {
+      await work(executor)
+    }
+  } catch (err: any) {
+    const code = getPgErrorCode(err)
+
+    if (!optionalSignupSetupErrorCodes.has(code)) {
+      throw err
+    }
+
+    console.warn('[Signup Setup] Optional setup skipped', {
+      step,
+      userId,
+      code,
+      error: getSafeErrorMessage(err),
+    })
+  }
+}
+
+const deliverVerificationEmail = async (job: VerificationEmailJob) => {
+  if (exposeAuthCodes) {
+    console.log(
+      '[Auth Email Verification] Skipping verification email because auth codes are exposed inline',
+      {
+        email: maskEmailForLog(job.email),
+        existingUser: job.existingUser,
+      },
+    )
+    return true
+  }
+
+  try {
+    console.log('[Auth Email Verification] Sending verification email', {
+      email: maskEmailForLog(job.email),
+      existingUser: job.existingUser,
+    })
+    await sendVerificationEmail(job.email, job.token)
+    return true
+  } catch (err: any) {
+    console.error(
+      '[Auth Email Verification] Verification email delivery failed after account update committed',
+      {
+        email: maskEmailForLog(job.email),
+        existingUser: job.existingUser,
+        error: getSafeErrorMessage(err),
+      },
+    )
+    return false
+  }
+}
+
 // Define User and NewUser types for convenience
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
@@ -424,11 +503,12 @@ export const handleEmailVerificationRequest = async (
   googleId: string | null,
   intent: 'login' | 'signup' = 'login',
 ): Promise<{ status: number; data: any }> => {
-  return await db.transaction(async (tx) => {
+  let verificationEmailJob: VerificationEmailJob | null = null
+
+  const response: { status: number; data: any } = await db.transaction(async (tx) => {
     const normalizedEmail = normalizeEmail(email)
     const token = generate8DigitsVerificationToken()
     const expiresAt = new Date(Date.now() + OTP_EXPIRY)
-    let shouldSendEmail = false
 
     const user = await findUserByEmail(normalizedEmail, tx)
 
@@ -457,7 +537,10 @@ export const handleEmailVerificationRequest = async (
             const updatedUser = await updateUserByEmail(normalizedEmail, { googleId }, tx)
             return {
               status: 200,
-              data: { message: 'Authenticated with Google', user: updatedUser || user },
+              data: {
+                message: 'Authenticated with Google',
+                user: updatedUser || user,
+              },
             }
           }
           return {
@@ -475,7 +558,8 @@ export const handleEmailVerificationRequest = async (
             status: 400,
             data: {
               code: 'PASSWORD_LOGIN_UNAVAILABLE',
-              error: 'Password login is not set up for this account. Please use email OTP or contact support.',
+              error:
+                'Password login is not set up for this account. Please use email OTP or contact support.',
             },
           }
         }
@@ -518,7 +602,8 @@ export const handleEmailVerificationRequest = async (
           status: 400,
           data: {
             code: 'PASSWORD_LOGIN_UNAVAILABLE',
-            error: 'Password login is not set up for this account. Please use email OTP or contact support.',
+            error:
+              'Password login is not set up for this account. Please use email OTP or contact support.',
           },
         }
       }
@@ -529,27 +614,16 @@ export const handleEmailVerificationRequest = async (
       }
 
       await updateUserVerificationToken(normalizedEmail, token, expiresAt, tx)
-      shouldSendEmail = true
-
-      if (shouldSendEmail && !exposeAuthCodes) {
-        console.log('[Auth Email Verification] Sending verification email', {
-          email: maskEmailForLog(normalizedEmail),
-          existingUser: true,
-        })
-        await sendVerificationEmail(normalizedEmail, token)
-      } else if (shouldSendEmail) {
-        console.log('[Auth Email Verification] Skipping verification email because auth codes are exposed inline', {
-          email: maskEmailForLog(normalizedEmail),
-          existingUser: true,
-        })
+      verificationEmailJob = {
+        email: normalizedEmail,
+        token,
+        existingUser: true,
       }
 
       return {
         status: 200,
         data: {
-          message: exposeAuthCodes
-            ? 'Verification code generated'
-            : 'Verification email sent',
+          message: exposeAuthCodes ? 'Verification code generated' : 'Verification email sent',
           ...(exposeAuthCodes ? { verificationToken: token } : {}),
         },
       }
@@ -580,7 +654,10 @@ export const handleEmailVerificationRequest = async (
         },
         tx,
       )
-      return { status: 201, data: { message: 'Account created via Google', user } }
+      return {
+        status: 201,
+        data: { message: 'Account created via Google', user },
+      }
     }
 
     if (!password) {
@@ -601,19 +678,10 @@ export const handleEmailVerificationRequest = async (
       tx,
     )
 
-    shouldSendEmail = true
-
-    if (shouldSendEmail && !exposeAuthCodes) {
-      console.log('[Auth Email Verification] Sending verification email', {
-        email: maskEmailForLog(normalizedEmail),
-        existingUser: false,
-      })
-      await sendVerificationEmail(normalizedEmail, token)
-    } else if (shouldSendEmail) {
-      console.log('[Auth Email Verification] Skipping verification email because auth codes are exposed inline', {
-        email: maskEmailForLog(normalizedEmail),
-        existingUser: false,
-      })
+    verificationEmailJob = {
+      email: normalizedEmail,
+      token,
+      existingUser: false,
     }
 
     return {
@@ -624,6 +692,21 @@ export const handleEmailVerificationRequest = async (
       },
     }
   })
+
+  if (verificationEmailJob) {
+    const delivered = await deliverVerificationEmail(verificationEmailJob)
+
+    if (!delivered && !exposeAuthCodes) {
+      response.data = {
+        ...response.data,
+        message:
+          'Verification code generated. We could not send the verification email right now. Please retry from the verification screen or contact support.',
+        emailDelivery: 'failed',
+      }
+    }
+  }
+
+  return response
 }
 
 export const saveRefreshToken = async (
@@ -670,73 +753,79 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
     })
 
     // 3) assign default plan (Basic)
-    const [basicPlan] = await tx
-      .select()
-      .from(schema.plans)
-      .where(eq(schema.plans.name, 'Basic'))
-      .limit(1)
+    await runOptionalSignupSetup('default-plan', user.id, tx, async (optionalTx) => {
+      const [basicPlan] = await optionalTx
+        .select()
+        .from(schema.plans)
+        .where(eq(schema.plans.name, 'Basic'))
+        .limit(1)
 
-    if (basicPlan) {
-      await tx.insert(schema.userPlans).values({
-        userId: user.id,
-        plan_id: basicPlan.id,
-        is_active: true,
-      })
-    } else {
-      console.warn(`âš ï¸ Basic plan not found for user ${user.id}. Plan assignment skipped.`)
-    }
+      if (basicPlan) {
+        await optionalTx.insert(schema.userPlans).values({
+          userId: user.id,
+          plan_id: basicPlan.id,
+          is_active: true,
+        })
+      } else {
+        console.warn(`âš ï¸ Basic plan not found for user ${user.id}. Plan assignment skipped.`)
+      }
+    })
 
     // 4) create default billing preferences
-    await tx.insert(schema.billingPreferences).values({
-      userId: user.id,
-      frequency: 'monthly',
-      autoGenerate: true,
-      customFrequencyDays: null,
+    await runOptionalSignupSetup('billing-preferences', user.id, tx, async (optionalTx) => {
+      await optionalTx.insert(schema.billingPreferences).values({
+        userId: user.id,
+        frequency: 'monthly',
+        autoGenerate: true,
+        customFrequencyDays: null,
+      })
     })
 
     // 5) create default label preferences
-    await tx.insert(schema.labelPreferences).values({
-      user_id: user.id,
-      printer_type: 'thermal',
-      char_limit: 25,
-      max_items: 3,
-      powered_by: 'Dolphin Enterprise',
-      order_info: {
-        orderId: true,
-        invoiceNumber: true,
-        orderDate: false,
-        invoiceDate: false,
-        orderBarcode: true,
-        invoiceBarcode: true,
-        rtoRoutingCode: true,
-        declaredValue: true,
-        cod: true,
-        awb: true,
-        terms: true,
-      },
-      shipper_info: {
-        shipperPhone: true,
-        gstin: true,
-        shipperAddress: true,
-        rtoAddress: false,
-        sellerBrandName: true,
-        brandLogo: true,
-      },
-      product_info: {
-        itemName: true,
-        productCost: true,
-        productQuantity: true,
-        skuCode: false,
-        dimension: false,
-        deadWeight: false,
-        otherCharges: true,
-      },
-      brand_logo: null,
+    await runOptionalSignupSetup('label-preferences', user.id, tx, async (optionalTx) => {
+      await optionalTx.insert(schema.labelPreferences).values({
+        user_id: user.id,
+        printer_type: 'thermal',
+        char_limit: 25,
+        max_items: 3,
+        powered_by: 'Dolphin Enterprise',
+        order_info: {
+          orderId: true,
+          invoiceNumber: true,
+          orderDate: false,
+          invoiceDate: false,
+          orderBarcode: true,
+          invoiceBarcode: true,
+          rtoRoutingCode: true,
+          declaredValue: true,
+          cod: true,
+          awb: true,
+          terms: true,
+        },
+        shipper_info: {
+          shipperPhone: true,
+          gstin: true,
+          shipperAddress: true,
+          rtoAddress: false,
+          sellerBrandName: true,
+          brandLogo: true,
+        },
+        product_info: {
+          itemName: true,
+          productCost: true,
+          productQuantity: true,
+          skuCode: false,
+          dimension: false,
+          deadWeight: false,
+          otherCharges: true,
+        },
+        brand_logo: null,
+      })
     })
 
     // 6) create default invoice preferences
-    try {
-      await tx.insert(schema.invoicePreferences).values({
+    await runOptionalSignupSetup('invoice-preferences', user.id, tx, async (optionalTx) => {
+      await optionalTx.insert(schema.invoicePreferences).values({
         userId: user.id,
         prefix: 'INV',
         suffix: '',
@@ -746,18 +835,7 @@ export async function createUserWithWallet(data: Partial<IUser>, txn: any = db) 
         logoFile: null,
         signatureFile: null,
       })
-    } catch (err: any) {
-      // Backward-compatible fallback for legacy DBs that don't have recently added columns yet.
-      if (err?.cause?.code !== '42703') {
-        throw err
-      }
-      await tx.execute(sql`
-        INSERT INTO "invoice_preferences"
-          ("user_id", "prefix", "suffix", "template", "include_logo", "include_signature", "logo_file", "signature_file", "created_at", "updated_at")
-        VALUES
-          (${user.id}, 'INV', '', 'classic', true, true, NULL, NULL, NOW(), NOW())
-      `)
-    }
+    })
 
     const companyInfo = {
       ...DEFAULT_PROFILE.companyInfo, // keeps required fields
