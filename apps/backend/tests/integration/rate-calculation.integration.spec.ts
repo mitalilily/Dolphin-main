@@ -9,6 +9,16 @@ import {
   mockShiprocketSuccess,
 } from '../mocks/courierApis.mock'
 
+jest.mock('../../src/models/client', () => ({
+  db: {
+    update: jest.fn(() => ({
+      set: jest.fn(() => ({
+        where: jest.fn(async () => []),
+      })),
+    })),
+  },
+}))
+
 jest.mock('../../src/models/services/courierCredentials.service', () => ({
   getEffectiveCourierConfig: jest.fn().mockResolvedValue(null),
 }))

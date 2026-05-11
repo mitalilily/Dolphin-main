@@ -24,6 +24,12 @@ const AGGREGATOR_LABELS: Record<string, string> = {
   icarry: 'icarry',
 }
 
+type CourierProviderFields = {
+  integration_type?: unknown
+  service_provider?: unknown
+  serviceProvider?: unknown
+}
+
 const inferProviderFromName = (name?: string | null) => {
   const n = String(name || '').toLowerCase()
   if (n.includes('shiprocket')) return 'shiprocket'
@@ -445,16 +451,22 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
           <Stack spacing={2}>
             {availableCouriers?.map((courier) => {
               const local = courier?.localRates
+              const providerFields = courier as CourierProviderFields
               const providerKeyRaw = String(
-                (courier as any)?.integration_type ||
-                  (courier as any)?.service_provider ||
-                  (courier as any)?.serviceProvider ||
+                providerFields?.integration_type ||
+                  providerFields?.service_provider ||
+                  providerFields?.serviceProvider ||
                   '',
               )
                 .trim()
                 .toLowerCase()
               const providerKey = providerKeyRaw || inferProviderFromName(courier?.name)
               const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'unknown'
+              const selectedIntegrationType = (
+                providerKey ||
+                inferProviderFromName(courier?.name) ||
+                ''
+              ) as B2CFormData['integrationType']
               const courierOptionKey = String(
                 courier?.courier_option_key ?? courier?.id ?? courier?.courier_id ?? '',
               )
@@ -484,12 +496,7 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                     ) // Estimated courier cost from serviceability
                     setValue(
                       'integrationType',
-                      (courier as any)?.integration_type ||
-                        (courier as any)?.service_provider ||
-                        (courier as any)?.serviceProvider ||
-                        providerKey ||
-                        inferProviderFromName(courier?.name) ||
-                        '',
+                      selectedIntegrationType as never,
                     )
                     setValue('zone', courier?.approxZone?.code ?? courier?.approxZone?.name ?? '')
                     setValue('zoneId', courier?.approxZone?.id ?? '')

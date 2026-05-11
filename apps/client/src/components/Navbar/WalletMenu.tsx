@@ -8,13 +8,23 @@ import AddMoneyDialog from '../AddMoneyDialog'
 const INK = '#182235'
 const ACCENT = '#D66F3D'
 
+type WalletBalanceResponse = {
+  data?: {
+    balance?: number | string
+  }
+}
+
 const WalletMenu = () => {
   const [dialogOpen, setDialogOpen] = useState(false)
   const { walletBalance, setWalletBalance } = useAuth()
   const { data, isLoading } = useWalletBalance(true)
 
   useEffect(() => {
-    const balance = Number((data as any)?.data?.balance ?? data)
+    const walletData = data as WalletBalanceResponse | number | string | null | undefined
+    const balance =
+      typeof walletData === 'object' && walletData !== null
+        ? Number(walletData.data?.balance)
+        : Number(walletData)
     if (!isNaN(balance)) {
       setWalletBalance(balance)
     } else {

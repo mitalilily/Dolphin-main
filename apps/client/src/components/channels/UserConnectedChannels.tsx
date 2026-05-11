@@ -72,7 +72,7 @@ const UserConnectedChannels = () => {
         <Stack direction="row" alignItems={"center"} spacing={1.5}>
           <Stack
             onClick={() => {
-              setSelectedStore({ channelId: value, platform: row?.platformId });
+              setSelectedStore({ channelId: String(value ?? ''), platform: row?.platformId });
               setDetails({
                 ...row,
                 name: row.name ?? undefined,

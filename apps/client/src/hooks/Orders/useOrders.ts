@@ -175,9 +175,10 @@ export const useRegenerateOrderDocuments = () => {
       queryClient.invalidateQueries({ queryKey: ['b2bOrdersByUser'] })
       queryClient.invalidateQueries({ queryKey: ['orders'] })
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { message?: string } }; message?: string }
       const message =
-        error?.response?.data?.message || error?.message || 'Failed to regenerate documents'
+        apiError?.response?.data?.message || apiError?.message || 'Failed to regenerate documents'
       toast.open({ message, severity: 'error' })
     },
   })
@@ -191,10 +192,10 @@ export const useCancelShipment = () => {
       toast.open({ message: 'Cancellation request sent', severity: 'success' })
       queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] })
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    onError: (error: any) => {
+    onError: (error: unknown) => {
+      const apiError = error as { response?: { data?: { message?: string } }; message?: string }
       const message =
-        error?.response?.data?.message || error?.message || 'Failed to cancel shipment'
+        apiError?.response?.data?.message || apiError?.message || 'Failed to cancel shipment'
       toast.open({ message, severity: 'error' })
     },
   })

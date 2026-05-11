@@ -41,6 +41,15 @@ const CreateBlog = () => {
   const history = useHistory()
   const textColor = useColorModeValue('gray.700', 'white')
   const bgColor = useColorModeValue('gray.50', 'gray.800')
+  const headerBg = useColorModeValue('white', 'gray.800')
+  const headerBorderColor = useColorModeValue('gray.200', 'gray.700')
+  const editorBorderColor = useColorModeValue('gray.200', 'gray.600')
+  const imageBorderColor = useColorModeValue('gray.200', 'gray.600')
+  const imageDropBorderColor = useColorModeValue('gray.300', 'gray.600')
+  const imageDropBg = useColorModeValue('gray.50', 'gray.700')
+  const imageDropHoverBorderColor = useColorModeValue('blue.400', 'blue.300')
+  const imageDropHoverBg = useColorModeValue('blue.50', 'gray.600')
+  const imageIconBg = useColorModeValue('blue.100', 'blue.900')
 
   const [form, setForm] = useState({
     title: '',
@@ -218,9 +227,9 @@ const CreateBlog = () => {
     <Box pt={{ base: '120px', md: '75px' }} bg={bgColor} minH="100vh" pb={10}>
       {/* Sticky Header */}
       <Box
-        bg={useColorModeValue('white', 'gray.800')}
+        bg={headerBg}
         borderBottom="1px"
-        borderColor={useColorModeValue('gray.200', 'gray.700')}
+        borderColor={headerBorderColor}
         position="sticky"
         top="0"
         zIndex="10"
@@ -325,7 +334,7 @@ const CreateBlog = () => {
                       </FormLabel>
                       <Box
                         border="1px solid"
-                        borderColor={useColorModeValue('gray.200', 'gray.600')}
+                        borderColor={editorBorderColor}
                         borderRadius="md"
                         overflow="hidden"
                         bg="white"
@@ -444,7 +453,7 @@ const CreateBlog = () => {
                         borderRadius="lg"
                         overflow="hidden"
                         border="2px solid"
-                        borderColor={useColorModeValue('gray.200', 'gray.600')}
+                        borderColor={imageBorderColor}
                       >
                         <Image
                           src={imagePreviewUrl}
@@ -457,15 +466,15 @@ const CreateBlog = () => {
                     ) : (
                       <Box
                         border="2px dashed"
-                        borderColor={useColorModeValue('gray.300', 'gray.600')}
+                        borderColor={imageDropBorderColor}
                         borderRadius="lg"
                         p={6}
                         textAlign="center"
-                        bg={useColorModeValue('gray.50', 'gray.700')}
+                        bg={imageDropBg}
                         transition="all 0.2s"
                         _hover={{
-                          borderColor: useColorModeValue('blue.400', 'blue.300'),
-                          bg: useColorModeValue('blue.50', 'gray.600'),
+                          borderColor: imageDropHoverBorderColor,
+                          bg: imageDropHoverBg,
                         }}
                       >
                         <VStack spacing={2}>
@@ -473,7 +482,7 @@ const CreateBlog = () => {
                             w={12}
                             h={12}
                             borderRadius="full"
-                            bg={useColorModeValue('blue.100', 'blue.900')}
+                            bg={imageIconBg}
                             display="flex"
                             alignItems="center"
                             justifyContent="center"

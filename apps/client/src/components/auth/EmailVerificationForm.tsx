@@ -145,7 +145,7 @@ export default function EmailVerificationForm({
           })
           navigate('/app', { replace: true })
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           setError(getAuthErrorMessage(err, 'Invalid code. Please try again.'))
         },
       },

@@ -23,7 +23,7 @@ export const WebhooksTable = ({
       id: 'name' as keyof WebhookSubscription,
       label: 'Name',
       minWidth: 150,
-      render: (value) => value || 'Unnamed',
+      render: (value) => String(value || 'Unnamed'),
     },
     {
       id: 'url' as keyof WebhookSubscription,
@@ -38,7 +38,7 @@ export const WebhooksTable = ({
             textOverflow: 'ellipsis',
           }}
         >
-          {value}
+          {String(value || '-')}
         </Typography>
       ),
     },

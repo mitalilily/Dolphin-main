@@ -42,7 +42,9 @@ export const useUpdateUserProfile = (
     onError: (error, variables, context) => {
       // Forward to consumer‑supplied handler
       options?.onError?.(error, variables, context);
-      const apiError = error as any;
+      const apiError = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
       toast.open({
         message:
           apiError?.response?.data?.message ??

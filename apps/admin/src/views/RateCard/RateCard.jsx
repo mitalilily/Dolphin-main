@@ -38,6 +38,7 @@ const RateCard = () => {
   const { mutate: importRates, isPending: isImporting } = useImportShippingRates()
   const [filters, setFilters] = useState({})
   const { data, isLoading } = useShippingRates(filters)
+  const selectedBusinessType = filters.businessType || filters.business_type || 'b2b'
 
   const [selectedRate, setSelectedRate] = useState(null)
   const [isModalOpen, setModalOpen] = useState(false)

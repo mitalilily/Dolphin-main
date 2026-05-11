@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Dispatch, SetStateAction } from 'react'
 import {
   getIncomingPickups,
   getCourierDistribution,
@@ -31,9 +30,11 @@ const shouldShowLoading = (currentData: unknown) => {
   return currentData === null || currentData === undefined
 }
 
-type PollConfig<T> = {
-  setter: Dispatch<SetStateAction<DataState<T>>>
-  fetcher: (signal: AbortSignal) => Promise<T>
+type RuntimePollConfig = {
+  setLoading: () => void
+  fetcher: (signal: AbortSignal) => Promise<unknown>
+  setSuccess: (payload: unknown) => void
+  setError: (message: string) => void
 }
 
 export const useRealtimeHomeDashboard = () => {
@@ -75,19 +76,70 @@ export const useRealtimeHomeDashboard = () => {
     destinations: false,
   })
 
-  const fetchMap = useMemo((): Record<DashboardKey, PollConfig<any>> => {
+  const fetchMap = useMemo((): Record<DashboardKey, RuntimePollConfig> => {
     return {
       pickups: {
-        setter: setPickupsState,
+        setLoading: () =>
+          setPickupsState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+          })),
         fetcher: (signal: AbortSignal) => getIncomingPickups({ signal }),
+        setSuccess: (payload: unknown) =>
+          setPickupsState({
+            data: Array.isArray(payload) ? (payload as Pickup[]) : [],
+            isLoading: false,
+            error: null,
+            lastUpdated: Date.now(),
+          }),
+        setError: (message: string) =>
+          setPickupsState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+            error: message,
+          })),
       },
       distribution: {
-        setter: setDistributionState,
+        setLoading: () =>
+          setDistributionState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+          })),
         fetcher: (signal: AbortSignal) => getCourierDistribution({ signal }),
+        setSuccess: (payload: unknown) =>
+          setDistributionState({
+            data: Array.isArray(payload) ? (payload as CourierDistribution[]) : [],
+            isLoading: false,
+            error: null,
+            lastUpdated: Date.now(),
+          }),
+        setError: (message: string) =>
+          setDistributionState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+            error: message,
+          })),
       },
       destinations: {
-        setter: setDestinationsState,
+        setLoading: () =>
+          setDestinationsState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+          })),
         fetcher: (signal: AbortSignal) => getTopDestinations(8, { signal }),
+        setSuccess: (payload: unknown) =>
+          setDestinationsState({
+            data: Array.isArray(payload) ? (payload as TopDestination[]) : [],
+            isLoading: false,
+            error: null,
+            lastUpdated: Date.now(),
+          }),
+        setError: (message: string) =>
+          setDestinationsState((prev) => ({
+            ...prev,
+            isLoading: shouldShowLoading(prev.data),
+            error: message,
+          })),
       },
     }
   }, [setPickupsState, setDistributionState, setDestinationsState])
@@ -100,32 +152,20 @@ export const useRealtimeHomeDashboard = () => {
       controllersRef.current[key]?.abort()
       controllersRef.current[key] = controller
 
-      const { setter, fetcher } = fetchMap[key]
-      setter((prev: DataState<any>) => ({
-        ...prev,
-        isLoading: shouldShowLoading(prev.data),
-      }))
+      const { setLoading, fetcher, setSuccess, setError } = fetchMap[key]
+      setLoading()
 
       try {
         const payload = await fetcher(controller.signal)
         if (!isMountedRef.current) return
-        setter({
-          data: payload,
-          isLoading: false,
-          error: null,
-          lastUpdated: Date.now(),
-        })
+        setSuccess(payload)
       } catch (err) {
         if (!isMountedRef.current) return
         const message =
           err instanceof Error
             ? err.message
             : `Unable to refresh ${key}`
-        setter((prev: DataState<any>) => ({
-          ...prev,
-          isLoading: shouldShowLoading(prev.data),
-          error: message,
-        }))
+        setError(message)
       } finally {
         isFetchingRef.current[key] = false
       }

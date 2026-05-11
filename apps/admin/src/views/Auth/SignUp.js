@@ -30,6 +30,8 @@ function SignUp() {
   const inputBorder = useColorModeValue('rgba(10,78,163,0.18)', 'rgba(26,166,247,0.2)')
   const brand = useColorModeValue(adminBrand.ink, '#8FD4FF')
   const accent = useColorModeValue(adminBrand.accent, '#FFB547')
+  const statCardBg = useColorModeValue('rgba(255,255,255,0.68)', 'rgba(255,255,255,0.06)')
+  const statCardBorder = useColorModeValue('rgba(10,78,163,0.14)', 'rgba(255,255,255,0.14)')
 
   return (
     <Flex
@@ -107,8 +109,8 @@ function SignUp() {
                 px={4}
                 py={3}
                 borderRadius="20px"
-                bg={useColorModeValue('rgba(255,255,255,0.68)', 'rgba(255,255,255,0.06)')}
-                border={`1px solid ${useColorModeValue('rgba(10,78,163,0.14)', 'rgba(255,255,255,0.14)')}`}
+                bg={statCardBg}
+                border={`1px solid ${statCardBorder}`}
               >
                 <Text fontSize="lg" fontWeight="800" color={accent} lineHeight="1">
                   {item.value}

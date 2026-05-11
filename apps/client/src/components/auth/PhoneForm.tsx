@@ -71,7 +71,7 @@ function GoogleSocialLogin({ termsChecked }: { termsChecked: boolean }) {
           setTokens(token, refreshToken)
           navigate('/app', { replace: true })
         },
-        onError: (error: any) => {
+        onError: (error: unknown) => {
           toast.open({
             message: getAuthErrorMessage(error, 'Google login failed'),
             severity: 'error',

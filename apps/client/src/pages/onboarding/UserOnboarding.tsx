@@ -164,7 +164,9 @@ export default function UserOnboarding() {
 
     try {
       setFinalSubmitting(true)
-      const response: any = await completeOnboarding({ step, data: formData })
+      const response = (await completeOnboarding({ step, data: formData })) as {
+        user?: unknown
+      }
 
       if (response?.user) {
         queryClient.setQueryData(['userProfile'], response.user)

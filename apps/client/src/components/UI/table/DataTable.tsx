@@ -30,7 +30,7 @@ export interface Column<T> {
   label_desc?: string
   label: JSX.Element | string
   align?: 'right' | 'left' | 'center'
-  render?: (value: any, row: T) => React.ReactNode
+  render?: (value: unknown, row: T) => React.ReactNode
   minWidth?: number
   hiddenOnMobile?: boolean
   truncate?: boolean

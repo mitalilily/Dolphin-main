@@ -22,6 +22,15 @@ interface CredentialAuthFormProps {
   mode: 'login' | 'signup'
 }
 
+type PasswordAccessResponse = {
+  token?: string
+  refreshToken?: string
+  user?: {
+    id?: string
+  }
+  message?: string
+}
+
 export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
   const navigate = useNavigate()
   const { setTokens, setUserId } = useAuth()
@@ -84,19 +93,23 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
         intent: mode,
       },
       {
-        onSuccess: (response: any) => {
-          const verificationCode = extractInlineCode(response)
+        onSuccess: (response: unknown) => {
+          const responseRecord = response as Record<string, unknown>
+          const authResponse = response as PasswordAccessResponse
+          const verificationCode = extractInlineCode(responseRecord)
           setInlineCode(verificationCode)
 
-          if (response?.token && response?.refreshToken) {
+          if (authResponse?.token && authResponse?.refreshToken) {
             sessionStorage.setItem('activeEmail', email.trim().toLowerCase())
-            setUserId(response?.user?.id)
-            setTokens(response.token, response.refreshToken)
+            if (authResponse?.user?.id) {
+              setUserId(authResponse.user.id)
+            }
+            setTokens(authResponse.token, authResponse.refreshToken)
             navigate('/app', { replace: true })
             return
           }
 
-          if (verificationCode || response?.message?.includes('Verification')) {
+          if (verificationCode || authResponse?.message?.includes('Verification')) {
             setStep('verify')
             setCode('')
             toast.open({
@@ -108,14 +121,14 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
             return
           }
 
-          if (response?.message) {
+          if (authResponse?.message) {
             toast.open({
-              message: response.message,
+              message: authResponse.message,
               severity: 'success',
             })
           }
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           setError(getAuthErrorMessage(err, 'Authentication failed'))
         },
       },
@@ -144,7 +157,7 @@ export default function CredentialAuthForm({ mode }: CredentialAuthFormProps) {
           setTokens(token, refreshToken)
           navigate('/app', { replace: true })
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           setError(getAuthErrorMessage(err, 'Verification failed'))
         },
       },

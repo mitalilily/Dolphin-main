@@ -40,7 +40,7 @@ interface CodFilterState {
   toDate?: CodFilterValue
 }
 
-const formatCurrency = (value: string | number | null | undefined) => {
+const formatCurrency = (value: unknown) => {
   const numericValue = Number(value ?? 0)
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -56,9 +56,9 @@ const toApiDate = (value: CodFilterValue) => {
   return text || undefined
 }
 
-const formatDate = (value?: string | null) => (value ? moment(value).format('DD MMM YYYY') : '-')
-const formatDateTime = (value?: string | null) =>
-  value ? moment(value).format('DD MMM YYYY, hh:mm A') : '-'
+const formatDate = (value?: unknown) => (value ? moment(String(value)).format('DD MMM YYYY') : '-')
+const formatDateTime = (value?: unknown) =>
+  value ? moment(String(value)).format('DD MMM YYYY, hh:mm A') : '-'
 
 const getStatusLabel = (status: string) => {
   if (status === 'credited') return 'Credited'
@@ -154,7 +154,7 @@ export default function CodRemittancesList() {
       minWidth: 130,
       render: (value) => (
         <Typography variant="body2" sx={{ color: brand.ink, fontWeight: 700 }}>
-          {value || 'N/A'}
+          {String(value || 'N/A')}
         </Typography>
       ),
     },

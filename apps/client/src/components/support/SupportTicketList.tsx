@@ -65,12 +65,12 @@ const SupportTicketList: React.FC<Props> = ({
     {
       label: 'Created At',
       id: 'createdAt',
-      render: (value) => moment(value).format('DD MMM YYYY'),
+      render: (value) => moment(String(value)).format('DD MMM YYYY'),
     },
     {
       label: 'Due Date',
       id: 'dueDate',
-      render: (value) => (value ? moment(value).format('DD MMM YYYY') : '—'),
+      render: (value) => (value ? moment(String(value)).format('DD MMM YYYY') : '—'),
     },
   ]
 

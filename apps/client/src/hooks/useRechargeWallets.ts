@@ -55,6 +55,20 @@ declare global {
   }
 }
 
+interface RazorpayOrderResponse {
+  orderId: string
+  amount: number
+  currency?: string
+  key: string
+  name?: string
+  description?: string
+  prefill: RazorpayCheckoutOptions['prefill']
+  theme?: {
+    color?: string
+  }
+  themeColor?: string
+}
+
 let razorpayScriptPromise: Promise<void> | null = null
 
 const loadRazorpayCheckout = () => {
@@ -80,12 +94,12 @@ export const useRechargeWallet = () =>
   useMutation<void, Error, RechargeOptions>({
     mutationFn: async (options) => {
       // Call backend → get Razorpay order details
-      const orderData = await createRechargeOrder({
+      const orderData = (await createRechargeOrder({
         amount: options.amount,
         name: options.prefill.name,
         email: options.prefill.email,
         phone: options.prefill.contact,
-      })
+      })) as RazorpayOrderResponse
 
       if (!orderData?.orderId || !orderData?.key) {
         throw new Error('Invalid Razorpay order response')
@@ -102,7 +116,7 @@ export const useRechargeWallet = () =>
         description: orderData.description || 'Wallet Recharge',
         order_id: orderData.orderId,
         prefill: orderData.prefill,
-        theme: { color: orderData.themeColor || '#0052CC' },
+        theme: { color: orderData.theme?.color || orderData.themeColor || '#0052CC' },
         handler: async function (response: RazorpayPaymentResponse) {
           try {
             const result = await confirmRecharge({

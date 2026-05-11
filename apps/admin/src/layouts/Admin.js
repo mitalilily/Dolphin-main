@@ -23,6 +23,8 @@ export default function Dashboard(props) {
   const [fixed, setFixed] = useState(true)
   const [sidebarWidth, setSidebarWidth] = useState(292)
   const [isResizing, setIsResizing] = useState(false)
+  const resizeBg = useColorModeValue('rgba(12,59,128,0.16)', 'rgba(255,255,255,0.18)')
+  const resizeHoverBg = useColorModeValue('rgba(12,59,128,0.12)', 'rgba(255,255,255,0.14)')
 
   useEffect(() => {
     const handleMouseMove = (e) => {
@@ -143,8 +145,8 @@ export default function Dashboard(props) {
         w="4px"
         cursor="col-resize"
         zIndex="1400"
-        bg={isResizing ? useColorModeValue('rgba(12,59,128,0.16)', 'rgba(255,255,255,0.18)') : 'transparent'}
-        _hover={{ bg: useColorModeValue('rgba(12,59,128,0.12)', 'rgba(255,255,255,0.14)') }}
+        bg={isResizing ? resizeBg : 'transparent'}
+        _hover={{ bg: resizeHoverBg }}
         onMouseDown={() => setIsResizing(true)}
       />
     </ChakraProvider>

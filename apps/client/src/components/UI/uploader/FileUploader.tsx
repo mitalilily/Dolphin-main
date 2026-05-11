@@ -319,14 +319,15 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           // setShowPlaceholder(false);
         }
         onUploaded(uploaded)
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error(err)
-        const httpStatus = err?.response?.status
+        const uploadError = err as { response?: { status?: number }; message?: string }
+        const httpStatus = uploadError?.response?.status
         const shouldForceInlineFallback =
           allowInlineFallback ||
           httpStatus === 404 ||
           httpStatus === 405 ||
-          /presigned upload url is missing or invalid/i.test(String(err?.message || ''))
+          /presigned upload url is missing or invalid/i.test(String(uploadError?.message || ''))
 
         if (shouldForceInlineFallback) {
           try {

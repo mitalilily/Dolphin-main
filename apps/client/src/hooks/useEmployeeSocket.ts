@@ -18,8 +18,9 @@ export const useEmployeeSocket = () => {
         if (!cancelled && employee?.employee?.isActive) {
           registerUserSocket({ id: socketUserId, role: 'employee' })
         }
-      } catch (error: any) {
-        if (error?.response?.status !== 404) {
+      } catch (error: unknown) {
+        const apiError = error as { response?: { status?: number } }
+        if (apiError?.response?.status !== 404) {
           console.error('Employee socket registration failed:', error)
         }
       }

@@ -108,10 +108,13 @@ const B2BOrdersList = ({
       minWidth: 150,
       sticky: 'right',
       stickyOffset: 360,
-      render: (v) => <StatusChip label={v} status={statusColorMap[v] || 'info'} />,
+      render: (v) => {
+        const statusKey = String(v || '').toLowerCase()
+        return <StatusChip label={statusKey || 'unknown'} status={statusColorMap[statusKey] || 'info'} />
+      },
     },
-    { label: 'Order Date', id: 'order_date', render: (v) => moment(v).format('DD MMM YYYY') },
-    { label: 'Last Updated', id: 'updated_at', render: (v) => moment(v).format('DD MMM YYYY') },
+    { label: 'Order Date', id: 'order_date', render: (v) => moment(String(v)).format('DD MMM YYYY') },
+    { label: 'Last Updated', id: 'updated_at', render: (v) => moment(String(v)).format('DD MMM YYYY') },
     {
       label: 'Actions',
       id: 'id',

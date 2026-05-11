@@ -55,8 +55,8 @@ export default function OtpLoginPanel() {
 
     setError('')
     requestOtp(email.trim().toLowerCase(), {
-      onSuccess: (response: any) => {
-        const inlineCode = extractInlineCode(response)
+      onSuccess: (response: unknown) => {
+        const inlineCode = extractInlineCode(response as Record<string, unknown>)
         setInlineOtp(inlineCode)
         setStep('verify')
         setCode('')
@@ -67,7 +67,7 @@ export default function OtpLoginPanel() {
           severity: 'success',
         })
       },
-      onError: (err: any) => {
+      onError: (err: unknown) => {
         setError(getAuthErrorMessage(err, 'OTP request failed'))
       },
     })
@@ -91,7 +91,7 @@ export default function OtpLoginPanel() {
           setTokens(token, refreshToken)
           navigate('/app', { replace: true })
         },
-        onError: (err: any) => {
+        onError: (err: unknown) => {
           setError(getAuthErrorMessage(err, 'OTP verification failed'))
         },
       },

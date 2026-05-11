@@ -41,19 +41,19 @@ const CourierList: FC<CourierListProps> = ({
       id: 'masterCompany',
       label: 'Master Company',
       minWidth: 180,
-      render: (val) => <Typography variant="body2">{val ?? '-'}</Typography>,
+      render: (val) => <Typography variant="body2">{String(val ?? '-')}</Typography>,
     },
     {
       id: 'podAvailable',
       label: 'POD Available',
       minWidth: 120,
-      render: (val) => val ?? '-',
+      render: (val) => (val === true ? 'Yes' : val === false ? 'No' : String(val ?? '-')),
     },
     {
       id: 'activatedDate',
       label: 'Established On',
       minWidth: 140,
-      render: (val) => (val ? moment(val).format('DD MMM YYYY') : '-'),
+      render: (val) => (val ? moment(String(val)).format('DD MMM YYYY') : '-'),
     },
   ]
 

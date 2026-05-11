@@ -11,6 +11,13 @@ interface ApiKeysTableProps {
 }
 
 export const ApiKeysTable = ({ apiKeys, isLoading, onUpdate, onDelete }: ApiKeysTableProps) => {
+  const formatDate = (value: unknown) => {
+    if (typeof value !== 'string' && typeof value !== 'number' && !(value instanceof Date)) {
+      return null
+    }
+    return new Date(value).toLocaleDateString()
+  }
+
   const columns: Column<ApiKey>[] = [
     {
       id: 'key_name',
@@ -35,8 +42,8 @@ export const ApiKeysTable = ({ apiKeys, isLoading, onUpdate, onDelete }: ApiKeys
       label: 'Last Used',
       minWidth: 150,
       render: (value) =>
-        value ? (
-          new Date(value).toLocaleDateString()
+        formatDate(value) ? (
+          formatDate(value)
         ) : (
           <Typography color="text.secondary">Never</Typography>
         ),
@@ -45,7 +52,7 @@ export const ApiKeysTable = ({ apiKeys, isLoading, onUpdate, onDelete }: ApiKeys
       id: 'created_at',
       label: 'Created',
       minWidth: 150,
-      render: (value) => new Date(value).toLocaleDateString(),
+      render: (value) => formatDate(value) ?? '-',
     },
     {
       id: 'id',

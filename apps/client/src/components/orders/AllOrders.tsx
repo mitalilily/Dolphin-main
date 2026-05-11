@@ -174,7 +174,7 @@ const AllOrders = () => {
       </Box>
     )
 
-  const normalizedOrders: Order[] = (activeQuery.data?.orders ?? []).map((order: any) => ({
+  const normalizedOrders: Order[] = (activeQuery.data?.orders ?? []).map((order: Order) => ({
     ...order,
     type: order.type || (currentOrderView === 'b2c' ? 'b2c' : currentOrderView === 'b2b' ? 'b2b' : order.type),
   }))
@@ -552,7 +552,10 @@ const AllOrders = () => {
       minWidth: 150,
       sticky: 'right',
       stickyOffset: 450,
-      render: (v) => <StatusChip label={v} status={statusColorMap[v] || 'info'} />,
+      render: (v) => {
+        const statusKey = String(v || '').toLowerCase()
+        return <StatusChip label={statusKey || 'unknown'} status={statusColorMap[statusKey] || 'info'} />
+      },
     },
     {
       id: 'id',

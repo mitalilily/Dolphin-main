@@ -260,7 +260,7 @@ const Invoices = () => {
       label: 'Invoice #',
       render: (val, row) => (
         <Stack direction="row" spacing={1} alignItems="center">
-          <Typography fontWeight={600}>{val}</Typography>
+          <Typography fontWeight={600}>{String(val ?? '-')}</Typography>
           {row.isDisputed && (
             <Chip
               size="small"
@@ -290,7 +290,11 @@ const Invoices = () => {
       id: 'status',
       label: 'Status',
       render: (val) => (
-        <Chip size="small" label={String(val).toUpperCase()} color={statusColor(val)} />
+        <Chip
+          size="small"
+          label={String(val).toUpperCase()}
+          color={statusColor(typeof val === 'string' ? val : undefined)}
+        />
       ),
     },
     {
