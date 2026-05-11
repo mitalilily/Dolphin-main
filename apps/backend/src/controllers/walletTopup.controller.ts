@@ -44,7 +44,7 @@ export const createTopup = async (req: Request, res: Response): Promise<any> => 
 
     if (minWalletRecharge > 0 && rechargeAmount < minWalletRecharge) {
       return res.status(400).json({
-        error: `Minimum wallet recharge amount is ₹${minWalletRecharge}`,
+        error: `Minimum wallet recharge amount is INR ${minWalletRecharge}`,
         minWalletRecharge,
       })
     }

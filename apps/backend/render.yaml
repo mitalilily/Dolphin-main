@@ -55,7 +55,13 @@ services:
       - key: TWILLIO_SENDGRID_API_KEY
         sync: false
       - key: RAZORPAY_MODE
-        value: test
+        value: live
+      - key: RAZORPAY_KEY_ID_PROD
+        sync: false
+      - key: RAZORPAY_KEY_SECRET_PROD
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET_PROD
+        sync: false
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

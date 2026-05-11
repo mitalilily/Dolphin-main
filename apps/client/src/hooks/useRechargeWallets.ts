@@ -104,6 +104,11 @@ export const useRechargeWallet = () =>
       if (!orderData?.orderId || !orderData?.key) {
         throw new Error('Invalid Razorpay order response')
       }
+      if (!orderData.key.startsWith('rzp_live_')) {
+        throw new Error(
+          'Wallet recharge is not configured for live Razorpay payments. Please contact support.',
+        )
+      }
 
       await loadRazorpayCheckout()
 

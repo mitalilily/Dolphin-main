@@ -33,21 +33,29 @@ async function main() {
     isRazorpayConfigured,
     razorpay,
     razorpayMode,
+    razorpayCredentialSources,
     RazorpayWalletTopupUnavailableError,
     isValidSig,
+    resolveRazorpayCredentials,
     verifyRazorpayPaymentSignature,
   } = require('../utils/razorpay')
   const {
     validateRazorpayWalletCredit,
   } = require('../utils/razorpayWalletSafety')
   const crypto = require('crypto') as typeof import('crypto')
+  const credentials = resolveRazorpayCredentials(razorpayMode)
 
   const summary: CheckResult[] = []
 
   summary.push(
     await runCheck('config.loaded', async () => {
       if (!isRazorpayConfigured) throw new Error(`Razorpay is not configured for ${razorpayMode} mode`)
-      return { mode: razorpayMode, configured: true }
+      return {
+        mode: razorpayMode,
+        configured: true,
+        keyMode: razorpayCredentialSources.keyMode,
+        keySource: razorpayCredentialSources.keyId,
+      }
     }),
   )
 
@@ -71,10 +79,7 @@ async function main() {
     await runCheck('checkout.signature.verify', async () => {
       const orderId = directOrderId || 'order_test_signature'
       const paymentId = 'pay_test_signature'
-      const secret =
-        razorpayMode === 'live'
-          ? process.env.RAZORPAY_KEY_SECRET_PROD || ''
-          : process.env.RAZORPAY_KEY_SECRET || ''
+      const secret = credentials.key_secret
       const signature = crypto
         .createHmac('sha256', secret)
         .update(`${orderId}|${paymentId}`)
@@ -97,10 +102,7 @@ async function main() {
 
   summary.push(
     await runCheck('webhook.signature.verify', async () => {
-      const secret =
-        razorpayMode === 'live'
-          ? process.env.RAZORPAY_WEBHOOK_SECRET_PROD || ''
-          : process.env.RAZORPAY_WEBHOOK_SECRET || ''
+      const secret = credentials.webhook_secret
       if (!secret) throw new Error('Razorpay webhook secret is missing')
       const body = JSON.stringify({
         event: 'payment.failed',
