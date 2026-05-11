@@ -217,6 +217,8 @@ export const fetchB2BOrdersByUser = async (params: FetchB2COrdersParams = {}) =>
 export interface GenerateManifestParams {
   awbs: string[]
   type: 'b2c' | 'b2b'
+  pickupDate?: string
+  pickupTime?: string
 }
 
 export interface GenerateManifestResponse {

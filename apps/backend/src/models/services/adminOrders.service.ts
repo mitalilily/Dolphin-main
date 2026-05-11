@@ -7,7 +7,10 @@ import { b2c_orders } from '../schema/b2cOrders'
 import { invoicePreferences } from '../schema/invoicePreferences'
 import { userProfiles } from '../schema/userProfile'
 import { users } from '../schema/users'
-import { sanitizeOrdersForCustomer } from '../../utils/orderSanitizer'
+import {
+  isOrderManifestedForDocuments,
+  sanitizeOrdersForCustomer,
+} from '../../utils/orderSanitizer'
 import { IOrderFilters, PaginationParams } from './shiprocket.service'
 import { generateLabelForOrder } from './generateCustomLabelService'
 import dayjs from 'dayjs'
@@ -486,6 +489,11 @@ export const regenerateOrderDocumentsServiceAdmin = async ({
   if (!userId) throw new Error('Order user not found')
   if (expectedUserId && userId !== expectedUserId) {
     throw new Error('Order not found')
+  }
+  if (orderType === 'b2c' && !isOrderManifestedForDocuments(order)) {
+    throw new Error(
+      'Documents are available only after the shipment is manifested. Confirm pickup date/time and generate the manifest first.',
+    )
   }
 
   let newLabelKey: string | null = null

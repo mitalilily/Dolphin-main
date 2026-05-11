@@ -21,9 +21,13 @@ import {
   getB2CManifestDisabledReason,
   getDocumentReference,
   getDownloadFileName,
+  isB2CManifestComplete,
   isDirectDownloadUrl,
   type DocumentType,
 } from './bulkActionUtils'
+import ConfirmPickupBeforeManifestDialog, {
+  type PickupManifestSchedule,
+} from './ConfirmPickupBeforeManifestDialog'
 
 interface OrderExpandedRowProps {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,6 +38,7 @@ interface OrderExpandedRowProps {
 export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) => {
   const [downloadingKey, setDownloadingKey] = useState<string | null>(null)
   const [generatingDocumentType, setGeneratingDocumentType] = useState<DocumentType | null>(null)
+  const [manifestPickupOpen, setManifestPickupOpen] = useState(false)
   const ACCENT = '#0D3B8E'
   const sortCodeValue = String(row?.sort_code || '').trim()
 
@@ -42,19 +47,21 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
   const { mutateAsync: regenerateDocuments, isPending: isRegeneratingDocuments } =
     useRegenerateOrderDocuments()
 
-  const hasLabelDocument = Boolean(String(row?.label_url || row?.label_key || row?.label || '').trim())
+  const isManifestComplete = type === 'b2b' || isB2CManifestComplete(row)
+  const hasLabelDocument =
+    isManifestComplete && Boolean(String(row?.label_url || row?.label_key || row?.label || '').trim())
   const hasInvoiceDocument = Boolean(
-    String(row?.invoice_url || row?.invoice_key || row?.invoice_link || '').trim(),
+    isManifestComplete &&
+      String(row?.invoice_url || row?.invoice_key || row?.invoice_link || '').trim(),
   )
   const hasManifestDocument = Boolean(
-    String(row?.manifest_url || row?.manifest_key || row?.manifest || '').trim(),
+    isManifestComplete &&
+      String(row?.manifest_url || row?.manifest_key || row?.manifest || '').trim(),
   )
   const normalizedStatus = String(row?.order_status || '').trim().toLowerCase()
   const isManifestedOrOperational =
-    Boolean(String(row?.manifest_key || row?.manifest || row?.awb_number || '').trim()) ||
+    type === 'b2b' ||
     [
-      'booked',
-      'shipment_created',
       'pickup_initiated',
       'manifest_generated',
       'in_transit',
@@ -153,6 +160,47 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
     return true
   }
 
+  const generateManifestForRow = async (pickupSchedule: PickupManifestSchedule) => {
+    setGeneratingDocumentType('manifest')
+    try {
+      const manifestRef = getB2CManifestIdentifier(row)
+      if (!manifestRef) return
+
+      const response = await generateManifestService({
+        awbs: [manifestRef],
+        type: 'b2c',
+        ...pickupSchedule,
+      })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
+        queryClient.invalidateQueries({ queryKey: ['orders'] }),
+      ])
+
+      const downloaded = await handleGeneratedDocumentDownload('manifest', {
+        manifest_url: response.manifest_url,
+        manifest_key: response.manifest_key,
+      })
+
+      toast.open({
+        message: downloaded
+          ? 'Manifest generated and downloaded.'
+          : 'Manifest generated successfully.',
+        severity: 'success',
+      })
+    } catch (err) {
+      console.error('manifest generation failed', err)
+      toast.open({
+        message: getActionableErrorMessage(
+          err,
+          'Failed to generate manifest. Please try again.',
+        ),
+        severity: 'error',
+      })
+    } finally {
+      setGeneratingDocumentType(null)
+    }
+  }
+
   const handleGenerateDocument = async (
     documentType: DocumentType,
     regenerateExistingDocument = false,
@@ -173,29 +221,13 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
         const manifestRef = getB2CManifestIdentifier(row)
         if (!manifestRef) {
           toast.open({
-            message: 'Manifest cannot be generated until this order has an order number or AWB.',
+            message: 'Manifest cannot be generated until this order has an order number.',
             severity: 'error',
           })
           return
         }
 
-        const response = await generateManifestService({ awbs: [manifestRef], type: 'b2c' })
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
-          queryClient.invalidateQueries({ queryKey: ['orders'] }),
-        ])
-
-        const downloaded = await handleGeneratedDocumentDownload('manifest', {
-          manifest_url: response.manifest_url,
-          manifest_key: response.manifest_key,
-        })
-
-        toast.open({
-          message: downloaded
-            ? 'Manifest generated and downloaded.'
-            : 'Manifest generated successfully.',
-          severity: 'success',
-        })
+        setManifestPickupOpen(true)
         return
       }
 
@@ -407,6 +439,7 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
   )
 
   return (
+    <>
     <Stack spacing={1.2} p={{ xs: 0.8, md: 1 }}>
       <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
         <Typography fontWeight={800} fontSize={14}>
@@ -541,7 +574,11 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
         </Paper>
       )}
 
-      {(hasLabelDocument || hasInvoiceDocument || hasManifestDocument || isManifestedOrOperational) && (
+      {(hasLabelDocument ||
+        hasInvoiceDocument ||
+        hasManifestDocument ||
+        isManifestedOrOperational ||
+        (type === 'b2c' && !isManifestComplete)) && (
         <Paper
           elevation={0}
           sx={{
@@ -578,5 +615,16 @@ export const OrderExpandedRow = ({ row, type = 'b2c' }: OrderExpandedRowProps) =
         </Paper>
       )}
     </Stack>
+    <ConfirmPickupBeforeManifestDialog
+      open={manifestPickupOpen}
+      orderLabel={row?.order_number || String(row?.id || '')}
+      loading={generatingDocumentType === 'manifest'}
+      onClose={() => setManifestPickupOpen(false)}
+      onConfirm={async (pickupSchedule) => {
+        setManifestPickupOpen(false)
+        await generateManifestForRow(pickupSchedule)
+      }}
+    />
+    </>
   )
 }

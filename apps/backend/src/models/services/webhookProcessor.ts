@@ -34,6 +34,7 @@ import { resolveInvoiceNumber } from './invoiceNumber.service'
 import { syncShopifyStatusForLocalOrder } from './shopify.service'
 import { computeB2CFreightForOrder } from './shiprocket.service'
 import { generateLabelForOrder } from './generateCustomLabelService'
+import { isOrderManifestedForDocuments } from '../../utils/orderSanitizer'
 
 const WEBHOOK_INVOICE_UPLOAD_TIMEOUT_MS = 60000
 
@@ -451,6 +452,7 @@ const ensureOrderDocumentsAfterWebhook = async (
   courierLabel: string,
 ) => {
   if (!order) return
+  if (!isOrderManifestedForDocuments(order)) return
 
   let nextLabelKey = typeof order.label === 'string' && order.label.trim() ? order.label.trim() : null
   let nextInvoiceKey =
@@ -1150,7 +1152,7 @@ export async function processDelhiveryWebhook(payload: any, tx = db) {
         let invoiceDateToStore = freshOrder.invoice_date
         let invoiceAmountToStore = freshOrder.invoice_amount
 
-        if (!invoiceKey) {
+        if (!invoiceKey && isOrderManifestedForDocuments(freshOrder)) {
           console.log(`🧾 Generating invoice for Delhivery order ${order.order_number}`)
           try {
             const invoiceResult = await generateInvoiceForOrderWebhook(freshOrder, innerTx)
@@ -1172,7 +1174,7 @@ export async function processDelhiveryWebhook(payload: any, tx = db) {
             )
             // Don't throw - invoice failure shouldn't prevent label from being saved
           }
-        } else {
+        } else if (invoiceKey) {
           console.log(`ℹ️ Invoice already exists for order ${order.order_number}`)
         }
 
@@ -1181,7 +1183,9 @@ export async function processDelhiveryWebhook(payload: any, tx = db) {
           .update(b2c_orders)
           .set({
             invoice_link: invoiceKey ?? undefined,
-            manifest: shipment?.upload_wbn ?? shipment?.UploadWBN ?? null,
+            manifest: isOrderManifestedForDocuments({ ...freshOrder, order_status: internalStatus })
+              ? shipment?.upload_wbn ?? shipment?.UploadWBN ?? freshOrder.manifest ?? null
+              : freshOrder.manifest ?? null,
             invoice_number: invoiceNumberToStore ?? undefined,
             invoice_date: invoiceDateToStore ?? undefined,
             invoice_amount: invoiceAmountToStore ?? undefined,

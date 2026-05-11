@@ -52,6 +52,9 @@ import {
   summarizeMessages,
   summarizeOrderNumbers,
 } from '../bulkActionUtils'
+import ConfirmPickupBeforeManifestDialog, {
+  type PickupManifestSchedule,
+} from '../ConfirmPickupBeforeManifestDialog'
 import { OrderExpandedRow } from '../OrderExpandedRow'
 import ReverseModal from '../reverse/ReverseModal'
 import B2COrderFormSteps from './B2COrderForm'
@@ -132,6 +135,10 @@ const B2COrdersList = () => {
   const [selectionResetToken, setSelectionResetToken] = useState(0)
   const [downloadingDocumentType, setDownloadingDocumentType] = useState<DocumentType | null>(null)
   const [bulkManifesting, setBulkManifesting] = useState(false)
+  const [manifestPickupRequest, setManifestPickupRequest] = useState<{
+    mode: 'single' | 'bulk'
+    orders: B2COrder[]
+  } | null>(null)
   const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback | null>(null)
   const [filters, setFilters] = useState<OrderFilters>({
     status: '',
@@ -174,36 +181,24 @@ const B2COrdersList = () => {
   }
 
   /* ───────────── Handlers ───────────── */
-  const handleGenerateManifest = async (order: B2COrder) => {
-    const manifestDisabledReason = getB2CManifestDisabledReason(order)
-    if (manifestDisabledReason) {
-      setBulkFeedback({
-        severity: 'error',
-        title: 'Manifest unavailable',
-        message: manifestDisabledReason,
-      })
-      toast.open({ message: manifestDisabledReason, severity: 'error' })
-      return
-    }
-
+  const executeSingleManifest = async (
+    order: B2COrder,
+    pickupSchedule: PickupManifestSchedule,
+  ) => {
     const manifestRef = getB2CManifestIdentifier(order)
-    if (!manifestRef) {
-      const message = `Manifest cannot be started for ${order.order_number} yet.`
-      setBulkFeedback({
-        severity: 'error',
-        title: 'Manifest unavailable',
-        message,
-      })
-      toast.open({ message, severity: 'error' })
-      return
-    }
+    if (!manifestRef) return
+
     try {
       setBulkFeedback({
         severity: 'info',
         title: 'Manifest in progress',
         message: `Processing ${order.order_number}.`,
       })
-      const response = await generateManifestService({ awbs: [manifestRef], type: 'b2c' })
+      const response = await generateManifestService({
+        awbs: [manifestRef],
+        type: 'b2c',
+        ...pickupSchedule,
+      })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
         queryClient.invalidateQueries({ queryKey: ['orders'] }),
@@ -242,6 +237,33 @@ const B2COrdersList = () => {
         severity: 'error',
       })
     }
+  }
+
+  const handleGenerateManifest = async (order: B2COrder) => {
+    const manifestDisabledReason = getB2CManifestDisabledReason(order)
+    if (manifestDisabledReason) {
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message: manifestDisabledReason,
+      })
+      toast.open({ message: manifestDisabledReason, severity: 'error' })
+      return
+    }
+
+    const manifestRef = getB2CManifestIdentifier(order)
+    if (!manifestRef) {
+      const message = `Manifest cannot be started for ${order.order_number} yet.`
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message,
+      })
+      toast.open({ message, severity: 'error' })
+      return
+    }
+
+    setManifestPickupRequest({ mode: 'single', orders: [order] })
   }
 
   const handleRetryManifest = async (order: B2COrder) => {
@@ -285,7 +307,7 @@ const B2COrdersList = () => {
     // Keep status filtering local; do not sync status to URL params.
   }
 
-  const handleBulkManifest = async () => {
+  const handleBulkManifest = async (pickupSchedule?: PickupManifestSchedule) => {
     if (!selectedOrders.length) {
       const message = 'Select up to 5 eligible orders to manifest.'
       setBulkFeedback({
@@ -304,6 +326,11 @@ const B2COrdersList = () => {
         message: manifestValidationMessage,
       })
       toast.open({ message: manifestValidationMessage, severity: 'error' })
+      return
+    }
+
+    if (!pickupSchedule) {
+      setManifestPickupRequest({ mode: 'bulk', orders: [...selectedOrders] })
       return
     }
 
@@ -338,7 +365,11 @@ const B2COrdersList = () => {
         if (!identifiers.length) continue
 
         try {
-          const response = await generateManifestService({ awbs: identifiers, type: 'b2c' })
+          const response = await generateManifestService({
+            awbs: identifiers,
+            type: 'b2c',
+            ...pickupSchedule,
+          })
           successCount += providerOrders.length
           if (response.warnings?.length) {
             warningMessages.push(...response.warnings)
@@ -580,9 +611,11 @@ const B2COrdersList = () => {
 
   /* ───────────── Columns ───────────── */
   const hasLabelGenerated = (row: B2COrder) =>
+    isB2CManifestComplete(row) &&
     Boolean(String(row.label_url || row.label_key || row.label || '').trim())
 
   const hasInvoiceGenerated = (row: B2COrder) =>
+    isB2CManifestComplete(row) &&
     Boolean(String(row.invoice_url || row.invoice_key || row.invoice_link || '').trim())
 
   const compactChipSx = {
@@ -903,6 +936,20 @@ const B2COrdersList = () => {
     )
   }
 
+  const handleConfirmManifestPickup = async (pickupSchedule: PickupManifestSchedule) => {
+    const request = manifestPickupRequest
+    if (!request) return
+
+    setManifestPickupRequest(null)
+    if (request.mode === 'single') {
+      const [order] = request.orders
+      if (order) await executeSingleManifest(order, pickupSchedule)
+      return
+    }
+
+    await handleBulkManifest(pickupSchedule)
+  }
+
   return (
     <Stack spacing={2}>
       {/* Top row: Create button */}
@@ -982,10 +1029,10 @@ const B2COrdersList = () => {
             </Box>
 
             <Stack direction={{ xs: 'column', sm: 'row' }} gap={1} flexWrap="wrap">
-              <Button
-                variant="contained"
-                onClick={handleBulkManifest}
-                disabled={bulkManifesting || Boolean(manifestValidationMessage)}
+                <Button
+                  variant="contained"
+                  onClick={() => handleBulkManifest()}
+                  disabled={bulkManifesting || Boolean(manifestValidationMessage)}
                 sx={{ textTransform: 'none', minWidth: 170 }}
               >
                 {bulkManifesting ? 'Manifesting...' : 'Manifest Selected'}
@@ -1073,6 +1120,15 @@ const B2COrdersList = () => {
           createReverse(payload)
           setReverseOrder(null)
         }}
+      />
+
+      <ConfirmPickupBeforeManifestDialog
+        open={Boolean(manifestPickupRequest)}
+        orderLabel={manifestPickupRequest?.orders[0]?.order_number || String(manifestPickupRequest?.orders[0]?.id || '')}
+        orderCount={manifestPickupRequest?.orders.length || 1}
+        loading={bulkManifesting}
+        onClose={() => setManifestPickupRequest(null)}
+        onConfirm={handleConfirmManifestPickup}
       />
 
       <CustomDrawer

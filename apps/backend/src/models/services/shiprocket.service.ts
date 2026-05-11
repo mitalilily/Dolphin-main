@@ -5675,7 +5675,7 @@ export const createB2CShipmentService = async (
         courier_name: 'Ekart Logistics',
         courier_id: params.courier_id ? Number(params.courier_id) : null,
         label: undefined,
-        manifest: shipmentData?.manifest ?? undefined,
+        manifest: undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -5806,8 +5806,8 @@ export const createB2CShipmentService = async (
           : params.courier_id
             ? Number(params.courier_id)
             : null,
-        label: xpressbeesPackage?.label ?? undefined,
-        manifest: xpressbeesPackage?.manifest ?? undefined,
+        label: isReverseShipment ? xpressbeesPackage?.label ?? undefined : undefined,
+        manifest: isReverseShipment ? xpressbeesPackage?.manifest ?? undefined : undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -6504,8 +6504,8 @@ export const createB2CShipmentService = async (
           ) || undefined,
         courier_name: icarryPayload?.courier_name ?? 'iCarry',
         courier_id: params.courier_id ? Number(params.courier_id) : null,
-        label: labelUrl,
-        manifest: icarryPayload?.manifest ?? undefined,
+        label: undefined,
+        manifest: undefined,
         courier_cost: providerCourierCost,
         sort_code: providerSortCode,
       }
@@ -7349,12 +7349,34 @@ export const createB2CShipmentService = async (
       )
 
       // ðŸ”” Send webhook event for order creation (async, don't wait)
+      const shouldHidePreManifestShipmentArtifacts =
+        !isReverseShipment &&
+        [
+          'delhivery',
+          'ekart',
+          'xpressbees',
+          'shipmozo',
+          'shiprocket',
+          'truxcargo',
+          'icarry',
+        ].includes(integrationType)
+      const customerShipmentData = shouldHidePreManifestShipmentArtifacts
+        ? {
+            ...(shipmentData || {}),
+            awb_number: null,
+            label: null,
+            invoice_link: null,
+            manifest: null,
+            packages: [],
+          }
+        : shipmentData
+
       const webhookStatus = 'booked'
 
       sendWebhookEvent(userId, 'order.created', {
         order_id: newOrder.id,
         order_number: params.order_number,
-        awb_number: shipmentMeta.awb_number,
+        awb_number: shouldHidePreManifestShipmentArtifacts ? null : shipmentMeta.awb_number,
         status: webhookStatus,
         courier_partner: shipmentMeta.courier_name,
         courier_id: shipmentMeta.courier_id,
@@ -7367,7 +7389,7 @@ export const createB2CShipmentService = async (
         // Don't fail the main flow if webhook fails
       })
 
-      return { order: newOrder, shipment: shipmentData }
+      return { order: newOrder, shipment: customerShipmentData }
     })
 
     rollbackActions.length = 0
@@ -7953,6 +7975,79 @@ export const updateB2COrderService = async (params: UpdateB2COrderParams) => {
 
 type OrderType = 'b2c' | 'b2b'
 
+type ManifestPickupSchedule = {
+  pickupDate: string
+  pickupTime: string
+}
+
+const normalizeManifestPickupDate = (value: unknown): string | null => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const indianMatch = raw.match(/^(\d{2})-(\d{2})-(\d{4})$/)
+  const normalized = isoMatch
+    ? raw
+    : indianMatch
+      ? `${indianMatch[3]}-${indianMatch[2]}-${indianMatch[1]}`
+      : null
+
+  if (!normalized) {
+    throw new HttpError(400, 'Pickup date must be a valid date.')
+  }
+
+  const [year, month, day] = normalized.split('-').map((part) => Number(part))
+  const parsedDate = new Date(Date.UTC(year, month - 1, day))
+  if (
+    parsedDate.getUTCFullYear() !== year ||
+    parsedDate.getUTCMonth() !== month - 1 ||
+    parsedDate.getUTCDate() !== day
+  ) {
+    throw new HttpError(400, 'Pickup date must be a valid date.')
+  }
+
+  return normalized
+}
+
+const normalizeManifestPickupTime = (value: unknown): string | null => {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const match = raw.match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/)
+  if (!match) {
+    throw new HttpError(400, 'Pickup time must be a valid 24-hour time.')
+  }
+
+  return `${match[1]}:${match[2]}:${match[3] || '00'}`
+}
+
+const getManifestPickupScheduleOrThrow = (
+  order: any,
+  requested: { pickupDate?: unknown; pickupTime?: unknown },
+): ManifestPickupSchedule => {
+  const pickupDetails = normalizePickupDetails(order?.pickup_details) as any
+  const pickupDate =
+    normalizeManifestPickupDate(requested.pickupDate) ||
+    normalizeManifestPickupDate(
+      pickupDetails?.pickup_date || pickupDetails?.pickupDate || order?.pickup_date,
+    )
+  const pickupTime =
+    normalizeManifestPickupTime(requested.pickupTime) ||
+    normalizeManifestPickupTime(
+      pickupDetails?.pickup_time || pickupDetails?.pickupTime || order?.pickup_time,
+    )
+
+  if (!pickupDate || !pickupTime) {
+    const orderRef = String(order?.order_number || order?.awb_number || 'this order').trim()
+    throw new HttpError(
+      400,
+      `Confirm Pickup Before Manifest. Set the pickup date and time for ${orderRef} before generating the manifest.`,
+    )
+  }
+
+  return { pickupDate, pickupTime }
+}
+
 // ----------------------
 // Generate Manifest
 // ----------------------
@@ -7960,6 +8055,10 @@ export const generateManifestService = async (params: {
   awbs: string[]
   type: 'b2c' | 'b2b'
   userId?: string
+  pickupDate?: string
+  pickupTime?: string
+  pickup_date?: string
+  pickup_time?: string
 }): Promise<{
   manifest_id: string | null
   manifest_url: string | null
@@ -8166,6 +8265,32 @@ export const generateManifestService = async (params: {
               }
             }
             return value
+          }
+
+          const requestedPickupSchedule = {
+            pickupDate: params.pickupDate ?? params.pickup_date,
+            pickupTime: params.pickupTime ?? params.pickup_time,
+          }
+          const confirmedPickupAt = new Date().toISOString()
+          for (const order of fetchedOrders) {
+            const schedule = getManifestPickupScheduleOrThrow(order, requestedPickupSchedule)
+            const pickupDetails = normalizeDetails(order.pickup_details)
+            const nextPickupDetails = {
+              ...pickupDetails,
+              pickup_date: schedule.pickupDate,
+              pickup_time: schedule.pickupTime,
+              manifest_pickup_confirmed_at: confirmedPickupAt,
+            }
+
+            await tx
+              .update(b2c_orders)
+              .set({
+                pickup_details: nextPickupDetails,
+                updated_at: new Date(),
+              })
+              .where(eq(b2c_orders.id, order.id))
+
+            order.pickup_details = nextPickupDetails
           }
 
           if (integrationType === 'shipmozo') {
@@ -9926,6 +10051,32 @@ export const generateManifestService = async (params: {
               }
             }
             return value
+          }
+
+          const requestedPickupSchedule = {
+            pickupDate: params.pickupDate ?? params.pickup_date,
+            pickupTime: params.pickupTime ?? params.pickup_time,
+          }
+          const confirmedPickupAt = new Date().toISOString()
+          for (const order of fetchedOrders) {
+            const schedule = getManifestPickupScheduleOrThrow(order, requestedPickupSchedule)
+            const pickupDetails = normalizeDetails(order.pickup_details)
+            const nextPickupDetails = {
+              ...pickupDetails,
+              pickup_date: schedule.pickupDate,
+              pickup_time: schedule.pickupTime,
+              manifest_pickup_confirmed_at: confirmedPickupAt,
+            }
+
+            await tx
+              .update(b2c_orders)
+              .set({
+                pickup_details: nextPickupDetails,
+                updated_at: new Date(),
+              })
+              .where(eq(b2c_orders.id, order.id))
+
+            order.pickup_details = nextPickupDetails
           }
 
           const normalizeOrderItems = (value: any) => {

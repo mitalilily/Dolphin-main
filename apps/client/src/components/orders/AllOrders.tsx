@@ -34,6 +34,9 @@ import {
   summarizeMessages,
   summarizeOrderNumbers,
 } from './bulkActionUtils'
+import ConfirmPickupBeforeManifestDialog, {
+  type PickupManifestSchedule,
+} from './ConfirmPickupBeforeManifestDialog'
 import { OrderExpandedRow } from './OrderExpandedRow'
 
 interface Order {
@@ -56,10 +59,14 @@ type BulkFeedback = {
   message: string
 }
 
+const canShowOrderDocuments = (order: Order) => order.type === 'b2b' || isB2CManifestComplete(order)
+
 const hasLabelGenerated = (order: Order) =>
+  canShowOrderDocuments(order) &&
   Boolean(String(order.label_url || order.label_key || order.label || '').trim())
 
 const hasInvoiceGenerated = (order: Order) =>
+  canShowOrderDocuments(order) &&
   Boolean(String(order.invoice_url || order.invoice_key || order.invoice_link || '').trim())
 
 const renderDocumentTags = (order: Order) => (
@@ -91,6 +98,10 @@ const AllOrders = () => {
   )
   const [bulkManifesting, setBulkManifesting] = useState(false)
   const [manifestingOrderId, setManifestingOrderId] = useState<Order['id'] | null>(null)
+  const [manifestPickupRequest, setManifestPickupRequest] = useState<{
+    mode: 'single' | 'bulk'
+    orders: Order[]
+  } | null>(null)
   const [cancellingOrderId, setCancellingOrderId] = useState<Order['id'] | null>(null)
   const [bulkFeedback, setBulkFeedback] = useState<BulkFeedback | null>(null)
   const [filters, setFilters] = useState<OrdersFilters>({
@@ -190,37 +201,19 @@ const AllOrders = () => {
           ? 'Some selected orders are not ready for manifest yet.'
           : ''
 
-  const handleBulkManifest = async () => {
-    if (!selectedOrders.length) {
-      const message = 'Select up to 5 eligible orders to manifest.'
-      setBulkFeedback({
-        severity: 'error',
-        title: 'No orders selected',
-        message,
-      })
-      toast.open({ message, severity: 'error' })
-      return
-    }
-
-    if (manifestValidationMessage) {
-      setBulkFeedback({
-        severity: 'error',
-        title: 'Manifest unavailable',
-        message: manifestValidationMessage,
-      })
-      toast.open({ message: manifestValidationMessage, severity: 'error' })
-      return
-    }
-
+  const executeBulkManifest = async (
+    ordersToManifest: Order[],
+    pickupSchedule: PickupManifestSchedule,
+  ) => {
     setBulkManifesting(true)
     setBulkFeedback({
       severity: 'info',
       title: 'Manifest in progress',
-      message: `Processing ${selectedOrders.length} selected order(s).`,
+      message: `Processing ${ordersToManifest.length} selected order(s).`,
     })
 
     try {
-      const b2cManifestGroups = selectedOrders.reduce<Record<string, Order[]>>((groups, order) => {
+      const b2cManifestGroups = ordersToManifest.reduce<Record<string, Order[]>>((groups, order) => {
         if (order.type !== 'b2c') return groups
 
         const manifestIdentifier = getB2CManifestIdentifier(order)
@@ -245,7 +238,11 @@ const AllOrders = () => {
         if (!identifiers.length) continue
 
         try {
-          const response = await generateManifestService({ awbs: identifiers, type: 'b2c' })
+          const response = await generateManifestService({
+            awbs: identifiers,
+            type: 'b2c',
+            ...pickupSchedule,
+          })
           successCount += providerOrders.length
           if (response.warnings?.length) {
             warningMessages.push(...response.warnings)
@@ -316,7 +313,32 @@ const AllOrders = () => {
     }
   }
 
-  const handleSingleManifest = async (order: Order) => {
+  const handleBulkManifest = async () => {
+    if (!selectedOrders.length) {
+      const message = 'Select up to 5 eligible orders to manifest.'
+      setBulkFeedback({
+        severity: 'error',
+        title: 'No orders selected',
+        message,
+      })
+      toast.open({ message, severity: 'error' })
+      return
+    }
+
+    if (manifestValidationMessage) {
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message: manifestValidationMessage,
+      })
+      toast.open({ message: manifestValidationMessage, severity: 'error' })
+      return
+    }
+
+    setManifestPickupRequest({ mode: 'bulk', orders: [...selectedOrders] })
+  }
+
+  const executeSingleManifest = async (order: Order, pickupSchedule: PickupManifestSchedule) => {
     const manifestRef = getB2CManifestIdentifier(order)
     const orderLabel = order.order_number || order.id
 
@@ -339,7 +361,11 @@ const AllOrders = () => {
     })
 
     try {
-      const response = await generateManifestService({ awbs: [manifestRef], type: 'b2c' })
+      const response = await generateManifestService({
+        awbs: [manifestRef],
+        type: 'b2c',
+        ...pickupSchedule,
+      })
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['b2cOrdersByUser'] }),
         queryClient.invalidateQueries({ queryKey: ['orders'] }),
@@ -377,6 +403,24 @@ const AllOrders = () => {
     } finally {
       setManifestingOrderId(null)
     }
+  }
+
+  const handleSingleManifest = async (order: Order) => {
+    const manifestRef = getB2CManifestIdentifier(order)
+    const orderLabel = order.order_number || order.id
+
+    if (!manifestRef || !isManifestEligible(order)) {
+      const message = `Manifest cannot be started for ${orderLabel} yet.`
+      setBulkFeedback({
+        severity: 'error',
+        title: 'Manifest unavailable',
+        message,
+      })
+      toast.open({ message, severity: 'error' })
+      return
+    }
+
+    setManifestPickupRequest({ mode: 'single', orders: [order] })
   }
 
   const handleCancelOrder = async (order: Order) => {
@@ -648,7 +692,22 @@ const AllOrders = () => {
     { name: 'toDate', label: 'To Date', type: 'date', placeholder: 'YYYY-MM-DD' },
   ]
 
+  const handleConfirmManifestPickup = async (pickupSchedule: PickupManifestSchedule) => {
+    const request = manifestPickupRequest
+    if (!request) return
+
+    setManifestPickupRequest(null)
+    if (request.mode === 'single') {
+      const [order] = request.orders
+      if (order) await executeSingleManifest(order, pickupSchedule)
+      return
+    }
+
+    await executeBulkManifest(request.orders, pickupSchedule)
+  }
+
   return (
+    <>
     <Stack gap={3}>
       <Box
         sx={{
@@ -884,6 +943,15 @@ const AllOrders = () => {
         )}
       </Box>
     </Stack>
+    <ConfirmPickupBeforeManifestDialog
+      open={Boolean(manifestPickupRequest)}
+      orderLabel={manifestPickupRequest?.orders[0]?.order_number || String(manifestPickupRequest?.orders[0]?.id || '')}
+      orderCount={manifestPickupRequest?.orders.length || 1}
+      loading={bulkManifesting || Boolean(manifestingOrderId)}
+      onClose={() => setManifestPickupRequest(null)}
+      onConfirm={handleConfirmManifestPickup}
+    />
+    </>
   )
 }
 

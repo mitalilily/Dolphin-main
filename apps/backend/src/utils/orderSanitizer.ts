@@ -1,5 +1,25 @@
 import { presignDownload } from '../models/services/upload.service'
 
+export const MANIFESTED_DOCUMENT_STATUSES = new Set([
+  'pickup_initiated',
+  'manifest_generated',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+  'ndr',
+  'undelivered',
+  'rto',
+  'rto_in_transit',
+  'rto_delivered',
+])
+
+export const isOrderManifestedForDocuments = (order: any): boolean => {
+  if (!order) return false
+
+  const status = String(order?.order_status || '').trim().toLowerCase()
+  return MANIFESTED_DOCUMENT_STATUSES.has(status)
+}
+
 /**
  * Generates an accessible download URL for stored asset keys.
  * Falls back gracefully if the file cannot be presigned.
@@ -56,6 +76,9 @@ export const sanitizeOrderForCustomer = async (order: any): Promise<any> => {
   const manifestRetryCount = Number(order?.manifest_retry_count ?? 0)
   const manifestRetriesRemaining = Math.max(0, 3 - manifestRetryCount)
   const provider = String(order?.integration_type || '').trim().toLowerCase()
+  const shouldGateManifestDocuments =
+    String(order?.type || '').trim().toLowerCase() === 'b2c' ||
+    (!order?.type && Object.prototype.hasOwnProperty.call(order, 'integration_type'))
 
   delete sanitized.courier_cost
 
@@ -65,6 +88,20 @@ export const sanitizeOrderForCustomer = async (order: any): Promise<any> => {
     String(order?.order_status || '').trim().toLowerCase() === 'manifest_failed' &&
     provider === 'delhivery' &&
     manifestRetriesRemaining > 0
+
+  if (shouldGateManifestDocuments && !isOrderManifestedForDocuments(order)) {
+    sanitized.awb_number = null
+    sanitized.label = null
+    sanitized.label_key = null
+    sanitized.label_url = null
+    sanitized.manifest = null
+    sanitized.manifest_key = null
+    sanitized.manifest_url = null
+    sanitized.invoice_link = null
+    sanitized.invoice_key = null
+    sanitized.invoice_url = null
+    return sanitized
+  }
 
   // Always expose stored document keys so clients can reliably use the same regenerated keys
   if (order.label) sanitized.label_key = order.label

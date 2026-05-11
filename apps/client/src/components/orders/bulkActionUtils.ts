@@ -135,7 +135,7 @@ export const isB2CManifestEligible = (order: BulkOrderDocumentShape) => {
 
 export const isB2CManifestComplete = (order: BulkOrderDocumentShape) => {
   const status = getNormalizedOrderStatus(order)
-  return hasManifestDocument(order) || B2C_MANIFEST_DONE_STATUSES.has(status)
+  return B2C_MANIFEST_DONE_STATUSES.has(status)
 }
 
 export const getB2CManifestDisabledReason = (order: BulkOrderDocumentShape) => {
@@ -240,6 +240,13 @@ export const downloadFile = async (url: string, fileName: string) => {
 }
 
 export const getDocumentReference = (order: BulkOrderDocumentShape, type: DocumentType) => {
+  const isB2COrder = order.type !== 'b2b'
+  const manifestComplete = isB2COrder ? isB2CManifestComplete(order) : true
+
+  if (!manifestComplete) {
+    return { key: null, url: null }
+  }
+
   if (type === 'label') {
     return {
       key:
