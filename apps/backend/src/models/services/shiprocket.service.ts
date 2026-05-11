@@ -2435,8 +2435,6 @@ export const fetchAvailableCouriersWithRates = async (
       'truxcargo',
       'icarry',
     ]
-    const CORE_FALLBACK_PROVIDERS = new Set(['shiprocket', 'truxcargo', 'icarry'])
-
     const fetchSystemCourierRows = async () =>
       db
         .select({
@@ -2535,7 +2533,7 @@ export const fetchAvailableCouriersWithRates = async (
       const providerKey = normalizeProviderKey(row.serviceProvider)
       if (!providerKey || !SUPPORTED_PROVIDERS.includes(providerKey)) continue
       const rowEnabled = Boolean((row as any)?.isEnabled)
-      if (!rowEnabled && !CORE_FALLBACK_PROVIDERS.has(providerKey)) continue
+      if (!rowEnabled) continue
       if (providerKey === 'delhivery' && !DELHIVERY_ALLOWED_COURIER_IDS.includes(Number(row.id))) {
         continue
       }
@@ -2552,6 +2550,45 @@ export const fetchAvailableCouriersWithRates = async (
     const systemCourierMap = Object.fromEntries(
       [...providerCourierBuckets.entries()].map(([providerKey, bucket]) => [providerKey, bucket.idSet]),
     ) as Record<string, Set<number>>
+
+    const refreshProviderBucketFromDb = async (providerKey: string, courierIds: number[]) => {
+      const normalizedProvider = normalizeProviderKey(providerKey)
+      const uniqueIds = [
+        ...new Set(
+          courierIds.map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+        ),
+      ]
+      if (!normalizedProvider || !uniqueIds.length) return
+
+      const enabledRows = await db
+        .select({
+          id: couriers.id,
+          serviceProvider: couriers.serviceProvider,
+          name: couriers.name,
+          isEnabled: couriers.isEnabled,
+          createdAt: couriers.createdAt,
+        })
+        .from(couriers)
+        .where(
+          and(
+            sql`lower(${couriers.serviceProvider}) = ${normalizedProvider}`,
+            eq(couriers.isEnabled, true),
+            inArray(couriers.id, uniqueIds),
+          ),
+        )
+
+      if (!enabledRows.length) {
+        providerCourierBuckets.delete(normalizedProvider)
+        delete systemCourierMap[normalizedProvider]
+        return
+      }
+
+      providerCourierBuckets.set(normalizedProvider, {
+        rows: enabledRows,
+        idSet: new Set<number>(enabledRows.map((row) => Number(row.id))),
+      })
+      systemCourierMap[normalizedProvider] = new Set<number>(enabledRows.map((row) => Number(row.id)))
+    }
 
     const syncShipmozoCourierRows = async (records: any[]) => {
       const normalizedRows = records
@@ -2595,17 +2632,10 @@ export const fetchAvailableCouriersWithRates = async (
           },
         })
 
-      providerCourierBuckets.set('shipmozo', {
-        rows: normalizedRows.map((row) => ({
-          id: row.id,
-          name: row.name,
-          serviceProvider: row.serviceProvider,
-          isEnabled: true,
-          createdAt: new Date(),
-        })),
-        idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),
-      })
-      systemCourierMap.shipmozo = new Set<number>(normalizedRows.map((row) => Number(row.id)))
+      await refreshProviderBucketFromDb(
+        'shipmozo',
+        normalizedRows.map((row) => Number(row.id)),
+      )
     }
 
     const syncShiprocketCourierRows = async (records: any[]) => {
@@ -2649,17 +2679,10 @@ export const fetchAvailableCouriersWithRates = async (
           },
         })
 
-      providerCourierBuckets.set('shiprocket', {
-        rows: normalizedRows.map((row) => ({
-          id: row.id,
-          name: row.name,
-          serviceProvider: row.serviceProvider,
-          isEnabled: true,
-          createdAt: new Date(),
-        })),
-        idSet: new Set<number>(normalizedRows.map((row) => Number(row.id))),
-      })
-      systemCourierMap.shiprocket = new Set<number>(normalizedRows.map((row) => Number(row.id)))
+      await refreshProviderBucketFromDb(
+        'shiprocket',
+        normalizedRows.map((row) => Number(row.id)),
+      )
     }
 
     interface ServiceableProviderMeta {
@@ -4855,6 +4878,50 @@ export const createB2CShipmentService = async (
       `âš ï¸ integration_type not provided and courier_id not available, defaulting to 'delhivery'`,
     )
     params.integration_type = 'delhivery'
+  }
+
+  params.integration_type = normalizeIntegrationTypeAlias(params.integration_type)
+
+  const hasSelectedCourierId =
+    params.courier_id !== undefined &&
+    params.courier_id !== null &&
+    String(params.courier_id).trim() !== ''
+
+  if (hasSelectedCourierId) {
+    const selectedCourierId = Number(params.courier_id)
+    if (!Number.isFinite(selectedCourierId)) {
+      throw new HttpError(400, 'Invalid courier_id. Please select a valid enabled courier.')
+    }
+
+    const [selectedCourier] = await db
+      .select({
+        id: couriers.id,
+        name: couriers.name,
+        serviceProvider: couriers.serviceProvider,
+        isEnabled: couriers.isEnabled,
+      })
+      .from(couriers)
+      .where(
+        and(
+          eq(couriers.id, selectedCourierId),
+          sql`lower(${couriers.serviceProvider}) = ${params.integration_type}`,
+        ),
+      )
+      .limit(1)
+
+    if (!selectedCourier) {
+      throw new HttpError(
+        400,
+        `Courier ${selectedCourierId} is not available for ${params.integration_type}. Please refresh courier selection and choose an enabled courier.`,
+      )
+    }
+
+    if (!selectedCourier.isEnabled) {
+      throw new HttpError(
+        400,
+        `Courier ${selectedCourier.name} (${selectedCourierId}) is disabled. Please select an enabled courier.`,
+      )
+    }
   }
 
   if (String(params.integration_type || '').toLowerCase() === 'delhivery') {
