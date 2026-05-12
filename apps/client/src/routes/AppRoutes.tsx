@@ -56,6 +56,7 @@ import {
   loadReports,
   loadRtoList,
   loadSettings,
+  loadSignup,
   loadSupportTicketsPage,
   loadTermsOfService,
   loadTicketDetailsPage,
@@ -85,6 +86,7 @@ const RateCalculatorLandingPage = lazy(loadRateCalculatorLandingPage)
 const TrackingLandingPage = lazy(loadTrackingLandingPage)
 const VolumetricCalculatorPage = lazy(loadVolumetricCalculatorPage)
 const Login = lazy(loadLogin)
+const Signup = lazy(loadSignup)
 const ClientPreview = lazy(loadClientPreview)
 const Layout = lazy(loadLayout)
 
@@ -279,7 +281,7 @@ function RoutedAppContent() {
             ) : (
               <>
                 <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Navigate to="/login" replace />} />
+                <Route path="/signup" element={<Signup />} />
                 <Route path="/app" element={<AppEntry />} />
                 <Route path="/preview" element={<ClientPreview />} />
                 <Route

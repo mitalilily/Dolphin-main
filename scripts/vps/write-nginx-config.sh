@@ -217,7 +217,7 @@ sed -i "s@__API_PORT__@$(escape_sed_replacement "$API_PORT")@g" "$NGINX_SITE"
 replace_multiline_placeholder() {
   local placeholder="$1"
   local value="$2"
-  REPLACEMENT="$value" perl -0pi -e "s/\Q$placeholder\E/$ENV{REPLACEMENT}/g" "$NGINX_SITE"
+  PLACEHOLDER="$placeholder" REPLACEMENT="$value" perl -0pi -e 's/\Q$ENV{PLACEHOLDER}\E/$ENV{REPLACEMENT}/g' "$NGINX_SITE"
 }
 
 replace_multiline_placeholder "__SSL_LISTEN__" "$SSL_LISTEN"
