@@ -3,7 +3,7 @@
 This deploys the monorepo with production-style host separation:
 
 - Marketing site: `https://shopnship.in/`
-- Seller dashboard: `https://client.shopnship.in/` (`https://app.shopnship.in/` remains an alias)
+- Seller dashboard: `https://app.shopnship.in/`
 - Admin panel: `https://admin.shopnship.in/`
 - Backend API and sockets: `https://api.shopnship.in/`
 - pgAdmin: `https://api.shopnship.in/pgadmin/`
@@ -32,9 +32,9 @@ Then run:
 
 ```bash
 PUBLIC_ORIGIN=https://shopnship.in \
-CLIENT_ORIGIN=https://client.shopnship.in \
-CLIENT_DOMAIN=client.shopnship.in \
-CLIENT_EXTRA_DOMAINS=app.shopnship.in \
+CLIENT_ORIGIN=https://app.shopnship.in \
+CLIENT_DOMAIN=app.shopnship.in \
+CLIENT_EXTRA_DOMAINS= \
 ADMIN_ORIGIN=https://admin.shopnship.in \
 API_ORIGIN=https://api.shopnship.in \
 PGADMIN_EMAIL=admin@shopnship.in \
@@ -58,9 +58,9 @@ VPS_USER=root
 VPS_SSH_KEY=<private key allowed in /root/.ssh/authorized_keys>
 VPS_PASSWORD=<optional fallback if no SSH key is configured>
 PUBLIC_ORIGIN=https://shopnship.in
-CLIENT_ORIGIN=https://client.shopnship.in
-CLIENT_DOMAIN=client.shopnship.in
-CLIENT_EXTRA_DOMAINS=app.shopnship.in
+CLIENT_ORIGIN=https://app.shopnship.in
+CLIENT_DOMAIN=app.shopnship.in
+CLIENT_EXTRA_DOMAINS=
 ADMIN_ORIGIN=https://admin.shopnship.in
 API_ORIGIN=https://api.shopnship.in
 ```
