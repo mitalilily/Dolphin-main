@@ -162,6 +162,10 @@ __SSL_DIRECTIVES__
         add_header Cache-Control "no-cache, no-store, must-revalidate";
     }
 
+    location = / {
+        return 302 /login;
+    }
+
     location / {
         add_header Clear-Site-Data "\"cache\"";
         add_header Cache-Control "no-cache, no-store, must-revalidate";
