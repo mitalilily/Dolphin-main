@@ -3,7 +3,7 @@
 This deploys the monorepo with production-style host separation:
 
 - Marketing site: `https://shopnship.in/`
-- Seller dashboard: `https://app.shopnship.in/`
+- Seller dashboard: `https://client.shopnship.in/` (`https://app.shopnship.in/` remains an alias)
 - Admin panel: `https://admin.shopnship.in/`
 - Backend API and sockets: `https://api.shopnship.in/`
 - pgAdmin: `https://api.shopnship.in/pgadmin/`
@@ -16,12 +16,13 @@ Point these Hostinger DNS records to the VPS IP `72.60.96.97`:
 Type  Name   Value
 A     @      72.60.96.97
 A     www    72.60.96.97
+A     client 72.60.96.97
 A     app    72.60.96.97
 A     admin  72.60.96.97
 A     api    72.60.96.97
 ```
 
-Remove old A records for `client.shopnship.in` or any records that still point the app/API domains somewhere else. SSL is requested only for names that already resolve to the VPS.
+Remove old records that point the client/app/API domains somewhere else. SSL is requested only for names that already resolve to the VPS.
 
 ## One-Time VPS Bootstrap
 
@@ -31,7 +32,9 @@ Then run:
 
 ```bash
 PUBLIC_ORIGIN=https://shopnship.in \
-CLIENT_ORIGIN=https://app.shopnship.in \
+CLIENT_ORIGIN=https://client.shopnship.in \
+CLIENT_DOMAIN=client.shopnship.in \
+CLIENT_EXTRA_DOMAINS=app.shopnship.in \
 ADMIN_ORIGIN=https://admin.shopnship.in \
 API_ORIGIN=https://api.shopnship.in \
 PGADMIN_EMAIL=admin@shopnship.in \
@@ -55,7 +58,9 @@ VPS_USER=root
 VPS_SSH_KEY=<private key allowed in /root/.ssh/authorized_keys>
 VPS_PASSWORD=<optional fallback if no SSH key is configured>
 PUBLIC_ORIGIN=https://shopnship.in
-CLIENT_ORIGIN=https://app.shopnship.in
+CLIENT_ORIGIN=https://client.shopnship.in
+CLIENT_DOMAIN=client.shopnship.in
+CLIENT_EXTRA_DOMAINS=app.shopnship.in
 ADMIN_ORIGIN=https://admin.shopnship.in
 API_ORIGIN=https://api.shopnship.in
 ```
