@@ -16,6 +16,19 @@ CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
 ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
 API_PORT="${API_PORT:-5002}"
+DEPLOY_SHA="${DEPLOY_SHA:-}"
+DEPLOY_LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/dolphin-deploy.lock}"
+DEPLOY_LOCK_TIMEOUT_SECONDS="${DEPLOY_LOCK_TIMEOUT_SECONDS:-1800}"
+
+if [ "${DOLPHIN_DEPLOY_LOCK_HELD:-}" != "1" ]; then
+  exec 9>"$DEPLOY_LOCK_FILE"
+  echo "Waiting for deploy lock at $DEPLOY_LOCK_FILE..."
+  if ! flock -w "$DEPLOY_LOCK_TIMEOUT_SECONDS" 9; then
+    echo "Another deploy is still running after ${DEPLOY_LOCK_TIMEOUT_SECONDS}s; aborting." >&2
+    exit 1
+  fi
+  export DOLPHIN_DEPLOY_LOCK_HELD=1
+fi
 
 purge_stale_frontend_assets() {
   local target_dir="$1"
@@ -49,7 +62,11 @@ if [ -d .git ]; then
     git remote add origin "$REPO_URL"
   fi
   git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
-  git reset --hard origin/main
+  if [ -n "$DEPLOY_SHA" ]; then
+    git reset --hard "$DEPLOY_SHA"
+  else
+    git reset --hard origin/main
+  fi
   git show -s --oneline --decorate HEAD
 fi
 
