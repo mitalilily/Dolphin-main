@@ -7,6 +7,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import AdminLayout from 'layouts/Admin.js'
 import AuthLayout from 'layouts/Auth.js'
 import RTLLayout from 'layouts/RTL.js'
+import { AdminRoute } from 'views/Auth/AdminRoute'
 import './index.css'
 
 const queryClient = new QueryClient()
@@ -18,9 +19,16 @@ root.render(
     <BrowserRouter>
       <Switch>
         <Route path={`/auth`} component={AuthLayout} />
-        <Route path={`/admin`} component={AdminLayout} />
+        <Route
+          path={`/admin`}
+          render={(props) => (
+            <AdminRoute>
+              <AdminLayout {...props} />
+            </AdminRoute>
+          )}
+        />
         <Route path={`/rtl`} component={RTLLayout} />
-        <Redirect from={`/`} to="/admin/dashboard" />
+        <Redirect from={`/`} to="/auth/signin" />
       </Switch>
     </BrowserRouter>
 

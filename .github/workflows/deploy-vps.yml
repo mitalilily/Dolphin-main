@@ -10,12 +10,17 @@ concurrency:
   group: dolphin-vps-deploy
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     env:
       VPS_HOST: ${{ secrets.VPS_HOST || '72.60.96.97' }}
       VPS_USER: ${{ secrets.VPS_USER || 'root' }}
+      DEPLOY_SHA: ${{ github.sha }}
       PUBLIC_ORIGIN: ${{ secrets.PUBLIC_ORIGIN || 'https://shopnship.in' }}
       CLIENT_ORIGIN: ${{ secrets.CLIENT_ORIGIN || 'https://client.shopnship.in' }}
       CLIENT_DOMAIN: ${{ secrets.CLIENT_DOMAIN || 'client.shopnship.in' }}
@@ -54,6 +59,7 @@ jobs:
           cat > /tmp/dolphin-deploy.sh <<'REMOTE'
           set -euo pipefail
           app_dir="${APP_DIR:-/var/www/dolphin}"
+          deploy_sha="${DEPLOY_SHA:-}"
           repo_url="https://github.com/mitalilily/Dolphin-main.git"
           mkdir -p "$app_dir"
           cd "$app_dir"
@@ -70,13 +76,32 @@ jobs:
             git remote add origin "$repo_url"
           fi
           git fetch --prune origin "+refs/heads/main:refs/remotes/origin/main"
-          git reset --hard origin/main
+          if [ -n "$deploy_sha" ]; then
+            git reset --hard "$deploy_sha"
+          else
+            git reset --hard origin/main
+          fi
           git show -s --oneline --decorate HEAD
           bash scripts/vps/deploy.sh
+
+          if [ -n "$deploy_sha" ] && [ "$(git rev-parse HEAD)" != "$deploy_sha" ]; then
+            echo "Deployed commit does not match GitHub Actions commit." >&2
+            echo "Expected: $deploy_sha" >&2
+            echo "Actual:   $(git rev-parse HEAD)" >&2
+            exit 1
+          fi
+
+          curl -fsS "$API_ORIGIN/api/health" >/dev/null
+          admin_headers="$(curl -fsSIL "$ADMIN_ORIGIN/" || true)"
+          printf '%s\n' "$admin_headers" | grep -qi 'location: .*/auth/signin' || {
+            echo "Admin root did not redirect to /auth/signin after deploy." >&2
+            printf '%s\n' "$admin_headers" >&2
+            exit 1
+          }
           REMOTE
 
           set +e
-          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' CLIENT_ORIGIN='${CLIENT_ORIGIN}' CLIENT_DOMAIN='${CLIENT_DOMAIN}' CLIENT_EXTRA_DOMAINS='${CLIENT_EXTRA_DOMAINS}' ADMIN_ORIGIN='${ADMIN_ORIGIN}' API_ORIGIN='${API_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
+          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' DEPLOY_SHA='${DEPLOY_SHA}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' CLIENT_ORIGIN='${CLIENT_ORIGIN}' CLIENT_DOMAIN='${CLIENT_DOMAIN}' CLIENT_EXTRA_DOMAINS='${CLIENT_EXTRA_DOMAINS}' ADMIN_ORIGIN='${ADMIN_ORIGIN}' API_ORIGIN='${API_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
           deploy_status=$?
           set -e
           printf '%s\n' "$deploy_output"

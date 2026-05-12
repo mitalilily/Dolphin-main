@@ -1,6 +1,6 @@
 import { jwtDecode } from 'jwt-decode'
 import { useEffect } from 'react'
-import { useHistory } from 'react-router-dom'
+import { Redirect } from 'react-router-dom'
 import { useAuthStore } from '../../store/useAuthStore'
 
 function isTokenExpired(token) {
@@ -13,15 +13,16 @@ function isTokenExpired(token) {
 }
 
 export const AdminRoute = ({ children }) => {
-  const history = useHistory()
   const { token, refreshToken, logout } = useAuthStore()
+  const shouldRedirect = !token || !refreshToken || isTokenExpired(refreshToken)
 
   useEffect(() => {
-    if (!token || !refreshToken || isTokenExpired(refreshToken)) {
+    if (shouldRedirect) {
       logout()
-      history.replace('/auth/signin')
     }
-  }, [token, refreshToken, logout, history])
+  }, [shouldRedirect, logout])
+
+  if (shouldRedirect) return <Redirect to="/auth/signin" />
 
   return children
 }

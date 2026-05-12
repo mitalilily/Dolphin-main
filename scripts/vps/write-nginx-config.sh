@@ -126,7 +126,7 @@ __SSL_DIRECTIVES__
     }
 
     location = / {
-        return 302 /admin/dashboard;
+        return 302 /auth/signin;
     }
 
     location / {
