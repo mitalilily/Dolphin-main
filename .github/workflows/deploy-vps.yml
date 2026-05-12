@@ -43,7 +43,13 @@ jobs:
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh_base=(-o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
+          ssh_base=(
+            -o StrictHostKeyChecking=accept-new
+            -o IdentitiesOnly=yes
+            -o ConnectTimeout=30
+            -o ServerAliveInterval=30
+            -o ServerAliveCountMax=4
+          )
           ssh_target="${VPS_USER}@${VPS_HOST}"
 
           if [ -n "${VPS_SSH_KEY:-}" ]; then
@@ -132,11 +138,28 @@ jobs:
           }
           REMOTE
 
-          set +e
-          deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' DEPLOY_SHA='${DEPLOY_SHA}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' CLIENT_ORIGIN='${CLIENT_ORIGIN}' CLIENT_DOMAIN='${CLIENT_DOMAIN}' CLIENT_EXTRA_DOMAINS='${CLIENT_EXTRA_DOMAINS}' ADMIN_ORIGIN='${ADMIN_ORIGIN}' API_ORIGIN='${API_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
-          deploy_status=$?
-          set -e
-          printf '%s\n' "$deploy_output"
+          deploy_status=1
+          deploy_output=""
+          for attempt in 1 2 3 4 5; do
+            set +e
+            deploy_output="$("${ssh_cmd[@]}" "APP_DIR='${APP_DIR}' DEPLOY_SHA='${DEPLOY_SHA}' PUBLIC_ORIGIN='${PUBLIC_ORIGIN}' CLIENT_ORIGIN='${CLIENT_ORIGIN}' CLIENT_DOMAIN='${CLIENT_DOMAIN}' CLIENT_EXTRA_DOMAINS='${CLIENT_EXTRA_DOMAINS}' ADMIN_ORIGIN='${ADMIN_ORIGIN}' API_ORIGIN='${API_ORIGIN}' bash -s" < /tmp/dolphin-deploy.sh 2>&1)"
+            deploy_status=$?
+            set -e
+            printf '%s\n' "$deploy_output"
+
+            if [ "$deploy_status" -eq 0 ]; then
+              break
+            fi
+
+            if [ "$deploy_status" -eq 255 ] && printf '%s' "$deploy_output" | grep -Eiq 'Connection timed out|Connection refused|Connection reset|No route to host|kex_exchange_identification'; then
+              echo "SSH deploy connection failed on attempt ${attempt}; retrying..."
+              sleep $((attempt * 20))
+              continue
+            fi
+
+            break
+          done
+
           if [ "$deploy_status" -ne 0 ]; then
             deploy_error="$(printf '%s' "$deploy_output" | tail -c 900 | tr '\n' ' ' | sed 's/%/%25/g; s/\r/%0D/g')"
             echo "::error title=VPS deploy failed::${deploy_error}"
