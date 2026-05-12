@@ -21,6 +21,7 @@ const defaultOrigins = [
   'https://admin.dolphinenterprises.in',
   'https://shopnship.in',
   'https://www.shopnship.in',
+  'https://client.shopnship.in',
   'https://app.shopnship.in',
   'https://admin.shopnship.in',
 ]

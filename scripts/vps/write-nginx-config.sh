@@ -4,7 +4,9 @@ set -euo pipefail
 APP_DIR="${APP_DIR:-/var/www/dolphin}"
 PRIMARY_DOMAIN="${PRIMARY_DOMAIN:-shopnship.in}"
 MARKETING_DOMAINS="${MARKETING_DOMAINS:-$PRIMARY_DOMAIN www.$PRIMARY_DOMAIN}"
-CLIENT_DOMAIN="${CLIENT_DOMAIN:-app.$PRIMARY_DOMAIN}"
+CLIENT_DOMAIN="${CLIENT_DOMAIN:-client.$PRIMARY_DOMAIN}"
+CLIENT_EXTRA_DOMAINS="${CLIENT_EXTRA_DOMAINS:-app.$PRIMARY_DOMAIN}"
+CLIENT_SERVER_NAMES="${CLIENT_SERVER_NAMES:-$CLIENT_DOMAIN $CLIENT_EXTRA_DOMAINS}"
 ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.$PRIMARY_DOMAIN}"
 API_DOMAIN="${API_DOMAIN:-api.$PRIMARY_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
@@ -138,7 +140,7 @@ server {
     listen 80;
     listen [::]:80;
 __SSL_LISTEN__
-    server_name __CLIENT_DOMAIN__;
+    server_name __CLIENT_SERVER_NAMES__;
 __SSL_DIRECTIVES__
 
     root __APP_DIR__/apps/client/dist-app;
@@ -209,6 +211,7 @@ sed -i "s@__APP_DIR__@$(escape_sed_replacement "$APP_DIR")@g" "$NGINX_SITE"
 sed -i "s@__PRIMARY_DOMAIN__@$(escape_sed_replacement "$PRIMARY_DOMAIN")@g" "$NGINX_SITE"
 sed -i "s@__MARKETING_DOMAINS__@$(escape_sed_replacement "$MARKETING_DOMAINS")@g" "$NGINX_SITE"
 sed -i "s@__CLIENT_DOMAIN__@$(escape_sed_replacement "$CLIENT_DOMAIN")@g" "$NGINX_SITE"
+sed -i "s@__CLIENT_SERVER_NAMES__@$(escape_sed_replacement "$CLIENT_SERVER_NAMES")@g" "$NGINX_SITE"
 sed -i "s@__ADMIN_DOMAIN__@$(escape_sed_replacement "$ADMIN_DOMAIN")@g" "$NGINX_SITE"
 sed -i "s@__API_DOMAIN__@$(escape_sed_replacement "$API_DOMAIN")@g" "$NGINX_SITE"
 sed -i "s@__API_ORIGIN__@$(escape_sed_replacement "$API_ORIGIN")@g" "$NGINX_SITE"

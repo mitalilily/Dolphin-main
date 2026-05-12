@@ -20,6 +20,7 @@ export interface CreateShipmentParams {
   request_auto_pickup?: 'Yes' | 'No'
   gift_wrap?: number
   shipping_charges?: number // What seller charges customer (customer-facing price)
+  other_charges?: number
   freight_charges?: number // What platform charges seller (based on rate card)
   courier_cost?: number // Estimated courier cost from serviceability (what platform pays courier - can be updated via webhook)
   cod_charges?: number

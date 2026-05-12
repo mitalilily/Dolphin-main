@@ -209,6 +209,7 @@ export default function B2COrderFormSteps({ onClose }: { onClose?: () => void })
         package_breadth: data.breadth,
         package_height: data.height,
         shipping_charges: Number(data?.shippingCharges ?? 0), // What seller charges customer
+        other_charges: Number(data?.otherCharges ?? 0),
         freight_charges: Number(data?.forwardCharges ?? 0), // What platform charges seller (based on rate card)
         courier_cost: data?.courierCost ? Number(data.courierCost) : undefined, // Estimated courier cost from serviceability (what platform pays courier)
         prepaid_amount: data?.prepaidAmount,

@@ -39,6 +39,7 @@ type CheckResult = {
 }
 
 const allProviders: ProviderKey[] = ['shiprocket', 'shipmozo', 'icarry', 'truxcargo']
+const money = (value: unknown) => Number(Number(value ?? 0).toFixed(2))
 
 const getProvidersToRun = (): ProviderKey[] => {
   const requested = String(process.env.COURIER_QA_PROVIDERS || '').trim()
@@ -221,21 +222,48 @@ const pickCourier = async (provider: ProviderKey, userId: string) => {
       .toLowerCase()
     return serviceProvider === provider
   })
-  const selected = exact[0] || couriers[0]
+  const selected =
+    exact.find((courier: any) => courier?.localRates?.forward) ||
+    couriers.find((courier: any) => courier?.localRates?.forward) ||
+    exact[0] ||
+    couriers[0]
   if (!selected?.id) throw new Error(`No serviceable courier returned for ${provider}`)
 
+  const localForwardRate = selected?.localRates?.forward
+  if (!localForwardRate) {
+    throw new Error(`No Dolphin forward rate card returned for ${provider} courier ${selected.id}`)
+  }
+
+  const charge = money(localForwardRate.rate ?? selected.rate)
+  if (!Number.isFinite(charge) || charge <= 0) {
+    throw new Error(`Invalid Dolphin forward rate for ${provider} courier ${selected.id}`)
+  }
+
+  const selectedRate = money(selected.rate)
+  if (selectedRate > 0 && Math.abs(selectedRate - charge) > 0.01) {
+    throw new Error(
+      `Selectable courier rate does not match Dolphin rate card for ${provider}: card=${charge}, selected=${selectedRate}`,
+    )
+  }
+
   const providerCost = await resolveProviderCost(provider)
-  const charge =
-    Number(selected.freight_charges ?? selected.total_charges ?? selected.rate ?? selected.shipping_charges ?? 0) ||
-    providerCost ||
-    50
+  const otherCharges = money(localForwardRate.other_charges)
+  const codCharges = money(localForwardRate.cod_charges)
 
   return {
     id: Number(selected.id),
     name: String(selected.name || selected.courier_name || selected.courier_partner || provider),
     charge,
-    providerCost: providerCost || charge,
+    otherCharges,
+    codCharges,
+    providerCost,
     rawCount: couriers.length,
+    rateCard: {
+      rate: charge,
+      otherCharges,
+      codCharges,
+      maxSlabWeight: selected.max_slab_weight ?? localForwardRate.max_slab_weight ?? null,
+    },
   }
 }
 
@@ -273,7 +301,7 @@ const buildShipmentPayload = ({
   provider: ProviderKey
   orderNumber: string
   pickupName: string
-  courier: { id: number; name: string; charge: number; providerCost: number }
+  courier: { id: number; name: string; charge: number; otherCharges: number; codCharges: number; providerCost: number }
   appPickupAddressId: string
   icarryPickupAddressId?: number | null
 }) => ({
@@ -285,7 +313,7 @@ const buildShipmentPayload = ({
   courier_cost: courier.providerCost,
   freight_charges: courier.charge,
   shipping_charges: courier.charge,
-  other_charges: 0,
+  other_charges: courier.otherCharges,
   cod_charges: 0,
   order_amount: 100,
   prepaid_amount: '0',
@@ -550,6 +578,7 @@ async function main() {
     })
 
     let mainOrder: any = null
+    let mainCourier: any = null
     await runStep(results, provider, 'rate-calculator', async () => {
       const courier = await pickCourier(provider, userId)
       return courier
@@ -565,12 +594,15 @@ async function main() {
         icarryPickupAddressId,
       })
       mainOrder = created.order
+      mainCourier = created.courier
       return {
         orderNumber: mainOrder.order_number,
         orderId: mainOrder.id,
         awb: mainOrder.awb_number || null,
         shipmentId: mainOrder.shipment_id || null,
         status: mainOrder.order_status,
+        dolphinRate: mainCourier.charge,
+        dolphinOtherCharges: mainCourier.otherCharges,
       }
     })
     if (!booked || !mainOrder) continue
@@ -612,9 +644,40 @@ async function main() {
     })
 
     await runStep(results, provider, 'wallet-debit', async () => {
+      const freshOrder = await getOrder(mainOrder.order_number)
+      mainOrder = freshOrder
+      const freightCharges = money(freshOrder.freight_charges)
+      const otherCharges = money(freshOrder.other_charges)
+      const expectedDebit = money(freightCharges + otherCharges)
+      if (Math.abs(freightCharges - money(mainCourier.charge)) > 0.01) {
+        throw new Error(
+          `Order freight ${freightCharges} does not match Dolphin rate card ${mainCourier.charge}`,
+        )
+      }
+      if (Math.abs(otherCharges - money(mainCourier.otherCharges)) > 0.01) {
+        throw new Error(
+          `Order other_charges ${otherCharges} does not match Dolphin rate card ${mainCourier.otherCharges}`,
+        )
+      }
       const walletSummary = await getOrderWalletSummary(beforeWallet.id, mainOrder.id)
       if (walletSummary.debit <= 0) throw new Error('No wallet debit found for order')
-      return walletSummary
+      if (Math.abs(money(walletSummary.debit) - expectedDebit) > 0.01) {
+        throw new Error(`Wallet debit ${walletSummary.debit} does not match Dolphin bill ${expectedDebit}`)
+      }
+      if (
+        money(mainCourier.providerCost) > 0 &&
+        Math.abs(money(walletSummary.debit) - money(mainCourier.providerCost)) <= 0.01 &&
+        Math.abs(expectedDebit - money(mainCourier.providerCost)) > 0.01
+      ) {
+        throw new Error('Wallet debit matched provider cost instead of Dolphin rate card bill')
+      }
+      return {
+        ...walletSummary,
+        expectedDebit,
+        freightCharges,
+        otherCharges,
+        providerCost: money(mainCourier.providerCost),
+      }
     })
 
     let cancelOrder: any = null

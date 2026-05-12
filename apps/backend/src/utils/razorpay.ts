@@ -36,9 +36,19 @@ export const maskRazorpayKey = (keyId: string) => {
 
 export const readRazorpayMode = (envVars: NodeJS.ProcessEnv = process.env): RazorpayMode => {
   const requestedMode = cleanEnv(envVars.RAZORPAY_MODE).toLowerCase()
+  const isProduction = cleanEnv(envVars.NODE_ENV).toLowerCase() === 'production'
+  const allowProductionTestMode = cleanEnv(envVars.ALLOW_RAZORPAY_TEST_IN_PRODUCTION).toLowerCase()
+
+  if (isProduction && requestedMode === 'test' && allowProductionTestMode !== 'true') {
+    console.warn(
+      '[Razorpay] Ignoring RAZORPAY_MODE=test because NODE_ENV=production. Set ALLOW_RAZORPAY_TEST_IN_PRODUCTION=true only for an intentional dry run.',
+    )
+    return 'live'
+  }
+
   return requestedMode === 'live' || requestedMode === 'test'
     ? requestedMode
-    : envVars.NODE_ENV === 'production'
+    : isProduction
       ? 'live'
       : 'test'
 }

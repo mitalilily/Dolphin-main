@@ -11,6 +11,13 @@ describe('razorpay configuration', () => {
     expect(readRazorpayMode({ NODE_ENV: 'development' } as NodeJS.ProcessEnv)).toBe('test')
     expect(
       readRazorpayMode({ NODE_ENV: 'production', RAZORPAY_MODE: 'test' } as NodeJS.ProcessEnv),
+    ).toBe('live')
+    expect(
+      readRazorpayMode({
+        NODE_ENV: 'production',
+        RAZORPAY_MODE: 'test',
+        ALLOW_RAZORPAY_TEST_IN_PRODUCTION: 'true',
+      } as NodeJS.ProcessEnv),
     ).toBe('test')
     expect(
       readRazorpayMode({ NODE_ENV: 'development', RAZORPAY_MODE: 'live' } as NodeJS.ProcessEnv),

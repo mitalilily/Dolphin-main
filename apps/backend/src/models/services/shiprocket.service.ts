@@ -1972,6 +1972,11 @@ export const computeB2CFreightForOrder = async (params: {
     ...freightCalc,
     slab_weight: freightCalc.slab_weight,
     base_price: freightCalc.base_price,
+    rate_card_id: rateCard.shippingRateId,
+    other_charges: rateCard.other_charges,
+    cod_charges: rateCard.cod_charges,
+    cod_percent: rateCard.cod_percent,
+    mode: rateCard.mode,
     zone_id: resolvedZoneRow.id,
     plan_id: resolvedPlanId,
     selected_slab: freightCalc.selected_slab,
@@ -3840,66 +3845,6 @@ export const fetchAvailableCouriersWithRates = async (
         const applicableRateCards = effectiveCourierRates.filter((r) => r.type === rateType)
         const applicableRateOptions = applicableRateCards.flatMap((r) => buildServiceabilityRateOptions(r))
 
-        if (
-          !applicableRateOptions.length &&
-          (providerKey === 'shipmozo' || providerKey === 'shiprocket') &&
-          courier?.provider_serviceability
-        ) {
-          const shipmozoForwardRate = Number(
-            courier?.provider_serviceability?.rate ??
-              courier?.provider_serviceability?.freight_charge ??
-              courier?.provider_serviceability?.total_charges ??
-              courier?.provider_serviceability?.shipping_charges ??
-              courier?.provider_serviceability?.amount ??
-              0,
-          )
-          const shipmozoCodCharges = Number(courier?.provider_serviceability?.cod_charges ?? 0)
-          const shipmozoEdd =
-            courier?.provider_serviceability?.etd ??
-            courier?.provider_serviceability?.expected_delivery_date ??
-            (courier?.provider_serviceability?.estimated_delivery_days
-              ? `${courier.provider_serviceability.estimated_delivery_days} Days`
-              : courier?.edd)
-          const shipmozoMode =
-            courier?.provider_serviceability?.courier_company_service ||
-            courier?.provider_serviceability?.service_type ||
-            (courier?.provider_serviceability?.is_surface === true ||
-            courier?.provider_serviceability?.is_surface === 1
-              ? 'Surface'
-              : courier?.provider_serviceability?.air_max_weight
-                ? 'Air'
-                : '')
-
-          return [
-            {
-              ...courier,
-              courier_option_key: makeCourierIdentityKey({
-                id: courier.id,
-                integration_type: courier.integration_type || courier.service_provider || null,
-                serviceProvider: courier.serviceProvider || null,
-                max_slab_weight: null,
-              }),
-              displayName: courier.name,
-              localRates: {
-                [rateType]: {
-                  rate: shipmozoForwardRate,
-                  cod_charges: shipmozoCodCharges,
-                  other_charges: 0,
-                  mode: shipmozoMode,
-                },
-              },
-              approxZone,
-              courier_cost_estimate: shipmozoForwardRate || courier?.courier_cost_estimate || null,
-              chargeable_weight: chargeableWeight,
-              volumetric_weight: null,
-              slabs: null,
-              rate: shipmozoForwardRate || null,
-              edd: shipmozoEdd || courier?.edd,
-              max_slab_weight: null,
-            },
-          ]
-        }
-
         if (!applicableRateOptions.length) {
           return [
             {
@@ -3958,27 +3903,13 @@ export const fetchAvailableCouriersWithRates = async (
       // Only filter out null/undefined, not couriers without local rates
       .filter((c) => c !== null && c !== undefined)
 
-    const requireLocalRates = params.shipment_type === 'b2c'
-    const B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST = new Set([
-      'shipmozo',
-      'shiprocket',
-      'icarry',
-      'truxcargo',
-      'delhivery',
-      'ekart',
-      'xpressbees',
-    ])
+    const requireLocalRates = true
     combined = combined.filter((c: any) => {
       const providerKey = (c.integration_type || '').toLowerCase()
       const inSystem = isCourierInSystem(providerKey, c.id)
       const requiredRateType = isReverseShipment ? 'rto' : 'forward'
       const hasLocalRate = Boolean(c.localRates?.[requiredRateType])
-      const hasProviderEstimate = Number.isFinite(Number(c?.rate)) || Number.isFinite(Number(c?.courier_cost_estimate))
-      const localRatesAvailable =
-        !requireLocalRates ||
-        hasLocalRate ||
-        (B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST.has(providerKey) && hasProviderEstimate) ||
-        B2C_RATE_OPTIONAL_PROVIDER_ALLOWLIST.has(providerKey)
+      const localRatesAvailable = !requireLocalRates || hasLocalRate
 
       if (!inSystem || !localRatesAvailable) {
         console.log('ðŸš« Removing courier from final list', {
@@ -3995,7 +3926,8 @@ export const fetchAvailableCouriersWithRates = async (
     // âœ… Final filter: Ensure all couriers have correct business_type
     combined = await filterCouriersByBusinessType(combined, 'b2c')
 
-    // Guarantee at least one visible card per key aggregator in B2C selection.
+    // Non-B2C utility views may show a provider card without a local rate.
+    // B2C serviceability must only return couriers backed by Dolphin rate cards.
     const ensureProviderCardPresent = (providerKey: string) => {
       const hasProviderCard = combined.some(
         (row: any) =>
@@ -4037,7 +3969,9 @@ export const fetchAvailableCouriersWithRates = async (
       })
     }
 
-    ;['shipmozo', 'shiprocket', 'truxcargo', 'icarry'].forEach(ensureProviderCardPresent)
+    if (!requireLocalRates) {
+      ;['shipmozo', 'shiprocket', 'truxcargo', 'icarry'].forEach(ensureProviderCardPresent)
+    }
 
     // ðŸ”¹ Sorting and tagging
     if (userId && combined?.length) {
@@ -5295,12 +5229,12 @@ export const createB2CShipmentService = async (
     throw new HttpError(400, 'Pickup and destination pincodes are required to book with Delhivery.')
   }
 
-  const otherCharges = Number(params?.other_charges ?? 0)
+  let otherCharges = Number(params?.other_charges ?? 0)
   const shippingCharges = Number(params?.shipping_charges ?? 0)
-  const totalShippingCharges = shippingCharges + otherCharges
+  let totalShippingCharges = shippingCharges + otherCharges
   let freightCharges = Number(params?.freight_charges ?? totalShippingCharges)
   const isCodOrder = params.payment_type === 'cod'
-  const codCharges = isCodOrder ? Number(params?.cod_charges ?? 0) : 0
+  let codCharges = isCodOrder ? Number(params?.cod_charges ?? 0) : 0
   const discount = Number(params?.discount ?? 0)
   const giftWrap = Number(params?.gift_wrap ?? 0)
   const transactionFee = Number(params?.transaction_fee ?? 0)
@@ -5315,6 +5249,10 @@ export const createB2CShipmentService = async (
     volumetric_weight: number | null
     chargeable_weight: number | null
     slabs: number | null
+    other_charges?: number
+    cod_charges?: number
+    cod_percent?: number
+    rate_card_id?: string
   } = {
     freight: freightCharges,
     volumetric_weight: null,
@@ -5322,64 +5260,51 @@ export const createB2CShipmentService = async (
     slabs: null,
   }
 
-  if (courierIdForRate && bookingPickupPincode && bookingDestinationPincode) {
-    try {
-      const computedFreight = await computeB2CFreightForOrder({
-        userId,
-        courierId: courierIdForRate,
-        serviceProvider: params.integration_type ?? null,
-        mode: selectedDelhiveryShippingMode ?? null,
-        selectedMaxSlabWeight,
-        zoneIdOverride: params.zone_id ?? null,
-        destinationPincode: bookingDestinationPincode,
-        originPincode: bookingPickupPincode,
-        weightG: normalizeServiceabilityWeightToGrams(params.package_weight ?? params.weight ?? 0),
-        lengthCm: Number(params.package_length ?? params.length ?? 0),
-        breadthCm: Number(params.package_breadth ?? params.breadth ?? 0),
-        heightCm: Number(params.package_height ?? params.height ?? 0),
-        isReverse: isReverseShipment,
-      })
-      if (computedFreight?.freight !== undefined) {
-        slabbedFreight = computedFreight
-        freightCharges = Number(computedFreight.freight)
-      }
-    } catch (freightErr: any) {
-      console.error('âŒ Failed to compute slab-based freight; aborting shipment creation', {
-        order_number: params.order_number,
-        error: freightErr?.message || freightErr,
-        pickup_pincode: bookingPickupPincode,
-        destination_pincode: bookingDestinationPincode,
-        courier_id: courierIdForRate,
-      })
-      const isRateCardMissing =
-        String(freightErr?.message || '')
-          .toLowerCase()
-          .includes('no rate card found') ||
-        String(freightErr?.message || '')
-          .toLowerCase()
-          .includes('no slab configured')
-      const requestFreight = Number(params?.freight_charges ?? totalShippingCharges)
-      if (isRateCardMissing && Number.isFinite(requestFreight) && requestFreight > 0) {
-        freightCharges = requestFreight
-        slabbedFreight = {
-          freight: requestFreight,
-          volumetric_weight: null,
-          chargeable_weight: null,
-          slabs: null,
-        }
-        console.warn('âš ï¸ Falling back to request freight_charges as rate card is missing', {
-          order_number: params.order_number,
-          fallback_freight: requestFreight,
-        })
-      } else if (freightErr instanceof HttpError) {
-        throw freightErr
-      } else {
-        throw new HttpError(
-          400,
-          freightErr?.message || 'Unable to compute freight for selected courier/zone',
-        )
-      }
+  if (!courierIdForRate || !Number.isFinite(Number(courierIdForRate))) {
+    throw new HttpError(400, 'Courier ID is required to compute Dolphin rate-card freight before booking.')
+  }
+
+  try {
+    const computedFreight = await computeB2CFreightForOrder({
+      userId,
+      courierId: courierIdForRate,
+      serviceProvider: params.integration_type ?? null,
+      mode: selectedDelhiveryShippingMode ?? null,
+      selectedMaxSlabWeight,
+      zoneIdOverride: params.zone_id ?? null,
+      destinationPincode: bookingDestinationPincode,
+      originPincode: bookingPickupPincode,
+      weightG: normalizeServiceabilityWeightToGrams(params.package_weight ?? params.weight ?? 0),
+      lengthCm: Number(params.package_length ?? params.length ?? 0),
+      breadthCm: Number(params.package_breadth ?? params.breadth ?? 0),
+      heightCm: Number(params.package_height ?? params.height ?? 0),
+      isReverse: isReverseShipment,
+    })
+    if (computedFreight?.freight !== undefined) {
+      slabbedFreight = computedFreight
+      freightCharges = Number(computedFreight.freight)
+      otherCharges = Number(computedFreight.other_charges ?? 0)
+      codCharges = isCodOrder ? Number(computedFreight.cod_charges ?? 0) : 0
+      totalShippingCharges = shippingCharges + otherCharges
+      params.freight_charges = freightCharges
+      params.other_charges = otherCharges
+      params.cod_charges = codCharges
     }
+  } catch (freightErr: any) {
+    console.error('âŒ Failed to compute Dolphin rate-card freight; aborting shipment creation', {
+      order_number: params.order_number,
+      error: freightErr?.message || freightErr,
+      pickup_pincode: bookingPickupPincode,
+      destination_pincode: bookingDestinationPincode,
+      courier_id: courierIdForRate,
+    })
+    if (freightErr instanceof HttpError) {
+      throw freightErr
+    }
+    throw new HttpError(
+      400,
+      freightErr?.message || 'Unable to compute Dolphin freight for selected courier/zone',
+    )
   }
 
   let estimatedWalletDebit = 0
@@ -6968,6 +6893,10 @@ export const createB2CShipmentService = async (
       volumetric_weight: number | null
       chargeable_weight: number | null
       slabs: number | null
+      other_charges?: number
+      cod_charges?: number
+      cod_percent?: number
+      rate_card_id?: string
     } = {
       freight: Number(params?.freight_charges ?? params?.shipping_charges ?? 0),
       volumetric_weight: null,
@@ -6991,28 +6920,18 @@ export const createB2CShipmentService = async (
         heightCm: Number(params.package_height ?? params.height ?? 0),
         isReverse: params.isReverse === true || params.payment_type === 'reverse',
       })
+      params.freight_charges = Number(slabbedFreight.freight)
+      params.other_charges = Number(slabbedFreight.other_charges ?? 0)
+      params.cod_charges =
+        params.payment_type === 'cod' ? Number(slabbedFreight.cod_charges ?? 0) : 0
+      codCharges = Number(params.cod_charges ?? 0)
     } catch (freightErr: any) {
-      const isRateCardMissing =
-        String(freightErr?.message || '')
-          .toLowerCase()
-          .includes('no rate card found') ||
-        String(freightErr?.message || '')
-          .toLowerCase()
-          .includes('no slab configured')
-      const requestFreight = Number(params?.freight_charges ?? params?.shipping_charges ?? 0)
-      if (!isRateCardMissing || !Number.isFinite(requestFreight) || requestFreight <= 0) {
-        throw freightErr
-      }
-      console.warn('Ã¢Å¡Â Ã¯Â¸Â Falling back to request freight_charges after provider booking', {
+      console.error('Dolphin rate-card freight recompute failed after provider booking', {
         order_number: params.order_number,
-        fallback_freight: requestFreight,
+        error: freightErr?.message || freightErr,
+        courier_id: courierIdForRate,
       })
-      slabbedFreight = {
-        freight: requestFreight,
-        volumetric_weight: null,
-        chargeable_weight: null,
-        slabs: null,
-      }
+      throw freightErr
     }
 
     // 2ï¸âƒ£ INSERT LOCAL ORDER + WALLET TRANSACTION
