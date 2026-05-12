@@ -101,8 +101,30 @@ jobs:
             exit 1
           fi
 
-          curl -fsS "$API_ORIGIN/api/health" >/dev/null
-          admin_headers="$(curl -fsSIL "$ADMIN_ORIGIN/" || true)"
+          for attempt in $(seq 1 40); do
+            if curl -fsS "$API_ORIGIN/api/health" >/dev/null; then
+              api_ready=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "${api_ready:-0}" != "1" ]; then
+            echo "API health check did not recover after deploy." >&2
+            curl -i "$API_ORIGIN/api/health" || true
+            exit 1
+          fi
+
+          for attempt in $(seq 1 20); do
+            admin_headers="$(curl -sSIL "$ADMIN_ORIGIN/" || true)"
+            if printf '%s\n' "$admin_headers" | grep -qi 'location: .*/auth/signin'; then
+              admin_ready=1
+              break
+            fi
+            sleep 3
+          done
+          if [ "${admin_ready:-0}" != "1" ]; then
+            admin_headers="$(curl -sSIL "$ADMIN_ORIGIN/" || true)"
+          fi
           printf '%s\n' "$admin_headers" | grep -qi 'location: .*/auth/signin' || {
             echo "Admin root did not redirect to /auth/signin after deploy." >&2
             printf '%s\n' "$admin_headers" >&2
