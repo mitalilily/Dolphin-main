@@ -19,6 +19,14 @@ API_PORT="${API_PORT:-5002}"
 DEPLOY_SHA="${DEPLOY_SHA:-}"
 DEPLOY_LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/dolphin-deploy.lock}"
 DEPLOY_LOCK_TIMEOUT_SECONDS="${DEPLOY_LOCK_TIMEOUT_SECONDS:-1800}"
+ADMIN_BUILD_STAGING=""
+
+cleanup() {
+  if [ -n "${ADMIN_BUILD_STAGING:-}" ]; then
+    rm -rf "$ADMIN_BUILD_STAGING"
+  fi
+}
+trap cleanup EXIT
 
 if [ "${DOLPHIN_DEPLOY_LOCK_HELD:-}" != "1" ]; then
   exec 9>"$DEPLOY_LOCK_FILE"
@@ -128,22 +136,26 @@ else
   npm --prefix apps/admin install --legacy-peer-deps
 fi
 echo "Building admin frontend for ${ADMIN_ORIGIN}..."
-ADMIN_STATIC_BACKUP="$(mktemp -d)"
-if [ -d apps/admin/build/static ]; then
-  mkdir -p "$ADMIN_STATIC_BACKUP/static"
-  cp -a apps/admin/build/static/. "$ADMIN_STATIC_BACKUP/static/"
-fi
+ADMIN_BUILD_LIVE="$APP_DIR/apps/admin/build"
+ADMIN_BUILD_STAGING="$(mktemp -d "$APP_DIR/apps/admin/build-next.XXXXXX")"
 (
   cd apps/admin
-  CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/ npx react-scripts build
+  CI=false DISABLE_ESLINT_PLUGIN=true GENERATE_SOURCEMAP=false PUBLIC_URL=/ BUILD_PATH="$ADMIN_BUILD_STAGING" npx react-scripts build
 )
-if [ -d "$ADMIN_STATIC_BACKUP/static" ]; then
-  mkdir -p apps/admin/build/static
-  cp -an "$ADMIN_STATIC_BACKUP/static/." apps/admin/build/static/ || true
-  find apps/admin/build/static -type f -mtime +21 -delete || true
+
+if [ ! -s "$ADMIN_BUILD_STAGING/index.html" ]; then
+  echo "Admin build did not produce index.html; keeping existing live admin build." >&2
+  exit 1
 fi
-rm -rf "$ADMIN_STATIC_BACKUP"
-purge_stale_frontend_assets apps/admin/build/static
+
+mkdir -p "$ADMIN_BUILD_LIVE"
+rsync -a --exclude=/index.html "$ADMIN_BUILD_STAGING"/ "$ADMIN_BUILD_LIVE"/
+cp "$ADMIN_BUILD_STAGING/index.html" "$ADMIN_BUILD_LIVE/index.html.tmp"
+mv "$ADMIN_BUILD_LIVE/index.html.tmp" "$ADMIN_BUILD_LIVE/index.html"
+rm -rf "$ADMIN_BUILD_STAGING"
+ADMIN_BUILD_STAGING=""
+purge_stale_frontend_assets "$ADMIN_BUILD_LIVE/static"
+find "$ADMIN_BUILD_LIVE/static" -type f -mtime +21 -delete || true
 
 echo "Restarting API..."
 pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
