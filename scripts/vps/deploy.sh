@@ -149,9 +149,13 @@ if [ ! -s "$ADMIN_BUILD_STAGING/index.html" ]; then
 fi
 
 mkdir -p "$ADMIN_BUILD_LIVE"
-rsync -a --exclude=/index.html "$ADMIN_BUILD_STAGING"/ "$ADMIN_BUILD_LIVE"/
+chmod 755 "$ADMIN_BUILD_LIVE"
+rsync -a --no-perms --chmod=D755,F644 --exclude=/index.html "$ADMIN_BUILD_STAGING"/ "$ADMIN_BUILD_LIVE"/
 cp "$ADMIN_BUILD_STAGING/index.html" "$ADMIN_BUILD_LIVE/index.html.tmp"
+chmod 644 "$ADMIN_BUILD_LIVE/index.html.tmp"
 mv "$ADMIN_BUILD_LIVE/index.html.tmp" "$ADMIN_BUILD_LIVE/index.html"
+find "$ADMIN_BUILD_LIVE" -type d -exec chmod 755 {} +
+find "$ADMIN_BUILD_LIVE" -type f -exec chmod 644 {} +
 rm -rf "$ADMIN_BUILD_STAGING"
 ADMIN_BUILD_STAGING=""
 purge_stale_frontend_assets "$ADMIN_BUILD_LIVE/static"
