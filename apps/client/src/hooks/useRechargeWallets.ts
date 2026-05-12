@@ -4,13 +4,14 @@ import { confirmRecharge, createRechargeOrder } from '../api/wallet.api'
 interface RechargeOptions {
   amount: number
   prefill: {
-    name: string
-    email: string
-    contact: string
+    name?: string
+    email?: string
+    contact?: string
   }
 }
 
-// Razorpay Checkout types
+type RazorpayPaymentMethod = 'upi' | 'card' | 'netbanking' | 'wallet' | 'emi' | 'paylater'
+
 interface RazorpayCheckoutOptions {
   key: string
   amount: number
@@ -26,6 +27,30 @@ interface RazorpayCheckoutOptions {
   theme: {
     color: string
   }
+  method?: RazorpayPaymentMethod
+  retry?: {
+    enabled: boolean
+  }
+  readonly?: {
+    name?: boolean
+    email?: boolean
+    contact?: boolean
+  }
+  config?: {
+    display?: {
+      blocks?: Record<
+        string,
+        {
+          name: string
+          instruments: Array<{ method: RazorpayPaymentMethod }>
+        }
+      >
+      sequence?: string[]
+      preferences?: {
+        show_default_blocks?: boolean
+      }
+    }
+  }
   handler: (response: RazorpayPaymentResponse) => void | Promise<void>
   modal: {
     ondismiss: () => void
@@ -38,9 +63,23 @@ interface RazorpayPaymentResponse {
   razorpay_signature: string
 }
 
+interface RazorpayPaymentFailedResponse {
+  error?: {
+    code?: string
+    description?: string
+    source?: string
+    step?: string
+    reason?: string
+    metadata?: {
+      order_id?: string
+      payment_id?: string
+    }
+  }
+}
+
 interface RazorpayInstance {
   open: () => void
-  on: (event: string, callback: () => void) => void
+  on: (event: string, callback: (response?: RazorpayPaymentFailedResponse) => void) => void
   close: () => void
 }
 
@@ -48,7 +87,6 @@ interface RazorpayConstructor {
   new (options: RazorpayCheckoutOptions): RazorpayInstance
 }
 
-// Declare Razorpay type for TypeScript
 declare global {
   interface Window {
     Razorpay: RazorpayConstructor
@@ -70,6 +108,60 @@ interface RazorpayOrderResponse {
 }
 
 let razorpayScriptPromise: Promise<void> | null = null
+
+const normalisePhoneForRazorpay = (phone?: string) => {
+  const raw = String(phone || '').trim()
+  if (!raw) return ''
+
+  if (raw.startsWith('+')) return `+${raw.slice(1).replace(/\D/g, '')}`
+
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length === 10) return `+91${digits}`
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`
+  return `+${digits}`
+}
+
+const normalisePrefill = (
+  primary?: Partial<RazorpayCheckoutOptions['prefill']>,
+  fallback?: Partial<RazorpayCheckoutOptions['prefill']>,
+): RazorpayCheckoutOptions['prefill'] => ({
+  name: String(primary?.name || fallback?.name || 'Dolphin Customer').trim(),
+  email: String(primary?.email || fallback?.email || '').trim(),
+  contact: normalisePhoneForRazorpay(primary?.contact || fallback?.contact),
+})
+
+const buildPaymentDisplayConfig = (): NonNullable<RazorpayCheckoutOptions['config']> => ({
+  display: {
+    blocks: {
+      upiPreferred: {
+        name: 'Pay by UPI / QR',
+        instruments: [{ method: 'upi' }],
+      },
+      cardPreferred: {
+        name: 'Cards',
+        instruments: [{ method: 'card' }],
+      },
+      bankingPreferred: {
+        name: 'Netbanking',
+        instruments: [{ method: 'netbanking' }],
+      },
+      walletPreferred: {
+        name: 'Wallets',
+        instruments: [{ method: 'wallet' }],
+      },
+    },
+    sequence: [
+      'block.upiPreferred',
+      'block.cardPreferred',
+      'block.bankingPreferred',
+      'block.walletPreferred',
+    ],
+    preferences: {
+      show_default_blocks: true,
+    },
+  },
+})
 
 const loadRazorpayCheckout = () => {
   if (window.Razorpay) return Promise.resolve()
@@ -93,12 +185,16 @@ const loadRazorpayCheckout = () => {
 export const useRechargeWallet = () =>
   useMutation<void, Error, RechargeOptions>({
     mutationFn: async (options) => {
-      // Call backend → get Razorpay order details
+      const requestPrefill = normalisePrefill(options.prefill)
+      if (!requestPrefill.email || !requestPrefill.contact) {
+        throw new Error('Customer email and phone number are required to open Razorpay payment.')
+      }
+
       const orderData = (await createRechargeOrder({
         amount: options.amount,
-        name: options.prefill.name,
-        email: options.prefill.email,
-        phone: options.prefill.contact,
+        name: requestPrefill.name,
+        email: requestPrefill.email,
+        phone: requestPrefill.contact,
       })) as RazorpayOrderResponse
 
       if (!orderData?.orderId || !orderData?.key) {
@@ -111,8 +207,8 @@ export const useRechargeWallet = () =>
       }
 
       await loadRazorpayCheckout()
+      const prefill = normalisePrefill(orderData.prefill, requestPrefill)
 
-      // Initialize Razorpay Checkout
       const options_razorpay: RazorpayCheckoutOptions = {
         key: orderData.key,
         amount: orderData.amount,
@@ -120,7 +216,17 @@ export const useRechargeWallet = () =>
         name: orderData.name || 'Dolphin Enterprise',
         description: orderData.description || 'Wallet Recharge',
         order_id: orderData.orderId,
-        prefill: orderData.prefill,
+        prefill,
+        method: 'upi',
+        retry: {
+          enabled: true,
+        },
+        readonly: {
+          name: false,
+          email: false,
+          contact: false,
+        },
+        config: buildPaymentDisplayConfig(),
         theme: { color: orderData.theme?.color || orderData.themeColor || '#0052CC' },
         handler: async function (response: RazorpayPaymentResponse) {
           try {
@@ -145,13 +251,20 @@ export const useRechargeWallet = () =>
         },
         modal: {
           ondismiss: function () {
-            // User closed the checkout without paying
             console.log('Payment cancelled by user')
           },
         },
       }
 
       const razorpay = new window.Razorpay(options_razorpay)
+      razorpay.on('payment.failed', (response) => {
+        console.error('Razorpay payment failed:', response)
+        alert(
+          response?.error?.description ||
+            response?.error?.reason ||
+            'Payment failed before completion. Please try another payment method.',
+        )
+      })
       razorpay.open()
     },
   })

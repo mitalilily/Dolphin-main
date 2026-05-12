@@ -40,6 +40,19 @@ const mergeRazorpayMeta = (meta: unknown, patch: Record<string, any>) => {
   }
 }
 
+const normalisePhoneForRazorpay = (phone: string) => {
+  const raw = String(phone || '').trim()
+  if (!raw) return ''
+
+  if (raw.startsWith('+')) return `+${raw.slice(1).replace(/\D/g, '')}`
+
+  const digits = raw.replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length === 10) return `+91${digits}`
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`
+  return `+${digits}`
+}
+
 const topupOwnerSelect = {
   id: walletTopups.id,
   walletId: walletTopups.walletId,
@@ -99,6 +112,11 @@ export async function createWalletOrder(
   const wallet = await walletOfUser(userId)
   const receipt = `wallet_${Date.now()}_${Math.floor(Math.random() * 1000)}`
   const amountPaise = Math.round(amount * 100)
+  const prefill = {
+    name: String(details.name || 'Dolphin Customer').trim(),
+    email: String(details.email || '').trim(),
+    contact: normalisePhoneForRazorpay(details.phone),
+  }
 
   const razorpayOrder = await razorpay.orders.create({
     amount: amountPaise,
@@ -138,11 +156,7 @@ export async function createWalletOrder(
     key: razorpayKeyId,
     name: 'Dolphin',
     description: 'Wallet Recharge',
-    prefill: {
-      name: details.name,
-      email: details.email,
-      contact: details.phone,
-    },
+    prefill,
     theme: {
       color: '#4b8e40',
     },
