@@ -1,6 +1,6 @@
 import { Box, Button, Stack, Typography } from '@mui/material'
 import { useState } from 'react'
-import { Navigate, Link as RouterLink } from 'react-router-dom'
+import { Navigate } from 'react-router-dom'
 import AuthShell from '../../components/auth/AuthShell'
 import CredentialAuthForm from '../../components/auth/CredentialAuthForm'
 import OtpLoginPanel from '../../components/auth/OtpLoginPanel'
@@ -66,13 +66,6 @@ export default function Login() {
         </Box>
 
         {mode === 'otp' ? <OtpLoginPanel /> : <CredentialAuthForm mode="login" />}
-
-        <Typography sx={{ color: brand.inkSoft, textAlign: 'center', fontSize: '0.88rem' }}>
-          New to Dolphin?{' '}
-          <Box component={RouterLink} to="/signup" sx={{ color: brand.ink, fontWeight: 700 }}>
-            Create an account
-          </Box>
-        </Typography>
       </Stack>
     </AuthShell>
   )
