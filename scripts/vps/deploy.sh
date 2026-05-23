@@ -97,6 +97,79 @@ module.exports = {
 EOF
 }
 
+list_api_port_pids() {
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltnp "sport = :${API_PORT}" 2>/dev/null \
+      | sed -nE 's/.*pid=([0-9]+),.*/\1/p' \
+      | sort -u
+    return 0
+  fi
+
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -ti "tcp:${API_PORT}" -sTCP:LISTEN 2>/dev/null | sort -u
+    return 0
+  fi
+}
+
+stop_stale_api_processes() {
+  local pids ids
+  pids="$(list_api_port_pids || true)"
+
+  if command -v pm2 >/dev/null 2>&1 && command -v node >/dev/null 2>&1; then
+    ids="$(
+      API_PIDS="$pids" API_PORT="$API_PORT" pm2 jlist 2>/dev/null | node -e '
+let input = ""
+process.stdin.on("data", (chunk) => {
+  input += chunk
+})
+process.stdin.on("end", () => {
+  const pids = new Set(String(process.env.API_PIDS || "").split(/\s+/).filter(Boolean))
+  let apps = []
+  try {
+    apps = JSON.parse(input || "[]")
+  } catch {
+    apps = []
+  }
+
+  for (const app of apps) {
+    const env = app.pm2_env || {}
+    const cwd = String(env.pm_cwd || "")
+    const port = String(env.PORT || "")
+    const pid = String(app.pid || "")
+    const name = String(app.name || "")
+
+    if (
+      name === "dolphin-api" ||
+      cwd.includes("/shipzilla/") ||
+      port === String(process.env.API_PORT || "") ||
+      pids.has(pid)
+    ) {
+      console.log(app.pm_id)
+    }
+  }
+})
+' || true
+    )"
+
+    local id
+    for id in $ids; do
+      echo "Deleting stale PM2 API process ${id}"
+      pm2 delete "$id" >/dev/null 2>&1 || true
+    done
+  fi
+
+  pids="$(list_api_port_pids || true)"
+  local pid
+  for pid in $pids; do
+    echo "Stopping stale process ${pid} listening on port ${API_PORT}"
+    kill "$pid" >/dev/null 2>&1 || true
+    sleep 2
+    if kill -0 "$pid" >/dev/null 2>&1; then
+      kill -9 "$pid" >/dev/null 2>&1 || true
+    fi
+  done
+}
+
 if [ "${DOLPHIN_DEPLOY_LOCK_HELD:-}" != "1" ]; then
   exec 9>"$DEPLOY_LOCK_FILE"
   echo "Waiting for deploy lock at $DEPLOY_LOCK_FILE..."
@@ -235,7 +308,8 @@ find "$ADMIN_BUILD_LIVE/static" -type f -mtime +21 -delete || true
 
 echo "Restarting API..."
 write_pm2_config
-pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
+stop_stale_api_processes
+pm2 start /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
 pm2 save
 
 echo "Reloading Nginx..."
