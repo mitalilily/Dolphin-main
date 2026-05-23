@@ -28,6 +28,75 @@ cleanup() {
 }
 trap cleanup EXIT
 
+append_origin() {
+  local origin="${1:-}"
+  origin="${origin%/}"
+  [ -n "$origin" ] || return 0
+
+  case ",${CORS_ORIGIN_LIST}," in
+    *,"$origin",*) ;;
+    *) CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:+$CORS_ORIGIN_LIST,}$origin" ;;
+  esac
+}
+
+build_cors_origin_list() {
+  CORS_ORIGIN_LIST="${CORS_ORIGIN_LIST:-}"
+
+  if [ -n "$CORS_ORIGIN_LIST" ]; then
+    return 0
+  fi
+
+  append_origin "$PUBLIC_ORIGIN"
+  append_origin "$CLIENT_ORIGIN"
+  append_origin "$ADMIN_ORIGIN"
+  append_origin "$API_ORIGIN"
+
+  local domain
+  for domain in $DOMAIN_NAMES $CLIENT_EXTRA_DOMAINS; do
+    append_origin "https://${domain}"
+    append_origin "http://${domain}"
+  done
+}
+
+sync_backend_env() {
+  local source="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
+  local target="$APP_DIR/apps/backend/.env.production"
+
+  if [ -f "$source" ]; then
+    cp "$source" "$target"
+    chmod 600 "$target"
+  elif [ ! -f "$target" ]; then
+    echo "Backend env file not found at $target and $source is missing." >&2
+    echo "Create $source or run scripts/vps/bootstrap.sh before deploying." >&2
+    exit 1
+  fi
+}
+
+write_pm2_config() {
+  install -d -m 0755 /etc/dolphin
+  cat > /etc/dolphin/ecosystem.config.cjs <<EOF
+module.exports = {
+  apps: [
+    {
+      name: 'dolphin-api',
+      cwd: '${APP_DIR}/apps/backend',
+      script: 'dist/index.js',
+      env: {
+        NODE_ENV: 'production',
+        PORT: '${API_PORT}',
+        CORS_ALLOWED_ORIGINS: '${CORS_ORIGIN_LIST}',
+        CORS_ORIGINS: '${CORS_ORIGIN_LIST}',
+        FRONTEND_URL: '${PUBLIC_ORIGIN}',
+        CLIENT_APP_URL: '${CLIENT_ORIGIN}',
+        ADMIN_APP_URL: '${ADMIN_ORIGIN}',
+        API_URL: '${API_ORIGIN}'
+      }
+    }
+  ]
+}
+EOF
+}
+
 if [ "${DOLPHIN_DEPLOY_LOCK_HELD:-}" != "1" ]; then
   exec 9>"$DEPLOY_LOCK_FILE"
   echo "Waiting for deploy lock at $DEPLOY_LOCK_FILE..."
@@ -77,6 +146,9 @@ if [ -d .git ]; then
   fi
   git show -s --oneline --decorate HEAD
 fi
+
+build_cors_origin_list
+sync_backend_env
 
 cat > apps/client/.env.marketing.local <<EOF
 VITE_APP_SURFACE=marketing
@@ -162,6 +234,7 @@ purge_stale_frontend_assets "$ADMIN_BUILD_LIVE/static"
 find "$ADMIN_BUILD_LIVE/static" -type f -mtime +21 -delete || true
 
 echo "Restarting API..."
+write_pm2_config
 pm2 startOrReload /etc/dolphin/ecosystem.config.cjs --only dolphin-api --update-env
 pm2 save
 
