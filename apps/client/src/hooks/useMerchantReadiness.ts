@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { usePickupAddresses } from './Pickup/usePickupAddresses'
 import { useWalletBalance } from './useWalletBalance'
-import { usePaymentOptions } from './usePaymentOptions'
 import { useAuth } from '../context/auth/AuthContext'
 
 type CompanyInfoLike = {
@@ -41,10 +40,9 @@ export const useMerchantReadiness = () => {
   const { user, loading: authLoading } = useAuth()
   const { data: pickupData, isLoading: pickupLoading } = usePickupAddresses({ page: 1, limit: 1 })
   const { data: walletData, isLoading: walletLoading } = useWalletBalance()
-  const { data: paymentOptions, isLoading: paymentOptionsLoading } = usePaymentOptions()
 
   const walletBalance = Number(walletData?.data?.balance || 0)
-  const requiredWalletBalance = Math.max(Number(paymentOptions?.minWalletRecharge || 0), 1)
+  const requiredWalletBalance = 1
   const hasPickupAddress =
     Number(pickupData?.totalCount || 0) > 0 || (pickupData?.pickupAddresses?.length || 0) > 0
   const hasCompanyInfo = hasRequiredCompanyInfo(user?.companyInfo)
@@ -96,7 +94,7 @@ export const useMerchantReadiness = () => {
       {
         key: 'wallet',
         title: 'Wallet Balance Ready',
-        description: `Keep at least Rs ${requiredWalletBalance.toLocaleString('en-IN')} available for first-order charges.`,
+        description: `Keep at least Rs ${requiredWalletBalance.toLocaleString('en-IN')} available before booking.`,
         done: walletBalance >= requiredWalletBalance,
         path: '/billing/wallet_transactions',
         actionLabel: 'Recharge Wallet',
@@ -122,6 +120,6 @@ export const useMerchantReadiness = () => {
     requiredWalletBalance,
     assignedPlanName,
     assignedPlanId,
-    isLoading: authLoading || pickupLoading || walletLoading || paymentOptionsLoading,
+    isLoading: authLoading || pickupLoading || walletLoading,
   }
 }

@@ -1,6 +1,5 @@
 import { and, count, eq } from 'drizzle-orm'
 import { db } from '../models/client'
-import { getPaymentOptions } from '../models/services/paymentOptions.service'
 import { kyc } from '../models/schema/kyc'
 import { pickupAddresses } from '../models/schema/pickupAddresses'
 import { userProfiles } from '../models/schema/userProfile'
@@ -29,8 +28,15 @@ function hasRequiredCompanyInfo(companyInfo: CompanyInfo | null | undefined) {
   })
 }
 
+function getRequiredOrderWalletBalance() {
+  const configured = Number(
+    process.env.MIN_ORDER_WALLET_BALANCE ?? process.env.ORDER_MIN_WALLET_BALANCE ?? 1,
+  )
+  return Number.isFinite(configured) && configured > 0 ? configured : 1
+}
+
 export async function getMerchantOrderReadiness(userId: string) {
-  const [profile, kycRecord, pickupCountResult, wallet, paymentSettings] = await Promise.all([
+  const [profile, kycRecord, pickupCountResult, wallet] = await Promise.all([
     db
       .select({
         onboardingComplete: userProfiles.onboardingComplete,
@@ -52,14 +58,13 @@ export async function getMerchantOrderReadiness(userId: string) {
       .from(wallets)
       .where(eq(wallets.userId, userId))
       .limit(1),
-    getPaymentOptions(),
   ])
 
   const profileRow = profile[0]
   const kycRow = kycRecord[0]
   const walletBalance = Number(wallet[0]?.balance ?? 0)
   const pickupCount = Number(pickupCountResult[0]?.count ?? 0)
-  const requiredWalletBalance = Math.max(Number(paymentSettings?.minWalletRecharge ?? 0), 1)
+  const requiredWalletBalance = getRequiredOrderWalletBalance()
 
   return {
     onboardingComplete: Boolean(profileRow?.onboardingComplete),
