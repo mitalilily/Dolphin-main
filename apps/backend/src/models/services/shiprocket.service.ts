@@ -1797,7 +1797,9 @@ const fetchZoneIdByKey = async (
   const exactTrim = await db
     .select({ id: zones.id, code: zones.code, name: zones.name })
     .from(zones)
-    .where(sql`trim(${zones.code}) = ${dbCode}`)
+    .where(
+      sql`trim(${zones.code}) = ${dbCode} AND lower(trim(${zones.business_type})) = 'b2c'`,
+    )
     .limit(1)
 
   if (exactTrim?.[0]?.id) {
@@ -1809,7 +1811,9 @@ const fetchZoneIdByKey = async (
   const ci = await db
     .select({ id: zones.id, code: zones.code, name: zones.name })
     .from(zones)
-    .where(sql`lower(trim(${zones.code})) = ${dbCode.toLowerCase()}`)
+    .where(
+      sql`lower(trim(${zones.code})) = ${dbCode.toLowerCase()} AND lower(trim(${zones.business_type})) = 'b2c'`,
+    )
     .limit(1)
 
   if (ci?.[0]?.id) {
@@ -1821,7 +1825,9 @@ const fetchZoneIdByKey = async (
   const nameMatch = await db
     .select({ id: zones.id, code: zones.code, name: zones.name })
     .from(zones)
-    .where(sql`lower(trim(${zones.name})) = ${dbCode.toLowerCase()}`)
+    .where(
+      sql`lower(trim(${zones.name})) = ${dbCode.toLowerCase()} AND lower(trim(${zones.business_type})) = 'b2c'`,
+    )
     .limit(1)
 
   if (nameMatch?.[0]?.id) {
@@ -1835,7 +1841,7 @@ const fetchZoneIdByKey = async (
     .select({ id: zones.id, code: zones.code, name: zones.name })
     .from(zones)
     .where(
-      sql`lower(trim(${zones.code})) = ${roiKeyLower} OR lower(trim(${zones.name})) = ${roiKeyLower}`,
+      sql`(lower(trim(${zones.code})) = ${roiKeyLower} OR lower(trim(${zones.name})) = ${roiKeyLower}) AND lower(trim(${zones.business_type})) = 'b2c'`,
     )
     .limit(1)
 
@@ -3674,6 +3680,84 @@ export const fetchAvailableCouriersWithRates = async (
     }
 
     // ðŸ”¹ Calculate chargeable weight if dimensions are provided
+    // Calculator mode should quote saved rate cards even when live provider APIs are unavailable.
+    const findEnabledCourierRowForRateCard = (rateCard: any): CourierRow | null => {
+      const rateProviderKey = normalizeProviderKey(rateCard?.service_provider)
+      const courierId = Number(rateCard?.courier_id)
+      if (!Number.isFinite(courierId)) return null
+
+      if (rateProviderKey) {
+        return (
+          providerCourierBuckets
+            .get(rateProviderKey)
+            ?.rows.find((row) => Number(row.id) === courierId) ?? null
+        )
+      }
+
+      const matches = Array.from(providerCourierBuckets.values())
+        .flatMap((bucket) => bucket.rows)
+        .filter((row) => Number(row.id) === courierId)
+
+      return matches.length === 1 ? matches[0] : null
+    }
+
+    const addLocalRateCardCouriers = () => {
+      if (!isCalculator || !localRates.length) return
+
+      const seen = new Set(
+        combinedCouriers.map((courier: any) =>
+          makeCourierIdentityKey({
+            id: courier.id,
+            integration_type: courier.integration_type || courier.service_provider || null,
+            serviceProvider: courier.serviceProvider || null,
+          }),
+        ),
+      )
+
+      for (const rateCard of localRates) {
+        const courierId = Number(rateCard?.courier_id)
+        if (!Number.isFinite(courierId)) continue
+
+        const enabledCourier = findEnabledCourierRowForRateCard(rateCard)
+        const providerKey =
+          normalizeProviderKey(rateCard?.service_provider) ||
+          normalizeProviderKey(enabledCourier?.serviceProvider || null)
+
+        if (!providerKey || !isCourierInSystem(providerKey, courierId)) continue
+
+        const identityKey = makeCourierIdentityKey({
+          id: courierId,
+          integration_type: providerKey,
+          serviceProvider: providerKey,
+        })
+        if (seen.has(identityKey)) continue
+        seen.add(identityKey)
+
+        combinedCouriers.push({
+          id: courierId,
+          name: enabledCourier?.name || rateCard?.courier_name || `Courier ${courierId}`,
+          serviceProvider: providerKey,
+          service_provider: providerKey,
+          integration_type: providerKey,
+          cod: true,
+          prepaid: true,
+          edd: null,
+          approxZone: null,
+          createdAt: enabledCourier?.createdAt ?? null,
+          courier_cost_estimate: null,
+          rateEstimate: null,
+          freight_charges: null,
+          cod_charges: null,
+          total_charges: null,
+          chargeable_weight: null,
+          provider_serviceability: { source: 'rate_card' },
+          shipping_mode: null,
+        })
+      }
+    }
+
+    addLocalRateCardCouriers()
+
     const serviceabilityWeightG = normalizeServiceabilityWeightToGrams(params.weight)
     let chargeableWeight: number | null = null
     if (

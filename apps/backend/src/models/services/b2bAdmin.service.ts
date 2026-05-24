@@ -1585,6 +1585,7 @@ export const calculateB2BRate = async (params: {
     destinationZoneId: destination.zoneId,
     courierId,
     serviceProvider,
+    planId: params.planId,
     effectiveDate,
   })
 
@@ -1681,6 +1682,7 @@ export const calculateB2BRate = async (params: {
     includeGlobal: true,
     onlyActive: true,
     effectiveDate,
+    planId: params.planId,
   })
 
   // Sort by priority
@@ -2555,6 +2557,7 @@ export const findZoneRate = async (params: {
   destinationZoneId: string
   courierId: number | null
   serviceProvider: string | null
+  planId?: string | null
   effectiveDate?: Date
 }) => {
   const effectiveDate = params.effectiveDate ?? new Date()
@@ -2569,35 +2572,41 @@ export const findZoneRate = async (params: {
 
   for (const scope of scopes) {
     const { courierId, serviceProvider } = normalizeCourierScope(scope ?? undefined)
+    const planCandidates = params.planId ? [params.planId, null] : [null]
 
-    const [row] = await db
-      .select()
-      .from(b2bZoneToZoneRates)
-      .where(
-        and(
-          eq(b2bZoneToZoneRates.origin_zone_id, params.originZoneId),
-          eq(b2bZoneToZoneRates.destination_zone_id, params.destinationZoneId),
-          eq(b2bZoneToZoneRates.is_active, true),
-          or(
-            isNull(b2bZoneToZoneRates.effective_from),
-            lte(b2bZoneToZoneRates.effective_from, effectiveDate),
+    for (const planId of planCandidates) {
+      const [row] = await db
+        .select()
+        .from(b2bZoneToZoneRates)
+        .where(
+          and(
+            eq(b2bZoneToZoneRates.origin_zone_id, params.originZoneId),
+            eq(b2bZoneToZoneRates.destination_zone_id, params.destinationZoneId),
+            eq(b2bZoneToZoneRates.is_active, true),
+            planId
+              ? eq(b2bZoneToZoneRates.plan_id, planId)
+              : isNull(b2bZoneToZoneRates.plan_id),
+            or(
+              isNull(b2bZoneToZoneRates.effective_from),
+              lte(b2bZoneToZoneRates.effective_from, effectiveDate),
+            ),
+            or(
+              isNull(b2bZoneToZoneRates.effective_to),
+              gte(b2bZoneToZoneRates.effective_to, effectiveDate),
+            ),
+            courierId
+              ? eq(b2bZoneToZoneRates.courier_id, courierId)
+              : isNull(b2bZoneToZoneRates.courier_id),
+            serviceProvider
+              ? eq(b2bZoneToZoneRates.service_provider, serviceProvider)
+              : isNull(b2bZoneToZoneRates.service_provider),
           ),
-          or(
-            isNull(b2bZoneToZoneRates.effective_to),
-            gte(b2bZoneToZoneRates.effective_to, effectiveDate),
-          ),
-          courierId
-            ? eq(b2bZoneToZoneRates.courier_id, courierId)
-            : isNull(b2bZoneToZoneRates.courier_id),
-          serviceProvider
-            ? eq(b2bZoneToZoneRates.service_provider, serviceProvider)
-            : isNull(b2bZoneToZoneRates.service_provider),
-        ),
-      )
-      .orderBy(desc(b2bZoneToZoneRates.effective_from))
-      .limit(1)
+        )
+        .orderBy(desc(b2bZoneToZoneRates.effective_from))
+        .limit(1)
 
-    if (row) return row
+      if (row) return row
+    }
   }
 
   return null

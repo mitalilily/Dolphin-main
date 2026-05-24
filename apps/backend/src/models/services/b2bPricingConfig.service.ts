@@ -159,20 +159,23 @@ export const getAdditionalCharges = async (params: {
       conditions.push(isNull(b2bAdditionalCharges.service_provider))
     }
 
-    // Add plan_id filter
-    if (params.planId) {
-      conditions.push(eq(b2bAdditionalCharges.plan_id, params.planId))
-    } else {
-      conditions.push(isNull(b2bAdditionalCharges.plan_id))
+    const planCandidates = params.planId ? [params.planId, null] : [null]
+    for (const planIdCandidate of planCandidates) {
+      const planScopedConditions = [...conditions]
+      if (planIdCandidate) {
+        planScopedConditions.push(eq(b2bAdditionalCharges.plan_id, planIdCandidate))
+      } else {
+        planScopedConditions.push(isNull(b2bAdditionalCharges.plan_id))
+      }
+
+      const [charges] = await db
+        .select()
+        .from(b2bAdditionalCharges)
+        .where(and(...planScopedConditions))
+        .limit(1)
+
+      if (charges) return charges
     }
-
-    const [charges] = await db
-      .select()
-      .from(b2bAdditionalCharges)
-      .where(and(...conditions))
-      .limit(1)
-
-    if (charges) return charges
   }
 
   // Return null if nothing found - frontend will handle empty form

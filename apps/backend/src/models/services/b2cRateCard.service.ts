@@ -23,6 +23,7 @@ export interface ResolvedRateCardSlab {
 export interface ResolvedB2CRateCard {
   shippingRateId: string
   courier_id: number
+  courier_name: string
   service_provider: string | null
   zone_id: string
   type: string
@@ -206,6 +207,7 @@ export async function fetchResolvedB2CRateCards(filters: {
     (row): ResolvedB2CRateCard => ({
       shippingRateId: row.id,
       courier_id: row.courier_id,
+      courier_name: row.courier_name,
       service_provider: row.service_provider ?? null,
       zone_id: row.zone_id,
       type: row.type,
