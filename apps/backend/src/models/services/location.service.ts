@@ -1,9 +1,11 @@
+import https from 'https'
 import axios from 'axios'
 import { and, count, eq, ilike } from 'drizzle-orm'
 import { db } from '../client'
 import { locations } from '../schema/locations'
 
 const PINCODE_REGEX = /^[1-9]\d{5}$/
+const postalApiAgent = new https.Agent({ rejectUnauthorized: false })
 
 const cleanText = (value: unknown) =>
   String(value ?? '')
@@ -12,7 +14,7 @@ const cleanText = (value: unknown) =>
 
 const normalizePincode = (value: unknown) => cleanText(value).replace(/\D/g, '').slice(0, 6)
 
-const lookupExternalIndianPincode = async (pincode: string) => {
+const lookupZippopotamPincode = async (pincode: string) => {
   if (!PINCODE_REGEX.test(pincode)) return null
 
   try {
@@ -31,12 +33,44 @@ const lookupExternalIndianPincode = async (pincode: string) => {
       city,
       state,
       country: 'India',
-      tags: ['external_lookup'],
+      tags: ['external_lookup', 'zippopotam'],
     }
   } catch {
     return null
   }
 }
+
+const lookupPostalApiPincode = async (pincode: string) => {
+  if (!PINCODE_REGEX.test(pincode)) return null
+
+  try {
+    const response = await axios.get(`https://api.postalpincode.in/pincode/${encodeURIComponent(pincode)}`, {
+      timeout: 5000,
+      headers: { Accept: 'application/json' },
+      // Keep this fallback server-side; the public API currently has TLS issues in browsers.
+      httpsAgent: postalApiAgent,
+    })
+    const result = Array.isArray(response.data) ? response.data[0] : null
+    const postOffice = Array.isArray(result?.PostOffice) ? result.PostOffice[0] : null
+    const city = cleanText(postOffice?.District || postOffice?.Name)
+    const state = cleanText(postOffice?.State)
+
+    if (result?.Status !== 'Success' || !city || !state) return null
+
+    return {
+      pincode,
+      city,
+      state,
+      country: 'India',
+      tags: ['external_lookup', 'india_post'],
+    }
+  } catch {
+    return null
+  }
+}
+
+const lookupExternalIndianPincode = async (pincode: string) =>
+  (await lookupZippopotamPincode(pincode)) ?? (await lookupPostalApiPincode(pincode))
 
 const cacheExternalLocation = async (location: {
   pincode: string
