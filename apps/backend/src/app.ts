@@ -12,7 +12,12 @@ import {
   delhiveryWebhookHandler,
 } from './controllers/webhooks/delhivery.webhook'
 import { ekartWebhookHandler } from './controllers/webhooks/ekart.webhook'
-import { icarryWebhookHandler } from './controllers/webhooks/icarry.webhook'
+import {
+  icarryWebhookHandler,
+  icarryNdrWebhookHandler,
+  icarryShipmentStatusWebhookHandler,
+  icarryWeightDisputeWebhookHandler,
+} from './controllers/webhooks/icarry.webhook'
 import { razorpayWebhook } from './controllers/webhooks/razorpay.webhooks'
 import { shipmozoWebhookHandler } from './controllers/webhooks/shipmozo.webhook'
 import { shiprocketWebhookHandler } from './controllers/webhooks/shiprocket.webhook'
@@ -196,6 +201,11 @@ app.post('/api/webhook/ekart', express.json(), ekartWebhookHandler)
 app.post('/api/webhook/ekart/track', express.json(), ekartWebhookHandler)
 app.post('/api/webhook/icarry', express.json(), icarryWebhookHandler)
 app.post('/api/webhook/icarry/callback', express.json(), icarryWebhookHandler)
+app.post('/api/webhook/icarry/status', express.json(), icarryShipmentStatusWebhookHandler)
+app.post('/api/webhook/icarry/shipment-status', express.json(), icarryShipmentStatusWebhookHandler)
+app.post('/api/webhook/icarry/ndr', express.json(), icarryNdrWebhookHandler)
+app.post('/api/webhook/icarry/weight-dispute', express.json(), icarryWeightDisputeWebhookHandler)
+app.post('/api/webhook/icarry/weight-discrepancy', express.json(), icarryWeightDisputeWebhookHandler)
 app.post('/api/webhook/shipmozo', express.json(), shipmozoWebhookHandler)
 app.post('/api/webhook/shipmozo/callback', express.json(), shipmozoWebhookHandler)
 app.post('/api/webhook/shiprocket', express.json(), shiprocketWebhookHandler)

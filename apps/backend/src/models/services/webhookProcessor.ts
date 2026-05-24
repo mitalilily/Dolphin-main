@@ -2010,6 +2010,26 @@ const ICARRY_NDR_DESCRIPTIONS: Record<string, string> = {
   'REATTEMPT-OUTOFSTN': 'Consignee is not at the delivery address.',
 }
 
+const ICARRY_STATUS_CALLBACK_TYPES = new Set([
+  '',
+  'sync_status',
+  'shipment_status',
+  'shipment_status_update',
+  'tracking_status',
+  'status_update',
+  'tracking_update',
+])
+
+const ICARRY_WEIGHT_CALLBACK_TYPES = new Set([
+  'weight_dispute',
+  'weight_dispute_event',
+  'weight_discrepancy',
+  'weight_discrepancy_event',
+  'new_weight_discrepancy',
+  'weight_update',
+  'shipment_weight',
+])
+
 const firstPresent = (...values: unknown[]) => {
   for (const value of values) {
     if (value === undefined || value === null) continue
@@ -2133,6 +2153,22 @@ const getIcarryNdrItems = (payload: any) => {
           : []
 
   return rawItems.filter((item: any) => item && typeof item === 'object')
+}
+
+const getIcarryCourierEvent = (payload: any) => {
+  if (payload?.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+    return {
+      ...payload.data,
+      callback_type: payload.data.callback_type || payload.callback_type || payload.callbackType,
+    }
+  }
+  if (payload?.msg && typeof payload.msg === 'object' && !Array.isArray(payload.msg)) {
+    return {
+      ...payload.msg,
+      callback_type: payload.msg.callback_type || payload.callback_type || payload.callbackType,
+    }
+  }
+  return payload
 }
 
 const getGenericCourierEvent = (payload: any) =>
@@ -2523,6 +2559,11 @@ export const __webhookProcessorTestUtils = {
   mapIcarryStatus,
   normalizeIcarryNdrType,
   normalizeShipmozoWebhookEvent,
+  getIcarryCourierEvent,
+  isIcarryStatusCallbackType: (value: unknown) =>
+    ICARRY_STATUS_CALLBACK_TYPES.has(String(value || '').trim().toLowerCase()),
+  isIcarryWeightCallbackType: (value: unknown) =>
+    ICARRY_WEIGHT_CALLBACK_TYPES.has(String(value || '').trim().toLowerCase()),
   normalizeWeightKg,
   parseWebhookDate,
   resolveWebhookWeights,
@@ -2977,7 +3018,61 @@ const processIcarryCourierWebhook = async (payload: any, tx: any) => {
     }
   }
 
-  if (callbackType && callbackType !== 'sync_status') {
+  if (ICARRY_WEIGHT_CALLBACK_TYPES.has(callbackType)) {
+    const event = getIcarryCourierEvent(payload)
+    const refs = extractCourierRefs(event)
+    if (!refs.awb && !refs.shipmentId && !refs.orderRef) {
+      return { success: false, reason: 'missing_awb' as const }
+    }
+
+    const order = await findB2cOrderForCourierWebhook(tx, refs)
+    if (!order) {
+      return {
+        success: false,
+        reason: 'order_not_found' as const,
+        awb: refs.awb || refs.shipmentId || refs.orderRef,
+        status: 'weight_dispute',
+      }
+    }
+
+    const { actualWeight, volumetricWeight, chargedWeight } = resolveWebhookWeights(
+      'icarry',
+      event,
+      order,
+    )
+    const updateData: any = {
+      updated_at: new Date(),
+    }
+    if (actualWeight !== undefined) updateData.actual_weight = actualWeight
+    if (volumetricWeight !== undefined) updateData.volumetric_weight = volumetricWeight
+    if (chargedWeight !== undefined) {
+      updateData.charged_weight = chargedWeight
+      if (chargedWeight > Number(order.weight ?? 0)) updateData.weight_discrepancy = true
+    }
+
+    if (Object.keys(updateData).length > 1) {
+      await tx.update(b2c_orders).set(updateData).where(eq(b2c_orders.id, order.id))
+    }
+
+    await maybeCreateWeightDiscrepancyFromWebhook({
+      provider: 'icarry',
+      providerLabel,
+      event,
+      payload,
+      order,
+      awb: refs.awb,
+      remarks: String(firstPresent(event?.remarks, event?.message, event?.type, 'weight_dispute') || ''),
+      statusText: 'weight_dispute',
+    })
+
+    return {
+      success: true as const,
+      awb: String(refs.awb || order.awb_number || ''),
+      status: 'weight_dispute',
+    }
+  }
+
+  if (!ICARRY_STATUS_CALLBACK_TYPES.has(callbackType)) {
     return {
       success: false,
       reason: 'invalid_callback_type' as const,
@@ -2985,10 +3080,11 @@ const processIcarryCourierWebhook = async (payload: any, tx: any) => {
     }
   }
 
+  const event = getIcarryCourierEvent(payload)
   return processSingleCourierWebhookEvent({
     provider: 'icarry',
     providerLabel,
-    event: payload,
+    event,
     payload,
     tx,
   })

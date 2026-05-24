@@ -79,9 +79,15 @@ npm run patch:kyc-columns
 No new DB migration is required specifically for the latest iCarry feature additions.
 
 ## 5) Webhook setup in iCarry dashboard
-Set callback URL to:
+Set callback URLs in the iCarry dashboard to:
 
-`https://<your-active-backend-domain>/api/v1/webhook/icarry/callback`
+- Shipment status: `https://<your-active-backend-domain>/api/webhook/icarry/status`
+- NDR event: `https://<your-active-backend-domain>/api/webhook/icarry/ndr`
+- Weight dispute event: `https://<your-active-backend-domain>/api/webhook/icarry/weight-dispute`
+
+The generic fallback callback remains available at:
+
+`https://<your-active-backend-domain>/api/webhook/icarry/callback`
 
 Token to configure in iCarry panel should match:
 - `ICARRY_WEBHOOK_TOKEN` (preferred), or

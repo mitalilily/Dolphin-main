@@ -49,4 +49,25 @@ describe('iCarry webhook normalization', () => {
     expect(weights.declaredWeight).toBe(0.5)
     expect(weights.chargedWeight).toBe(1.3)
   })
+
+  it('accepts explicit iCarry callback types used by dashboard webhook fields', () => {
+    expect(utils.isIcarryStatusCallbackType('sync_status')).toBe(true)
+    expect(utils.isIcarryStatusCallbackType('shipment_status')).toBe(true)
+    expect(utils.isIcarryWeightCallbackType('weight_dispute')).toBe(true)
+    expect(utils.isIcarryWeightCallbackType('new_weight_discrepancy')).toBe(true)
+  })
+
+  it('normalizes nested iCarry webhook data for status and weight events', () => {
+    const event = utils.getIcarryCourierEvent({
+      callback_type: 'weight_dispute',
+      data: {
+        shipment_id: 249772,
+        weight: '1300',
+      },
+    })
+
+    expect(event.shipment_id).toBe(249772)
+    expect(event.weight).toBe('1300')
+    expect(event.callback_type).toBe('weight_dispute')
+  })
 })

@@ -7,7 +7,12 @@ import {
 } from '../controllers/externalApi/apiKey.controller'
 import { generateManifestController } from '../controllers/externalApi/manifest.controller'
 import { ekartWebhookHandler } from '../controllers/webhooks/ekart.webhook'
-import { icarryWebhookHandler } from '../controllers/webhooks/icarry.webhook'
+import {
+  icarryWebhookHandler,
+  icarryNdrWebhookHandler,
+  icarryShipmentStatusWebhookHandler,
+  icarryWeightDisputeWebhookHandler,
+} from '../controllers/webhooks/icarry.webhook'
 import { shipmozoWebhookHandler } from '../controllers/webhooks/shipmozo.webhook'
 import { shiprocketWebhookHandler } from '../controllers/webhooks/shiprocket.webhook'
 import { truxcargoWebhookHandler } from '../controllers/webhooks/truxcargo.webhook'
@@ -72,6 +77,11 @@ router.post('/webhooks/:id/regenerate-secret', requireAuth, regenerateWebhookSec
 // Provider webhook (Ekart) for partners who want to post directly
 router.post('/webhook/ekart/track', ekartWebhookHandler)
 router.post('/webhook/icarry/callback', icarryWebhookHandler)
+router.post('/webhook/icarry/status', icarryShipmentStatusWebhookHandler)
+router.post('/webhook/icarry/shipment-status', icarryShipmentStatusWebhookHandler)
+router.post('/webhook/icarry/ndr', icarryNdrWebhookHandler)
+router.post('/webhook/icarry/weight-dispute', icarryWeightDisputeWebhookHandler)
+router.post('/webhook/icarry/weight-discrepancy', icarryWeightDisputeWebhookHandler)
 router.post('/webhook/shipmozo/callback', shipmozoWebhookHandler)
 router.post('/webhook/shiprocket/callback', shiprocketWebhookHandler)
 router.post('/webhook/tracking/callback', shiprocketWebhookHandler)
