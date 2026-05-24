@@ -137,6 +137,12 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
     cancellationResult?.Success === true ||
     cancellationResult?.Success === 1 ||
     cancellationResult?.Success === '1' ||
+    cancellationResult?.result === true ||
+    cancellationResult?.result === 1 ||
+    cancellationResult?.result === '1' ||
+    cancellationResult?.response?.result === true ||
+    cancellationResult?.response?.result === 1 ||
+    cancellationResult?.response?.result === '1' ||
     cancellationResult?.status === true || // Boolean true (most common)
     cancellationResult?.status === 1 ||
     cancellationResult?.status === '1' ||
@@ -157,6 +163,7 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
     isSuccess,
     success: cancellationResult?.success,
     Success: cancellationResult?.Success,
+    result: cancellationResult?.result,
     status: cancellationResult?.status,
     statusType: typeof cancellationResult?.status,
     remark: cancellationResult?.remark,

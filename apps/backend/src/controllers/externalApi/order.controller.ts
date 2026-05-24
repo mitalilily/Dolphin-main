@@ -428,6 +428,12 @@ export const cancelOrderController = async (req: any, res: Response) => {
       cancellationResult?.success === 1 ||
       cancellationResult?.Success === 1 ||
       cancellationResult?.Success === true ||
+      cancellationResult?.result === true ||
+      cancellationResult?.result === 1 ||
+      cancellationResult?.result === '1' ||
+      cancellationResult?.response?.result === true ||
+      cancellationResult?.response?.result === 1 ||
+      cancellationResult?.response?.result === '1' ||
       cancellationResult?.status === true ||
       cancellationResult?.status === 1 ||
       cancellationResult?.status === 'Success' ||
