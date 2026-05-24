@@ -1596,6 +1596,9 @@ interface NimbusServiceabilityParams {
   cost_info?: boolean
   source_pincode?: number
   destination_pincode?: number
+  origin_pincode?: number
+  pickup_pincode?: number
+  delivery_pincode?: number
   pickupId?: string
   // Hint that this call is coming from a rate calculator UI (we can skip heavy live checks)
   isCalculator?: boolean
@@ -1749,12 +1752,12 @@ const determineB2CZoneKey = (
  * Adjust the right-hand values if your zones.code uses different wording.
  */
 const ZONE_KEY_TO_DB_CODE: Record<string, string> = {
-  METRO_TO_METRO: 'METRO_TO_METRO',
+  METRO_TO_METRO: 'METRO TO METRO',
   ROI: 'ROI',
-  SPECIAL_ZONE: 'SPECIAL_ZONE',
-  WITHIN_CITY: 'WITHIN_CITY',
-  WITHIN_REGION: 'WITHIN_REGION',
-  WITHIN_STATE: 'WITHIN_STATE',
+  SPECIAL_ZONE: 'SPECIAL ZONE',
+  WITHIN_CITY: 'WITHIN CITY',
+  WITHIN_REGION: 'WITHIN REGION',
+  WITHIN_STATE: 'WITHIN STATE',
 }
 
 /**
@@ -2530,12 +2533,20 @@ export const fetchAvailableCouriersWithRates = async (
 
     // ðŸ”¹ Cache key (per user + params)
     const normalizePincode = (value: unknown): number | undefined => {
-      if (typeof value === 'number' && !Number.isNaN(value)) {
-        return Number(value)
-      }
-      if (typeof value === 'string' && value.trim()) {
-        const parsed = Number(value.trim())
-        return Number.isNaN(parsed) ? undefined : parsed
+      const raw =
+        typeof value === 'number' && Number.isFinite(value)
+          ? String(Math.trunc(value))
+          : typeof value === 'string'
+            ? value.trim()
+            : ''
+      if (!/^\d{6}$/.test(raw)) return undefined
+      return Number(raw)
+    }
+
+    const resolveServiceabilityPincode = (...values: unknown[]) => {
+      for (const value of values) {
+        const normalized = normalizePincode(value)
+        if (normalized !== undefined) return normalized.toString()
       }
       return undefined
     }
@@ -2870,10 +2881,17 @@ export const fetchAvailableCouriersWithRates = async (
 
     if (enabledProviders.has('delhivery')) {
       const delhivery = new DelhiveryService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
 
       console.log('[Serviceability] Delhivery pincode check start', {
         mode: isCalculator ? 'calculator' : 'standard',
@@ -2981,10 +2999,17 @@ export const fetchAvailableCouriersWithRates = async (
     let ekartEDD = '3-5 Days'
     if (enabledProviders.has('ekart')) {
       const ekart = new EkartService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
       const invoiceAmountAvailable = orderAmountValue > 0
 
@@ -3065,10 +3090,17 @@ export const fetchAvailableCouriersWithRates = async (
     let xpressbeesResp: any = null
     if (enabledProviders.has('xpressbees')) {
       const xpressbees = new XpressbeesService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
 
       if (originPincode && destinationPincode && orderAmountValue > 0) {
@@ -3121,10 +3153,17 @@ export const fetchAvailableCouriersWithRates = async (
     let shiprocketRateRecords: any[] = []
     if (enabledProviders.has('shiprocket')) {
       const shiprocket = new ShiprocketCourierService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
       const weightKg = normalizeWeightToKg(params.weight)
 
@@ -3187,10 +3226,17 @@ export const fetchAvailableCouriersWithRates = async (
     let shipmozoPincodeResponse: any = null
     if (enabledProviders.has('shipmozo')) {
       const shipmozo = new ShipmozoService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
 
       if (originPincode && destinationPincode) {
@@ -3304,10 +3350,17 @@ export const fetchAvailableCouriersWithRates = async (
     let truxcargoRateRecords: any[] = []
     if (enabledProviders.has('truxcargo')) {
       const truxcargo = new TruxcargoService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
       const weightKg = normalizeWeightToKg(params.weight)
 
@@ -3367,10 +3420,17 @@ export const fetchAvailableCouriersWithRates = async (
     let icarryRateRecords: any[] = []
     if (enabledProviders.has('icarry')) {
       const icarry = new IcarryService()
-      const originPincode = normalizePincode(params.origin ?? params.source_pincode)?.toString()
-      const destinationPincode = normalizePincode(
-        params.destination ?? params.destination_pincode,
-      )?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
       const orderAmountValue = Number(params.order_amount ?? params.orderAmount ?? 0)
       const weightKg = normalizeWeightToKg(params.weight)
 
@@ -3624,17 +3684,36 @@ export const fetchAvailableCouriersWithRates = async (
     let approxZone: { id: string; code: string; name?: string } | null = null
 
     if (params.shipment_type === 'b2c') {
-      const originPincode = params.origin?.toString()
-      const destinationPincode = params.destination?.toString()
+      const originPincode = resolveServiceabilityPincode(
+        params.origin,
+        params.source_pincode,
+        params.origin_pincode,
+        params.pickup_pincode,
+      )
+      const destinationPincode = resolveServiceabilityPincode(
+        params.destination,
+        params.destination_pincode,
+        params.delivery_pincode,
+      )
 
       const [originLoc, destLoc] = await Promise.all([
         originPincode ? fetchLocationByPincode(originPincode) : null,
         destinationPincode ? fetchLocationByPincode(destinationPincode) : null,
       ])
 
-      const { key: zoneKey } = determineB2CZoneKey(originLoc, destLoc)
+      const { key: zoneKey, reason: zoneReason } = determineB2CZoneKey(originLoc, destLoc)
       const zoneRow = await fetchZoneIdByKey(zoneKey)
       approxZone = { id: zoneRow.id, code: zoneRow.code, name: zoneRow.name }
+
+      console.log('[RateCalculator] B2C zone resolved', {
+        originPincode,
+        destinationPincode,
+        originFound: Boolean(originLoc),
+        destinationFound: Boolean(destLoc),
+        zoneKey,
+        zoneReason,
+        zoneCode: zoneRow.code,
+      })
 
       let activePlanId: string | null | undefined = planIdOverride ?? null
 
@@ -3701,6 +3780,45 @@ export const fetchAvailableCouriersWithRates = async (
       return matches.length === 1 ? matches[0] : null
     }
 
+    const getRateCardProviderKey = (rateCard: any) => {
+      const explicitProviderKey = normalizeProviderKey(rateCard?.service_provider)
+      if (explicitProviderKey) return explicitProviderKey
+
+      const enabledCourier = findEnabledCourierRowForRateCard(rateCard)
+      return normalizeProviderKey(enabledCourier?.serviceProvider || null)
+    }
+
+    const rateCardMatchesCourier = (rateCard: any, courier: any, providerKey: string) => {
+      const courierId = Number(courier?.id)
+      const rateCourierId = Number(rateCard?.courier_id)
+      if (!Number.isFinite(courierId) || !Number.isFinite(rateCourierId)) return false
+      if (courierId !== rateCourierId) return false
+
+      const rateProviderKey = getRateCardProviderKey(rateCard)
+      if (!rateProviderKey || rateProviderKey !== providerKey) return false
+
+      return isCourierInSystem(rateProviderKey, courierId)
+    }
+
+    if (localRates.length) {
+      const beforeCount = localRates.length
+      localRates = localRates.filter((rateCard) => {
+        const courierId = Number(rateCard?.courier_id)
+        const providerKey = getRateCardProviderKey(rateCard)
+        return Boolean(
+          providerKey && Number.isFinite(courierId) && isCourierInSystem(providerKey, courierId),
+        )
+      })
+
+      if (beforeCount !== localRates.length) {
+        console.warn('[RateCalculator] Ignored rate cards for disabled or ambiguous couriers', {
+          beforeCount,
+          usableCount: localRates.length,
+          skippedCount: beforeCount - localRates.length,
+        })
+      }
+    }
+
     const addLocalRateCardCouriers = () => {
       if (!isCalculator || !localRates.length) return
 
@@ -3719,9 +3837,7 @@ export const fetchAvailableCouriersWithRates = async (
         if (!Number.isFinite(courierId)) continue
 
         const enabledCourier = findEnabledCourierRowForRateCard(rateCard)
-        const providerKey =
-          normalizeProviderKey(rateCard?.service_provider) ||
-          normalizeProviderKey(enabledCourier?.serviceProvider || null)
+        const providerKey = getRateCardProviderKey(rateCard)
 
         if (!providerKey || !isCourierInSystem(providerKey, courierId)) continue
 
@@ -3905,12 +4021,8 @@ export const fetchAvailableCouriersWithRates = async (
             ? normalizeB2CShippingMode(getDelhiveryShippingModeByCourierId(courier?.id))
             : '')
         // Find local rates for this courier
-        const courierRates = localRates.filter(
-          (r) =>
-            r.courier_id.toString() === courier.id.toString() &&
-            (!providerKey ||
-              !r.service_provider ||
-              String(r.service_provider).toLowerCase().trim() === providerKey),
+        const courierRates = localRates.filter((rateCard) =>
+          rateCardMatchesCourier(rateCard, courier, providerKey),
         )
 
         const matchedCourierRates = providerMode
@@ -3989,7 +4101,9 @@ export const fetchAvailableCouriersWithRates = async (
 
     const requireLocalRates = true
     combined = combined.filter((c: any) => {
-      const providerKey = (c.integration_type || '').toLowerCase()
+      const providerKey = normalizeProviderKey(
+        c.integration_type || c.service_provider || c.serviceProvider || null,
+      )
       const inSystem = isCourierInSystem(providerKey, c.id)
       const requiredRateType = isReverseShipment ? 'rto' : 'forward'
       const hasLocalRate = Boolean(c.localRates?.[requiredRateType])

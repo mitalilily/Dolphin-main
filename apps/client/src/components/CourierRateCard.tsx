@@ -33,6 +33,7 @@ type LocalRates = {
 
 export type Courier = {
   id: string
+  courier_option_key?: string | null
   name?: string | null
   chargeable_weight?: number | null
   volumetric_weight?: number | null
@@ -183,7 +184,10 @@ export default function CourierRateList({
           const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'Unknown Aggregator'
 
           return (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={courier.id}>
+            <Grid
+              size={{ xs: 12, sm: 6, md: 4 }}
+              key={courier.courier_option_key || `${providerKey}-${courier.id}`}
+            >
               <Card
                 onClick={isClickable ? () => onSelect?.(courier) : undefined}
                 sx={{
