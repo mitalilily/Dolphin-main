@@ -49,6 +49,62 @@ describe('IcarryService', () => {
     expect(result.success).toBe(1)
   })
 
+  it('gets multi-box estimate with top-level boxes payload', async () => {
+    nock(base).post('/api_login').reply(200, { success: 1, api_token: 'token-1' })
+    nock(base)
+      .post('/api_get_estimate_b2b', (body) => {
+        return Array.isArray(body?.boxes) && body.boxes.length === 1 && body?.parcel === undefined
+      })
+      .query({ api_token: 'token-1' })
+      .reply(200, { success: 1, estimate: { 'iCarry LTL': { courier_cost: 250 } } })
+
+    const service = new IcarryService()
+    const result = await service.getEstimateMultiBoxShipment({
+      destination_pincode: '400001',
+      origin_pincode: '560001',
+      destination_country_code: 'IN',
+      origin_country_code: 'IN',
+      shipment_mode: 'E',
+      shipment_type: 'P',
+      shipment_value: 1000,
+      boxes: [
+        {
+          quantity: 1,
+          length: 10,
+          breadth: 8,
+          height: 5,
+          dimension_unit: 'cm',
+          weight: 1000,
+          weight_unit: 'gm',
+        },
+      ],
+    })
+
+    expect(result.success).toBe(1)
+  })
+
+  it('aliases international estimates into estimate for callers', async () => {
+    nock(base).post('/api_login').reply(200, { success: 1, api_token: 'token-1' })
+    nock(base)
+      .post('/api_get_estimate_international')
+      .query({ api_token: 'token-1' })
+      .reply(200, { success: 1, estimates: [{ courier_name: 'iCarry Global', total: 999 }] })
+
+    const service = new IcarryService()
+    const result = await service.getEstimateInternationalShipment({
+      weight: 520,
+      length: 10,
+      breadth: 10,
+      height: 25,
+      origin_pincode: '400081',
+      origin_country_code: 'IN',
+      destination_country_code: 'US',
+    })
+
+    expect(result.estimates).toHaveLength(1)
+    expect(result.estimate).toHaveLength(1)
+  })
+
   it('handles failed login', async () => {
     nock(base).post('/api_login').reply(401, { error: 'Invalid credentials' })
 

@@ -62,6 +62,7 @@ export type IcarryEstimateResponse = {
   success?: number | string
   error?: string
   estimate?: any
+  estimates?: any
   [key: string]: any
 }
 
@@ -456,11 +457,8 @@ export class IcarryService {
 
     const requestPayload = {
       ...payload,
-      parcel: {
-        boxes: payload.boxes,
-      },
+      boxes: payload.boxes,
     } as Record<string, any>
-    delete requestPayload.boxes
 
     return this.requestWithToken<IcarryEstimateResponse>('/api_get_estimate_b2b', requestPayload)
   }
@@ -471,10 +469,14 @@ export class IcarryService {
     if (!payload || typeof payload !== 'object') {
       throw new HttpError(400, 'Payload is required for iCarry international estimate')
     }
-    return this.requestWithToken<IcarryEstimateResponse>('/api_get_estimate_international', {
+    const response = await this.requestWithToken<IcarryEstimateResponse>('/api_get_estimate_international', {
       ...payload,
       origin_country_code: payload.origin_country_code || 'IN',
     })
+    if (response?.estimates !== undefined && response?.estimate === undefined) {
+      return { ...response, estimate: response.estimates }
+    }
+    return response
   }
 
   async bookInternationalShipment(
