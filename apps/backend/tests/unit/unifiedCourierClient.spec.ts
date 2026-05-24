@@ -9,6 +9,7 @@ import {
   getCourierCapabilities,
   getUnifiedCourierClient,
 } from '../../src/models/services/couriers/unifiedCourierClient'
+import { ShipmozoService } from '../../src/models/services/couriers/shipmozo.service'
 import { TruxcargoService } from '../../src/models/services/couriers/truxcargo.service'
 
 describe('unified courier workflow capabilities', () => {
@@ -28,7 +29,9 @@ describe('unified courier workflow capabilities', () => {
     })
     expect(getCourierCapabilities('shipmozo')).toMatchObject({
       flowType: 'TYPE_B_CREATE_PLUS_PICKUP',
+      actions: expect.objectContaining({ generateManifest: 'provider_api' }),
       requiresAwbBeforePickup: true,
+      labelAvailableAfter: 'generateManifest',
     })
   })
 
@@ -152,15 +155,127 @@ describe('unified courier workflow capabilities', () => {
     expect(trackShipment).toHaveBeenCalledWith({ order_id: 'ORD-1' })
   })
 
-  it('treats unsupported separate manifests as a safe no-op for Shipmozo', async () => {
+  it('turns Shipmozo shipment creation into a pending-manifest provider order', async () => {
+    const pushOrder = jest
+      .spyOn(ShipmozoService.prototype, 'pushOrder')
+      .mockResolvedValue({ result: 1, data: { order_id: 'SMZ-1', reference_id: 'REF-1' } })
     const shipmozo = getUnifiedCourierClient('shipmozo')
-    const result = await shipmozo.generateManifest({ order_id: 'ORD-1' })
 
+    const result = await shipmozo.createShipment({ order_id: 'SMZ-1' })
+
+    expect(pushOrder).toHaveBeenCalledWith({ order_id: 'SMZ-1' })
+    expect(result).toMatchObject({
+      success: true,
+      provider: 'shipmozo',
+      action: 'createShipment',
+      booking_state: 'pending_manifest',
+      remote_order_created: true,
+      order_id: 'SMZ-1',
+      shipment_id: 'SMZ-1',
+      next_action: 'generateManifest',
+    })
+  })
+
+  it('turns Shipmozo manifest into assign, pickup, detail, and label calls', async () => {
+    const assignCourier = jest
+      .spyOn(ShipmozoService.prototype, 'assignCourier')
+      .mockResolvedValue({ result: 1, data: { order_id: 'SMZ-1', awb_number: 'AWB-1', courier: 'Amazon ATS' } })
+    const schedulePickup = jest
+      .spyOn(ShipmozoService.prototype, 'schedulePickup')
+      .mockResolvedValue({ result: 1, data: { order_id: 'SMZ-1', awb_number: 'AWB-1' } })
+    const getOrderDetail = jest
+      .spyOn(ShipmozoService.prototype, 'getOrderDetail')
+      .mockResolvedValue({ result: 1, data: [{ order_id: 'SMZ-1', awb_number: 'AWB-1' }] })
+    const getOrderLabel = jest
+      .spyOn(ShipmozoService.prototype, 'getOrderLabel')
+      .mockResolvedValue({ result: 1, data: [{ label: 'https://label.example/awb-1.pdf' }] })
+    const shipmozo = getUnifiedCourierClient('shipmozo')
+
+    const result = await shipmozo.generateManifest({ order_id: 'SMZ-1', courier_id: 55 })
+
+    expect(assignCourier).toHaveBeenCalledWith({ order_id: 'SMZ-1', courier_id: '55' })
+    expect(schedulePickup).toHaveBeenCalledWith({ order_id: 'SMZ-1' })
+    expect(getOrderDetail).toHaveBeenCalledWith('SMZ-1')
+    expect(getOrderLabel).toHaveBeenCalledWith('AWB-1')
     expect(result).toMatchObject({
       success: true,
       provider: 'shipmozo',
       action: 'generateManifest',
-      skipped: true,
+      booking_state: 'manifested',
+      order_id: 'SMZ-1',
+      shipment_id: 'SMZ-1',
+      awb_number: 'AWB-1',
+      courier_partner: 'Amazon ATS',
+      assignment_mode: 'manual',
+      pickup_status: 'scheduled',
+      label: 'https://label.example/awb-1.pdf',
     })
+  })
+
+  it('auto-assigns Shipmozo when no courier_id is supplied', async () => {
+    const autoAssignOrder = jest
+      .spyOn(ShipmozoService.prototype, 'autoAssignOrder')
+      .mockResolvedValue({ result: 1, data: { order_id: 'SMZ-1', awb_number: 'AWB-2' } })
+    jest
+      .spyOn(ShipmozoService.prototype, 'schedulePickup')
+      .mockResolvedValue({ result: 1, data: { order_id: 'SMZ-1' } })
+    jest
+      .spyOn(ShipmozoService.prototype, 'getOrderDetail')
+      .mockResolvedValue({ result: 1, data: [{ order_id: 'SMZ-1', awb_number: 'AWB-2' }] })
+    jest
+      .spyOn(ShipmozoService.prototype, 'getOrderLabel')
+      .mockResolvedValue({ result: 1, data: [{ label: 'label' }] })
+    const shipmozo = getUnifiedCourierClient('shipmozo')
+
+    const result = await shipmozo.generateManifest({ order_id: 'SMZ-1' })
+
+    expect(autoAssignOrder).toHaveBeenCalledWith({ order_id: 'SMZ-1' })
+    expect(result).toMatchObject({
+      awb_number: 'AWB-2',
+      assignment_mode: 'auto',
+    })
+  })
+
+  it('normalizes Shipmozo rate payloads to provider required fields', async () => {
+    const rateCalculator = jest
+      .spyOn(ShipmozoService.prototype, 'rateCalculator')
+      .mockResolvedValue({ result: 1, data: [] })
+    const shipmozo = getUnifiedCourierClient('shipmozo')
+
+    await shipmozo.getRates({
+      source_pincode: '122001',
+      destination_pincode: '110001',
+      payment_type: 'cod',
+      order_amount: 1000,
+      weight: 500,
+      length: 22,
+      breadth: 10,
+      height: 10,
+    })
+
+    expect(rateCalculator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pickup_pincode: '122001',
+        delivery_pincode: '110001',
+        payment_type: 'COD',
+        shipment_type: 'FORWARD',
+        order_amount: 1000,
+        type_of_package: 'SPS',
+        rov_type: 'ROV_OWNER',
+        cod_amount: '1000',
+        weight: 500,
+        dimensions: [{ no_of_box: 1, length: 22, width: 10, height: 10 }],
+      }),
+    )
+  })
+
+  it('rejects Shipmozo tracking without AWB instead of sending an empty request', async () => {
+    const trackOrder = jest.spyOn(ShipmozoService.prototype, 'trackOrder')
+    const shipmozo = getUnifiedCourierClient('shipmozo')
+
+    expect(() => shipmozo.trackShipment({ order_id: 'SMZ-1' })).toThrow(
+      'Shipmozo tracking requires AWB number',
+    )
+    expect(trackOrder).not.toHaveBeenCalled()
   })
 })

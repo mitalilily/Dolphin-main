@@ -93,18 +93,18 @@ const COURIER_CAPABILITIES: Record<UnifiedCourierProvider, UnifiedCourierCapabil
     actions: {
       createShipment: 'provider_api',
       generateAwb: 'provider_api',
-      generateManifest: 'not_supported',
+      generateManifest: 'provider_api',
       schedulePickup: 'provider_api',
       generateLabel: 'provider_api',
       trackShipment: 'provider_api',
       cancelShipment: 'provider_api',
       getRates: 'provider_api',
     },
-    bookingSequence: ['createShipment', 'generateAwb', 'schedulePickup', 'generateLabel'],
+    bookingSequence: ['createShipment', 'generateManifest', 'generateLabel'],
     autoPickupOnCreate: false,
     requiresAwbBeforePickup: true,
     requiresManifestBeforePickup: false,
-    labelAvailableAfter: 'schedulePickup',
+    labelAvailableAfter: 'generateManifest',
     cancellationKey: 'order_id_plus_awb',
   },
   icarry: {
@@ -258,6 +258,16 @@ const firstNestedValue = (
 
 const firstNestedText = (source: unknown, keys: string[]) => toText(firstNestedValue(source, keys))
 
+const firstNestedItem = (source: unknown) => {
+  if (Array.isArray(source)) return source[0] || null
+  if (source && typeof source === 'object') {
+    const data = (source as Record<string, any>).data
+    if (Array.isArray(data)) return data[0] || null
+    if (data && typeof data === 'object') return data
+  }
+  return null
+}
+
 const resolveIcarryDomesticEndpoint = (payload: Record<string, any>) => {
   const explicit = toText(payload.endpoint).toLowerCase()
   if (explicit === 'air') return 'air'
@@ -265,6 +275,114 @@ const resolveIcarryDomesticEndpoint = (payload: Record<string, any>) => {
 
   const shipmentMode = toText(payload.shipment_mode || payload.shipmentMode).toUpperCase()
   return shipmentMode === 'E' ? 'air' : 'surface'
+}
+
+const SHIPMOZO_AWB_KEYS = [
+  'awb',
+  'awb_number',
+  'awbNumber',
+  'lr',
+  'lr_number',
+  'lrNumber',
+  'waybill',
+  'tracking_number',
+  'trackingNumber',
+  'docket_number',
+  'docketNumber',
+]
+
+const SHIPMOZO_ORDER_ID_KEYS = [
+  'order_id',
+  'orderId',
+  'shipment_id',
+  'shipmentId',
+  'reference_id',
+  'referenceId',
+  'refrence_id',
+]
+
+const SHIPMOZO_COURIER_NAME_KEYS = [
+  'courier',
+  'courier_name',
+  'courierName',
+  'courier_company',
+  'courier_company_service',
+  'carrier',
+  'carrier_name',
+]
+
+const SHIPMOZO_LABEL_KEYS = ['label', 'label_url', 'label_link']
+const SHIPMOZO_INVOICE_KEYS = ['invoice', 'invoice_url', 'invoice_link', 'invoiceLabel']
+
+const isShipmozoAlreadyAssignedMessage = (value: unknown) =>
+  /already\s+(assigned|allocated)|courier\s+already|awb\s+already|waybill\s+already/i.test(
+    toText(value),
+  )
+
+const isShipmozoPickupAlreadyScheduledMessage = (value: unknown) =>
+  /already\s+(scheduled|manifested|picked|pickup)|pickup\s+already|manifest\s+already/i.test(
+    toText(value),
+  )
+
+const normalizeShipmozoPaymentType = (value: unknown) => {
+  const normalized = toText(value).toUpperCase()
+  return normalized === 'COD' ? 'COD' : 'PREPAID'
+}
+
+const normalizeShipmozoPositiveNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const normalizeShipmozoDimensions = (input: Record<string, any>) => {
+  if (Array.isArray(input.dimensions) && input.dimensions.length) return input.dimensions
+  return [
+    {
+      no_of_box: normalizeShipmozoPositiveNumber(input.no_of_box ?? input.boxes, 1),
+      length: normalizeShipmozoPositiveNumber(input.length ?? input.package_length, 1),
+      width: normalizeShipmozoPositiveNumber(input.width ?? input.breadth ?? input.package_breadth, 1),
+      height: normalizeShipmozoPositiveNumber(input.height ?? input.package_height, 1),
+    },
+  ]
+}
+
+const normalizeShipmozoRatePayload = (input: Record<string, any>) => {
+  const payload = input || {}
+  const pickupPincode =
+    firstText(payload, ['pickup_pincode', 'source_pincode', 'origin_pincode', 'origin']) ||
+    toText(payload.pickup?.pincode || payload.pickupAddress?.pincode)
+  const deliveryPincode =
+    firstText(payload, ['delivery_pincode', 'destination_pincode', 'destination', 'pincode']) ||
+    toText(payload.consignee?.pincode || payload.deliveryAddress?.pincode)
+
+  if (!pickupPincode || !deliveryPincode) {
+    throw new HttpError(400, 'Shipmozo rates require pickup and delivery pincodes.')
+  }
+
+  const paymentType = normalizeShipmozoPaymentType(
+    payload.payment_type || payload.paymentType || payload.mode,
+  )
+  const orderAmount = normalizeShipmozoPositiveNumber(
+    payload.order_amount ?? payload.orderAmount ?? payload.invoice_value,
+    1,
+  )
+
+  return {
+    ...payload,
+    pickup_pincode: pickupPincode,
+    delivery_pincode: deliveryPincode,
+    payment_type: paymentType,
+    shipment_type: firstText(payload, ['shipment_type', 'shipmentType']) || 'FORWARD',
+    order_amount: orderAmount,
+    type_of_package: firstText(payload, ['type_of_package', 'typeOfPackage']) || 'SPS',
+    rov_type: firstText(payload, ['rov_type', 'rovType']) || 'ROV_OWNER',
+    cod_amount:
+      paymentType === 'COD'
+        ? String(normalizeShipmozoPositiveNumber(payload.cod_amount ?? orderAmount, orderAmount))
+        : '',
+    weight: normalizeShipmozoPositiveNumber(payload.weight ?? payload.package_weight, 500),
+    dimensions: normalizeShipmozoDimensions(payload),
+  }
 }
 
 const TRUXCARGO_WAYBILL_KEYS = [
@@ -477,38 +595,188 @@ class ShipmozoUnifiedClient implements UnifiedCourierClient {
   readonly capabilities = getCourierCapabilities(this.provider)
   private readonly service = new ShipmozoService()
 
-  createShipment(orderData: Record<string, any>) {
-    return this.service.pushOrder(orderData as any)
+  private resolveOrderId(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPMOZO_ORDER_ID_KEYS)
+      if (found) return found
+    }
+    return ''
   }
 
-  generateAwb(input: Record<string, any>) {
+  private resolveAwb(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPMOZO_AWB_KEYS)
+      if (found) return found
+    }
+    return ''
+  }
+
+  private resolveCourierName(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPMOZO_COURIER_NAME_KEYS)
+      if (found) return found
+    }
+    return ''
+  }
+
+  private buildLabelSummary(labelResponse: any) {
+    const labelRow = firstNestedItem(labelResponse)
+    return {
+      label: firstNestedText(labelRow, SHIPMOZO_LABEL_KEYS) || undefined,
+      invoice: firstNestedText(labelRow, SHIPMOZO_INVOICE_KEYS) || undefined,
+      raw: labelResponse,
+    }
+  }
+
+  async createShipment(orderData: Record<string, any>) {
+    const payload = orderData || {}
+    const response = await this.service.pushOrder(payload as any)
+    const orderId = this.resolveOrderId(response, payload)
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'createShipment',
+      booking_state: 'pending_manifest',
+      remote_order_created: true,
+      order_id: orderId || undefined,
+      shipment_id: orderId || undefined,
+      next_action: 'generateManifest',
+      raw: response,
+      ...response,
+    }
+  }
+
+  async generateAwb(input: Record<string, any>) {
     const payload = input || {}
     const orderId = requireText(payload, ['order_id', 'orderId'], 'Shipmozo AWB generation requires order_id')
     const courierId = firstText(payload, ['courier_id', 'courierId'])
-    if (courierId) return this.service.assignCourier({ order_id: orderId, courier_id: courierId })
-    return this.service.autoAssignOrder({ order_id: orderId })
+    const response = courierId
+      ? await this.service.assignCourier({ order_id: orderId, courier_id: courierId })
+      : await this.service.autoAssignOrder({ order_id: orderId })
+    const awb = this.resolveAwb(response)
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateAwb',
+      order_id: orderId,
+      shipment_id: orderId,
+      awb_number: awb || undefined,
+      courier_partner: this.resolveCourierName(response) || undefined,
+      assignment_mode: courierId ? 'manual' : 'auto',
+      raw: response,
+      ...response,
+    }
   }
 
-  generateManifest(input: Record<string, any>) {
-    return implicitSuccess(this.provider, 'generateManifest', {
-      skipped: true,
-      message: 'Shipmozo does not expose a separate manifest API in the integrated flow.',
-      order_id: firstText(input || {}, ['order_id', 'orderId']) || undefined,
-    })
+  async generateManifest(input: Record<string, any>) {
+    const payload = input || {}
+    const orderId = requireText(payload, ['order_id', 'orderId'], 'Shipmozo manifest requires order_id')
+    const courierId = firstText(payload, ['courier_id', 'courierId'])
+
+    let assignResponse: any = null
+    let autoAssignResponse: any = null
+    let assignmentSkipped = false
+    try {
+      if (courierId) {
+        assignResponse = await this.service.assignCourier({ order_id: orderId, courier_id: courierId })
+      } else {
+        autoAssignResponse = await this.service.autoAssignOrder({ order_id: orderId })
+      }
+    } catch (err: any) {
+      if (!isShipmozoAlreadyAssignedMessage(err?.message)) throw err
+      assignmentSkipped = true
+    }
+
+    let scheduleResponse: any = null
+    let pickupAlreadyScheduled = false
+    try {
+      scheduleResponse = await this.service.schedulePickup({ order_id: orderId })
+    } catch (err: any) {
+      if (!isShipmozoPickupAlreadyScheduledMessage(err?.message)) throw err
+      pickupAlreadyScheduled = true
+    }
+
+    const detailResponse = await this.service.getOrderDetail(orderId)
+    const awb = this.resolveAwb(payload, assignResponse, autoAssignResponse, scheduleResponse, detailResponse)
+    if (!awb) {
+      throw new HttpError(
+        502,
+        'Shipmozo manifest did not return an AWB/LR number. Please retry after checking the Shipmozo order.',
+      )
+    }
+
+    let labelResponse: any = null
+    let labelError = ''
+    try {
+      labelResponse = await this.service.getOrderLabel(awb)
+    } catch (err: any) {
+      labelError = toText(err?.message || err)
+    }
+    const labelSummary = this.buildLabelSummary(labelResponse)
+
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateManifest',
+      booking_state: 'manifested',
+      order_id: orderId,
+      shipment_id: orderId,
+      awb_number: awb,
+      courier_partner:
+        this.resolveCourierName(assignResponse, autoAssignResponse, scheduleResponse, detailResponse) ||
+        undefined,
+      assignment_mode: courierId ? 'manual' : 'auto',
+      assignment_skipped: assignmentSkipped,
+      pickup_status: pickupAlreadyScheduled ? 'already_scheduled' : 'scheduled',
+      label: labelSummary.label,
+      invoice: labelSummary.invoice,
+      label_pending: Boolean(labelError),
+      label_error: labelError || undefined,
+      assign_courier: assignResponse,
+      auto_assign: autoAssignResponse,
+      schedule_pickup: scheduleResponse,
+      order_detail: detailResponse,
+      label_response: labelSummary.raw,
+    }
   }
 
-  schedulePickup(input: Record<string, any>) {
-    return this.service.schedulePickup(input as any)
+  async schedulePickup(input: Record<string, any>) {
+    const payload = input || {}
+    const orderId = requireText(payload, ['order_id', 'orderId'], 'Shipmozo pickup requires order_id')
+    const response = await this.service.schedulePickup({ ...payload, order_id: orderId } as any)
+    const awb = this.resolveAwb(response)
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'schedulePickup',
+      order_id: orderId,
+      shipment_id: orderId,
+      awb_number: awb || undefined,
+      raw: response,
+      ...response,
+    }
   }
 
-  generateLabel(input: Record<string, any>) {
+  async generateLabel(input: Record<string, any>) {
     const awb = requireText(input || {}, ['awb', 'awb_number', 'awbNumber'], 'Shipmozo label requires AWB number')
-    return this.service.getOrderLabel(awb)
+    const response = await this.service.getOrderLabel(awb)
+    const summary = this.buildLabelSummary(response)
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateLabel',
+      awb_number: awb,
+      label: summary.label,
+      invoice: summary.invoice,
+      raw: response,
+      ...response,
+    }
   }
 
   trackShipment(trackingId: UnifiedCourierIdentifier) {
     const payload = toPayload(trackingId)
     const awb = firstText(payload, ['awb', 'awb_number', 'awbNumber']) || toText(trackingId)
+    if (!awb) throw new HttpError(400, 'Shipmozo tracking requires AWB number')
     return this.service.trackOrder(awb)
   }
 
@@ -520,7 +788,7 @@ class ShipmozoUnifiedClient implements UnifiedCourierClient {
   }
 
   getRates(input: Record<string, any>) {
-    return this.service.rateCalculator(input as any)
+    return this.service.rateCalculator(normalizeShipmozoRatePayload(input || {}) as any)
   }
 }
 
