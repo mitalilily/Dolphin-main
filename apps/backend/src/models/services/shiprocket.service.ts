@@ -8946,7 +8946,11 @@ export const generateManifestService = async (params: {
               throw new HttpError(400, 'No valid Shiprocket shipment IDs found for manifest.')
             }
             try {
-              await shiprocket.generatePickup({ shipment_id: shipmentIds })
+              await Promise.all(
+                shipmentIds.map((shipmentId) =>
+                  shiprocket.generatePickup({ shipment_id: [shipmentId] }),
+                ),
+              )
             } catch (pickupErr: any) {
               const pickupMessage = String(pickupErr?.message || '').toLowerCase()
               if (

@@ -9,6 +9,7 @@ import {
   getCourierCapabilities,
   getUnifiedCourierClient,
 } from '../../src/models/services/couriers/unifiedCourierClient'
+import { ShiprocketCourierService } from '../../src/models/services/couriers/shiprocket.service'
 import { ShipmozoService } from '../../src/models/services/couriers/shipmozo.service'
 import { TruxcargoService } from '../../src/models/services/couriers/truxcargo.service'
 
@@ -33,6 +34,157 @@ describe('unified courier workflow capabilities', () => {
       requiresAwbBeforePickup: true,
       labelAvailableAfter: 'generateManifest',
     })
+    expect(getCourierCapabilities('shiprocket')).toMatchObject({
+      flowType: 'TYPE_B_CREATE_PLUS_PICKUP',
+      requiresAwbBeforePickup: true,
+      requiresManifestBeforePickup: false,
+      labelAvailableAfter: 'generateManifest',
+      cancellationKey: 'order_id_plus_awb',
+    })
+  })
+
+  it('turns Shiprocket shipment creation into a pending-AWB provider order', async () => {
+    const createCustomOrder = jest
+      .spyOn(ShiprocketCourierService.prototype, 'createCustomOrder')
+      .mockResolvedValue({ order_id: 101, shipment_id: 202 })
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    const result = await shiprocket.createShipment({ order_id: 'ORD-1' })
+
+    expect(createCustomOrder).toHaveBeenCalledWith({ order_id: 'ORD-1' })
+    expect(result).toMatchObject({
+      success: true,
+      provider: 'shiprocket',
+      action: 'createShipment',
+      booking_state: 'pending_awb',
+      remote_order_created: true,
+      order_id: '101',
+      shipment_id: '202',
+      next_action: 'generateAwb',
+    })
+  })
+
+  it('assigns a Shiprocket AWB before pickup or manifest', async () => {
+    const assignAwb = jest
+      .spyOn(ShiprocketCourierService.prototype, 'assignAwb')
+      .mockResolvedValue({ response: { data: { awb_code: 'SR-AWB-1', courier_name: 'Delhivery' } } })
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    const result = await shiprocket.generateAwb({ shipment_id: 202, courier_id: 10 })
+
+    expect(assignAwb).toHaveBeenCalledWith({ shipment_id: 202, courier_id: 10 })
+    expect(result).toMatchObject({
+      success: true,
+      provider: 'shiprocket',
+      action: 'generateAwb',
+      booking_state: 'awb_assigned',
+      shipment_id: '202',
+      awb_number: 'SR-AWB-1',
+      courier_partner: 'Delhivery',
+    })
+  })
+
+  it('turns Shiprocket manifest into AWB, pickup, manifest, documents sequence', async () => {
+    const assignAwb = jest
+      .spyOn(ShiprocketCourierService.prototype, 'assignAwb')
+      .mockResolvedValue({ response: { data: { awb_code: 'SR-AWB-1', courier_name: 'Delhivery' } } })
+    const generatePickup = jest
+      .spyOn(ShiprocketCourierService.prototype, 'generatePickup')
+      .mockResolvedValue({ pickup_status: 1 })
+    const generateManifest = jest
+      .spyOn(ShiprocketCourierService.prototype, 'generateManifest')
+      .mockResolvedValue({ status: 1, manifest_url: 'https://docs.example/manifest.pdf' })
+    const printManifest = jest
+      .spyOn(ShiprocketCourierService.prototype, 'printManifest')
+      .mockResolvedValue({ manifest_url: 'https://docs.example/print-manifest.pdf' })
+    const generateLabel = jest
+      .spyOn(ShiprocketCourierService.prototype, 'generateLabel')
+      .mockResolvedValue({ label_url: 'https://docs.example/label.pdf' })
+    const generateInvoice = jest
+      .spyOn(ShiprocketCourierService.prototype, 'generateInvoice')
+      .mockResolvedValue({ invoice_url: 'https://docs.example/invoice.pdf' })
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    const result = await shiprocket.generateManifest({
+      shipment_id: [202, 203],
+      order_ids: [101],
+      courier_id: 10,
+    })
+
+    expect(assignAwb).toHaveBeenCalledWith({ shipment_id: 202, courier_id: 10 })
+    expect(assignAwb).toHaveBeenCalledWith({ shipment_id: 203, courier_id: 10 })
+    expect(generatePickup).toHaveBeenCalledWith({ shipment_id: [202] })
+    expect(generatePickup).toHaveBeenCalledWith({ shipment_id: [203] })
+    expect(generateManifest).toHaveBeenCalledWith({ shipment_id: [202, 203] })
+    expect(printManifest).toHaveBeenCalledWith({ order_ids: [101] })
+    expect(generateLabel).toHaveBeenCalledWith({ shipment_id: [202, 203] })
+    expect(generateInvoice).toHaveBeenCalledWith({ ids: [101] })
+    expect(result).toMatchObject({
+      success: true,
+      provider: 'shiprocket',
+      action: 'generateManifest',
+      booking_state: 'manifested',
+      shipment_ids: [202, 203],
+      order_ids: [101],
+      awb_number: 'SR-AWB-1',
+      courier_partner: 'Delhivery',
+      pickup_status: 'scheduled',
+      manifest: 'https://docs.example/print-manifest.pdf',
+      label: 'https://docs.example/label.pdf',
+      invoice: 'https://docs.example/invoice.pdf',
+    })
+  })
+
+  it('normalizes Shiprocket rate payloads to serviceability params', async () => {
+    const checkCourierServiceability = jest
+      .spyOn(ShiprocketCourierService.prototype, 'checkCourierServiceability')
+      .mockResolvedValue({ status: 200, data: { available_courier_companies: [] } })
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    await shiprocket.getRates({
+      source_pincode: '122001',
+      destination_pincode: '110001',
+      payment_type: 'cod',
+      order_amount: 999,
+      weight: 500,
+      length: 12,
+      breadth: 9,
+      height: 6,
+    })
+
+    expect(checkCourierServiceability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pickup_postcode: 122001,
+        delivery_postcode: 110001,
+        cod: 1,
+        weight: 0.5,
+        length: 12,
+        breadth: 9,
+        height: 6,
+        declared_value: 999,
+      }),
+    )
+  })
+
+  it('rejects Shiprocket tracking without any identifier', async () => {
+    const trackByAwb = jest.spyOn(ShiprocketCourierService.prototype, 'trackByAwb')
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    expect(() => shiprocket.trackShipment({})).toThrow(
+      'Shiprocket tracking requires AWB, shipment_id, or order_id.',
+    )
+    expect(trackByAwb).not.toHaveBeenCalled()
+  })
+
+  it('cancels Shiprocket scalar identifiers as AWBs', async () => {
+    const cancelShipmentByAwbs = jest
+      .spyOn(ShiprocketCourierService.prototype, 'cancelShipmentByAwbs')
+      .mockResolvedValue({ success: true })
+    const shiprocket = getUnifiedCourierClient('shiprocket')
+
+    await shiprocket.cancelShipment('SR-AWB-1')
+
+    expect(cancelShipmentByAwbs).toHaveBeenCalledWith({ awbs: ['SR-AWB-1'] })
   })
 
   it('keeps deferred-manifest providers local until the manifest action', async () => {

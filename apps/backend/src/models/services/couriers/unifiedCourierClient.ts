@@ -81,8 +81,8 @@ const COURIER_CAPABILITIES: Record<UnifiedCourierProvider, UnifiedCourierCapabil
     autoPickupOnCreate: false,
     requiresAwbBeforePickup: true,
     requiresManifestBeforePickup: false,
-    labelAvailableAfter: 'generateAwb',
-    cancellationKey: 'order_id',
+    labelAvailableAfter: 'generateManifest',
+    cancellationKey: 'order_id_plus_awb',
   },
   shipmozo: {
     provider: 'shipmozo',
@@ -534,33 +534,428 @@ const normalizeTruxcargoRatePayload = (input: Record<string, any>) => {
   }
 }
 
+const SHIPROCKET_AWB_KEYS = [
+  'awb_code',
+  'awb',
+  'awb_number',
+  'awbNumber',
+  'tracking_number',
+  'trackingNumber',
+]
+
+const SHIPROCKET_ORDER_ID_KEYS = [
+  'order_id',
+  'orderId',
+  'shiprocket_order_id',
+  'sr_order_id',
+  'id',
+]
+
+const SHIPROCKET_SHIPMENT_ID_KEYS = [
+  'shipment_id',
+  'shipmentId',
+  'shiprocket_shipment_id',
+]
+
+const SHIPROCKET_COURIER_NAME_KEYS = [
+  'courier_name',
+  'courierName',
+  'courier_company_name',
+  'courier_company',
+  'courier',
+]
+
+const SHIPROCKET_MANIFEST_KEYS = ['manifest_url', 'manifest', 'download_url', 'url']
+const SHIPROCKET_LABEL_KEYS = ['label_url', 'label', 'download_url', 'url']
+const SHIPROCKET_INVOICE_KEYS = ['invoice_url', 'invoice', 'download_url', 'url']
+
+const normalizeShiprocketIdValue = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+const normalizeShiprocketIdList = (...values: unknown[]) => {
+  const ids: number[] = []
+  const visit = (value: unknown) => {
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (typeof value === 'string' && value.includes(',')) {
+      value.split(',').forEach((item) => visit(item))
+      return
+    }
+    const parsed = normalizeShiprocketIdValue(value)
+    if (parsed && !ids.includes(parsed)) ids.push(parsed)
+  }
+  values.forEach(visit)
+  return ids
+}
+
+const getShiprocketShipmentIds = (payload: Record<string, any>) =>
+  normalizeShiprocketIdList(
+    payload.shipment_id,
+    payload.shipmentId,
+    payload.shipment_ids,
+    payload.shipmentIds,
+    payload.shipments,
+  )
+
+const getShiprocketOrderIds = (payload: Record<string, any>) =>
+  normalizeShiprocketIdList(
+    payload.order_ids,
+    payload.orderIds,
+    payload.shiprocket_order_ids,
+    payload.shiprocketOrderIds,
+    payload.order_id,
+    payload.orderId,
+  )
+
+const normalizeShiprocketPositiveNumber = (value: unknown, fallback: number) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
+const normalizeShiprocketWeightKg = (value: unknown) => {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0.5
+  return parsed > 50 ? parsed / 1000 : parsed
+}
+
+const normalizeShiprocketPaymentCod = (payload: Record<string, any>) => {
+  const directCod = Number(payload.cod)
+  if (Number.isFinite(directCod)) return directCod > 0 ? 1 : 0
+
+  const payment = toText(payload.payment_type || payload.paymentType || payload.mode).toLowerCase()
+  return payment === 'cod' ? 1 : 0
+}
+
+const normalizeShiprocketRatePayload = (input: Record<string, any>) => {
+  const payload = input || {}
+  const pickupPostcode =
+    firstText(payload, ['pickup_postcode', 'pickup_pincode', 'source_pincode', 'origin_pincode', 'origin']) ||
+    toText(payload.pickup?.pincode || payload.pickupAddress?.pincode)
+  const deliveryPostcode =
+    firstText(payload, ['delivery_postcode', 'delivery_pincode', 'destination_pincode', 'destination', 'pincode']) ||
+    toText(payload.consignee?.pincode || payload.deliveryAddress?.pincode)
+
+  if (!pickupPostcode || !deliveryPostcode) {
+    throw new HttpError(400, 'Shiprocket rates require pickup and delivery pincodes.')
+  }
+
+  const declaredValue = normalizeShiprocketPositiveNumber(
+    payload.declared_value ?? payload.order_amount ?? payload.orderAmount ?? payload.invoice_value,
+    1,
+  )
+
+  const normalized: Record<string, any> = {
+    ...payload,
+    pickup_postcode: Number(pickupPostcode),
+    delivery_postcode: Number(deliveryPostcode),
+    cod: normalizeShiprocketPaymentCod(payload),
+    weight: normalizeShiprocketWeightKg(payload.weight ?? payload.package_weight),
+    length: normalizeShiprocketPositiveNumber(payload.length ?? payload.package_length, 1),
+    breadth: normalizeShiprocketPositiveNumber(payload.breadth ?? payload.package_breadth ?? payload.width, 1),
+    height: normalizeShiprocketPositiveNumber(payload.height ?? payload.package_height, 1),
+    declared_value: declaredValue,
+  }
+
+  const mode = firstText(payload, ['shipping_mode', 'shipment_mode', 'mode'])
+  if (mode) normalized.mode = mode
+  if (payload.is_return !== undefined) normalized.is_return = payload.is_return
+  if (payload.courier_id !== undefined) normalized.courier_id = payload.courier_id
+
+  return normalized
+}
+
+const isShiprocketAlreadyAssignedMessage = (value: unknown) =>
+  /already\s+(assigned|generated)|awb\s+already|courier\s+already/i.test(toText(value))
+
+const isShiprocketPickupAlreadyScheduledMessage = (value: unknown) =>
+  /already\s+(scheduled|generated|requested|manifested|picked|pickup)|pickup\s+already/i.test(
+    toText(value),
+  )
+
+const normalizeShiprocketChannelId = (value: unknown) => {
+  const text = toText(value)
+  if (!text) return undefined
+  const parsed = Number(text)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : text
+}
+
+const buildShiprocketPickupPayload = (shipmentId: number, input: Record<string, any>) => {
+  const payload: Record<string, any> = { shipment_id: [shipmentId] }
+  const status = toText(input.status)
+  if (status) payload.status = status.toLowerCase()
+  const pickupDate = input.pickup_date ?? input.pickupDate
+  if (pickupDate) payload.pickup_date = Array.isArray(pickupDate) ? pickupDate : [pickupDate]
+  return payload
+}
+
 class ShiprocketUnifiedClient implements UnifiedCourierClient {
   readonly provider = 'shiprocket' as const
   readonly capabilities = getCourierCapabilities(this.provider)
   private readonly service = new ShiprocketCourierService()
 
-  createShipment(orderData: Record<string, any>) {
-    return this.service.createCustomOrder(orderData || {})
+  private resolveOrderId(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPROCKET_ORDER_ID_KEYS)
+      if (found) return found
+    }
+    return ''
   }
 
-  generateAwb(input: Record<string, any>) {
-    return this.service.assignAwb(input || {})
+  private resolveShipmentId(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPROCKET_SHIPMENT_ID_KEYS)
+      if (found) return found
+    }
+    return ''
   }
 
-  generateManifest(input: Record<string, any>) {
-    return this.service.generateManifest(input || {})
+  private resolveAwb(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPROCKET_AWB_KEYS)
+      if (found) return found
+    }
+    return ''
   }
 
-  schedulePickup(input: Record<string, any>) {
-    return this.service.generatePickup(input || {})
+  private resolveCourierName(...sources: unknown[]) {
+    for (const source of sources) {
+      const found = firstNestedText(source, SHIPROCKET_COURIER_NAME_KEYS)
+      if (found) return found
+    }
+    return ''
   }
 
-  generateLabel(input: Record<string, any>) {
-    return this.service.generateLabel(input || {})
+  private resolveDocument(source: unknown, keys: string[]) {
+    return firstNestedText(source, keys) || undefined
+  }
+
+  async createShipment(orderData: Record<string, any>) {
+    const payload = orderData || {}
+    const channelId = normalizeShiprocketChannelId(
+      payload.channel_id || payload.channelId || this.service.getDefaultChannelId(),
+    )
+    const response = channelId
+      ? await this.service.createChannelSpecificOrder({ ...payload, channel_id: channelId })
+      : await this.service.createCustomOrder(payload)
+    const orderId = this.resolveOrderId(response)
+    const shipmentId = this.resolveShipmentId(response)
+    return {
+      raw: response,
+      ...response,
+      success: true,
+      provider: this.provider,
+      action: 'createShipment',
+      booking_state: 'pending_awb',
+      remote_order_created: true,
+      order_id: orderId || undefined,
+      shipment_id: shipmentId || undefined,
+      next_action: 'generateAwb',
+    }
+  }
+
+  async generateAwb(input: Record<string, any>) {
+    const payload = input || {}
+    const shipmentId = requireText(payload, ['shipment_id', 'shipmentId'], 'Shiprocket AWB requires shipment_id')
+    const courierId = firstText(payload, ['courier_id', 'courierId'])
+
+    let response: any
+    let assignmentSkipped = false
+    try {
+      response = await this.service.assignAwb({
+        shipment_id: normalizeShiprocketIdValue(shipmentId) || shipmentId,
+        ...(courierId ? { courier_id: normalizeShiprocketIdValue(courierId) || courierId } : {}),
+      })
+    } catch (err: any) {
+      if (!isShiprocketAlreadyAssignedMessage(err?.message)) throw err
+      assignmentSkipped = true
+      response = await this.service.trackByShipmentId(shipmentId)
+    }
+
+    const awb = this.resolveAwb(response)
+    if (!awb) {
+      throw new HttpError(502, 'Shiprocket AWB assignment did not return a trackable AWB number.')
+    }
+
+    return {
+      raw: response,
+      ...response,
+      success: true,
+      provider: this.provider,
+      action: 'generateAwb',
+      booking_state: 'awb_assigned',
+      shipment_id: shipmentId,
+      awb_number: awb,
+      courier_partner: this.resolveCourierName(response) || undefined,
+      assignment_skipped: assignmentSkipped,
+    }
+  }
+
+  async generateManifest(input: Record<string, any>) {
+    const payload = input || {}
+    const shipmentIds = getShiprocketShipmentIds(payload)
+    if (!shipmentIds.length) {
+      throw new HttpError(400, 'Shiprocket manifest requires shipment_id.')
+    }
+
+    const orderIds = getShiprocketOrderIds(payload)
+    const courierId = firstText(payload, ['courier_id', 'courierId'])
+    const assignmentResponses: any[] = []
+    let assignmentSkipped = false
+
+    if (!isTruthyFlag(payload.skip_awb) && !isTruthyFlag(payload.skipAwb)) {
+      for (const shipmentId of shipmentIds) {
+        try {
+          assignmentResponses.push(
+            await this.service.assignAwb({
+              shipment_id: shipmentId,
+              ...(courierId ? { courier_id: normalizeShiprocketIdValue(courierId) || courierId } : {}),
+            }),
+          )
+        } catch (err: any) {
+          if (!isShiprocketAlreadyAssignedMessage(err?.message)) throw err
+          assignmentSkipped = true
+        }
+      }
+    }
+
+    const pickupResponses: any[] = []
+    let pickupAlreadyScheduled = false
+    for (const shipmentId of shipmentIds) {
+      try {
+        pickupResponses.push(await this.service.generatePickup(buildShiprocketPickupPayload(shipmentId, payload)))
+      } catch (err: any) {
+        if (!isShiprocketPickupAlreadyScheduledMessage(err?.message)) throw err
+        pickupAlreadyScheduled = true
+      }
+    }
+
+    const manifestResponse = await this.service.generateManifest({ shipment_id: shipmentIds })
+    const manifestMessage = toText(manifestResponse?.message).toLowerCase()
+    if (
+      manifestMessage.includes('not generated') ||
+      manifestResponse?.status === false ||
+      manifestResponse?.success === false
+    ) {
+      throw new HttpError(
+        400,
+        manifestResponse?.message || 'Shiprocket manifest was not generated for the selected shipments.',
+      )
+    }
+
+    let printManifestResponse: any = null
+    let printManifestError = ''
+    try {
+      printManifestResponse = await this.service.printManifest(
+        orderIds.length ? { order_ids: orderIds } : { shipment_id: shipmentIds },
+      )
+    } catch (err: any) {
+      printManifestError = toText(err?.message || err)
+    }
+
+    let labelResponse: any = null
+    let labelError = ''
+    try {
+      labelResponse = await this.service.generateLabel({ shipment_id: shipmentIds })
+    } catch (err: any) {
+      labelError = toText(err?.message || err)
+    }
+
+    let invoiceResponse: any = null
+    let invoiceError = ''
+    if (orderIds.length) {
+      try {
+        invoiceResponse = await this.service.generateInvoice({ ids: orderIds })
+      } catch (err: any) {
+        invoiceError = toText(err?.message || err)
+      }
+    }
+
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateManifest',
+      booking_state: 'manifested',
+      shipment_ids: shipmentIds,
+      order_ids: orderIds,
+      awb_number: this.resolveAwb(payload, ...assignmentResponses) || undefined,
+      courier_partner: this.resolveCourierName(...assignmentResponses) || undefined,
+      assignment_skipped: assignmentSkipped,
+      pickup_status: pickupAlreadyScheduled ? 'already_scheduled' : 'scheduled',
+      manifest:
+        this.resolveDocument(printManifestResponse, SHIPROCKET_MANIFEST_KEYS) ||
+        this.resolveDocument(manifestResponse, SHIPROCKET_MANIFEST_KEYS),
+      label: this.resolveDocument(labelResponse, SHIPROCKET_LABEL_KEYS),
+      invoice: this.resolveDocument(invoiceResponse, SHIPROCKET_INVOICE_KEYS),
+      manifest_pending: Boolean(printManifestError),
+      manifest_error: printManifestError || undefined,
+      label_pending: Boolean(labelError),
+      label_error: labelError || undefined,
+      invoice_pending: Boolean(invoiceError),
+      invoice_error: invoiceError || undefined,
+      assign_awb: assignmentResponses,
+      schedule_pickup: pickupResponses,
+      generate_manifest: manifestResponse,
+      print_manifest: printManifestResponse,
+      label_response: labelResponse,
+      invoice_response: invoiceResponse,
+    }
+  }
+
+  async schedulePickup(input: Record<string, any>) {
+    const payload = input || {}
+    const shipmentIds = getShiprocketShipmentIds(payload)
+    if (!shipmentIds.length) {
+      throw new HttpError(400, 'Shiprocket pickup requires shipment_id.')
+    }
+
+    const responses = []
+    let pickupAlreadyScheduled = false
+    for (const shipmentId of shipmentIds) {
+      try {
+        responses.push(await this.service.generatePickup(buildShiprocketPickupPayload(shipmentId, payload)))
+      } catch (err: any) {
+        if (!isShiprocketPickupAlreadyScheduledMessage(err?.message)) throw err
+        pickupAlreadyScheduled = true
+      }
+    }
+
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'schedulePickup',
+      shipment_ids: shipmentIds,
+      pickup_status: pickupAlreadyScheduled ? 'already_scheduled' : 'scheduled',
+      raw: responses,
+    }
+  }
+
+  async generateLabel(input: Record<string, any>) {
+    const payload = input || {}
+    const shipmentIds = getShiprocketShipmentIds(payload)
+    if (!shipmentIds.length) {
+      throw new HttpError(400, 'Shiprocket label requires shipment_id.')
+    }
+    const response = await this.service.generateLabel({ ...payload, shipment_id: shipmentIds })
+    return {
+      raw: response,
+      ...response,
+      success: true,
+      provider: this.provider,
+      action: 'generateLabel',
+      shipment_ids: shipmentIds,
+      label: this.resolveDocument(response, SHIPROCKET_LABEL_KEYS),
+    }
   }
 
   trackShipment(trackingId: UnifiedCourierIdentifier) {
     const payload = toPayload(trackingId)
+    const awb = firstText(payload, ['awb', 'awb_number', 'awbNumber']) || toText(trackingId)
+    if (awb) return this.service.trackByAwb(awb)
+
     const shipmentId = firstText(payload, ['shipment_id', 'shipmentId'])
     if (shipmentId) return this.service.trackByShipmentId(shipmentId)
 
@@ -572,8 +967,7 @@ class ShiprocketUnifiedClient implements UnifiedCourierClient {
       })
     }
 
-    const awb = firstText(payload, ['awb', 'awb_number', 'awbNumber']) || toText(trackingId)
-    return this.service.trackByAwb(awb)
+    throw new HttpError(400, 'Shiprocket tracking requires AWB, shipment_id, or order_id.')
   }
 
   cancelShipment(input: UnifiedCourierIdentifier) {
@@ -581,12 +975,16 @@ class ShiprocketUnifiedClient implements UnifiedCourierClient {
     const awb = firstText(payload, ['awb', 'awb_number', 'awbNumber'])
     if (awb) return this.service.cancelShipmentByAwbs({ awbs: [awb] })
 
-    const id = firstText(payload, ['order_id', 'orderId', 'shipment_id', 'shipmentId', 'id']) || toText(input)
+    const scalarIdentifier = toText(input)
+    if (scalarIdentifier) return this.service.cancelShipmentByAwbs({ awbs: [scalarIdentifier] })
+
+    const id = firstText(payload, ['order_id', 'orderId', 'id']) || toText(input)
+    if (!id) throw new HttpError(400, 'Shiprocket cancellation requires AWB or Shiprocket order_id.')
     return this.service.cancelOrders({ ids: [id] })
   }
 
   getRates(input: Record<string, any>) {
-    return this.service.checkCourierServiceability(input || {})
+    return this.service.checkCourierServiceability(normalizeShiprocketRatePayload(input || {}))
   }
 }
 
