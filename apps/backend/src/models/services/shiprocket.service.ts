@@ -3394,10 +3394,16 @@ export const fetchAvailableCouriersWithRates = async (
               : Array.isArray(truxcargoResp?.records)
                 ? truxcargoResp.records
                 : []
+          const truxStatusText = String(
+            truxcargoResp?.status ?? truxcargoResp?.data?.status ?? '',
+          )
+            .trim()
+            .toLowerCase()
           truxcargoAvailable =
             truxcargoRateRecords.length > 0 ||
             truxcargoResp?.success === true ||
-            truxcargoResp?.status === true
+            truxcargoResp?.status === true ||
+            ['yes', 'true', 'serviceable'].includes(truxStatusText)
 
           if (truxcargoAvailable) {
             registerServiceableProvider('truxcargo', {

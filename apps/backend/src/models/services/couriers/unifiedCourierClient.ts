@@ -178,6 +178,7 @@ const toPayload = (value: UnifiedCourierIdentifier | Record<string, any>) =>
     : {}
 
 const toText = (value: unknown) => {
+  if (value == null || typeof value === 'object') return ''
   const normalized = String(value ?? '').trim()
   return normalized || ''
 }
@@ -225,6 +226,38 @@ const isIcarryInternationalPayload = (payload: Record<string, any>) => {
   return Boolean(country && country.toUpperCase() !== 'IN')
 }
 
+const firstNestedValue = (
+  source: unknown,
+  keys: string[],
+  depth = 0,
+): unknown => {
+  if (source == null || depth > 5) return undefined
+
+  if (Array.isArray(source)) {
+    for (const item of source) {
+      const found = firstNestedValue(item, keys, depth + 1)
+      if (found !== undefined && found !== null && found !== '') return found
+    }
+    return undefined
+  }
+
+  if (typeof source !== 'object') return undefined
+
+  const normalizedKeys = new Set(keys.map((key) => key.toLowerCase()))
+  for (const [key, value] of Object.entries(source as Record<string, any>)) {
+    if (normalizedKeys.has(key.toLowerCase())) return value
+  }
+
+  for (const value of Object.values(source as Record<string, any>)) {
+    const found = firstNestedValue(value, keys, depth + 1)
+    if (found !== undefined && found !== null && found !== '') return found
+  }
+
+  return undefined
+}
+
+const firstNestedText = (source: unknown, keys: string[]) => toText(firstNestedValue(source, keys))
+
 const resolveIcarryDomesticEndpoint = (payload: Record<string, any>) => {
   const explicit = toText(payload.endpoint).toLowerCase()
   if (explicit === 'air') return 'air'
@@ -232,6 +265,155 @@ const resolveIcarryDomesticEndpoint = (payload: Record<string, any>) => {
 
   const shipmentMode = toText(payload.shipment_mode || payload.shipmentMode).toUpperCase()
   return shipmentMode === 'E' ? 'air' : 'surface'
+}
+
+const TRUXCARGO_WAYBILL_KEYS = [
+  'waybill',
+  'waybill_number',
+  'waybillNumber',
+  'awb',
+  'awb_number',
+  'awbNumber',
+  'tracking_number',
+  'trackingNumber',
+]
+
+const TRUXCARGO_SHIPMENT_ID_KEYS = [
+  'shipment_id',
+  'shipmentId',
+  'shipment',
+  'order_id',
+  'orderId',
+]
+
+const normalizeTruxcargoPaymentMode = (value: unknown) => {
+  const normalized = toText(value).toUpperCase()
+  if (normalized === 'COD') return 'COD'
+  if (normalized === 'PREPAID' || normalized === 'PPD') return 'PREPAID'
+  return ''
+}
+
+const toFiniteNumber = (value: unknown) => {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const normalizeTruxcargoWeightKg = (value: unknown) => {
+  const parsed = toFiniteNumber(value)
+  if (!parsed || parsed <= 0) return 0.5
+  return parsed > 50 ? parsed / 1000 : parsed
+}
+
+const numericOrFallback = (value: unknown, fallback: number) => {
+  const parsed = toFiniteNumber(value)
+  return parsed && parsed > 0 ? parsed : fallback
+}
+
+const normalizeTruxcargoDimension = (value: unknown) => {
+  if (Array.isArray(value) && value.length) return value
+  return [numericOrFallback(value, 1)]
+}
+
+const firstOrderItem = (payload: Record<string, any>) =>
+  Array.isArray(payload.order_items) && payload.order_items.length
+    ? payload.order_items[0]
+    : Array.isArray(payload.products) && payload.products.length
+      ? payload.products[0]
+      : {}
+
+const normalizeTruxcargoRatePayload = (input: Record<string, any>) => {
+  const payload = input || {}
+  const item = firstOrderItem(payload)
+  const partner = firstText(payload, ['partner', 'courier_id', 'courierId'])
+  if (!partner) {
+    throw new HttpError(400, 'Truxcargo rates require courier_id/partner.')
+  }
+
+  const origin =
+    firstText(payload, ['origin', 'source_pincode', 'origin_pincode', 'pickup_pincode']) ||
+    toText(payload.pickup?.pincode || payload.pickupAddress?.pincode)
+  const destination =
+    firstText(payload, ['destination', 'destination_pincode', 'delivery_pincode', 'pincode']) ||
+    toText(payload.consignee?.pincode || payload.deliveryAddress?.pincode)
+  if (!origin || !destination) {
+    throw new HttpError(400, 'Truxcargo rates require origin and destination pincodes.')
+  }
+
+  const paymentMode =
+    normalizeTruxcargoPaymentMode(
+      payload.payment_type || payload.payment_mode || payload.paymentMode || payload.mode,
+    ) || 'PREPAID'
+  const orderAmount =
+    numericOrFallback(
+      payload.order_amount ?? payload.orderAmount ?? payload.invoice_value ?? payload.total_amount,
+      1,
+    )
+  const qty = numericOrFallback(payload.qty ?? item?.qty ?? item?.quantity, 1)
+  const unitPrice = numericOrFallback(
+    Array.isArray(payload.product_price)
+      ? payload.product_price[0]
+      : payload.product_price ?? item?.price ?? item?.selling_price,
+    orderAmount,
+  )
+  const hsn =
+    firstText(payload, ['hsn', 'hsnCode', 'product_hsn']) ||
+    toText(item?.hsn || item?.hsnCode) ||
+    '6201'
+  const sku =
+    firstText(payload, ['sku']) ||
+    toText(item?.sku || payload.order_id || payload.order_number || 'TRUXCARGO-RATE')
+  const productDescription =
+    firstText(payload, ['product_description', 'productDescription', 'description']) ||
+    toText(item?.name || item?.productName || item?.description) ||
+    'Product'
+  const isInsured = isTruthyFlag(payload.is_insurance) || isTruthyFlag(payload.isInsurance)
+  const insurance = firstText(payload, ['insurance']) || (isInsured ? 'YES' : 'NO')
+  const codAmount =
+    paymentMode === 'COD'
+      ? numericOrFallback(payload.cod_amount ?? payload.codAmount ?? orderAmount, orderAmount)
+      : 0
+
+  return {
+    ...payload,
+    partner,
+    courier_id: partner,
+    origin,
+    destination,
+    pickup_pincode: firstText(payload, ['pickup_pincode']) || origin,
+    delivery_pincode: firstText(payload, ['delivery_pincode']) || destination,
+    pincode: firstText(payload, ['pincode']) || destination,
+    pin: firstText(payload, ['pin']) || destination,
+    pin_code: firstText(payload, ['pin_code']) || destination,
+    payment_type: paymentMode,
+    payment_mode: paymentMode,
+    paymentmode: paymentMode,
+    paymentMode,
+    mode: paymentMode,
+    invoice_value: orderAmount,
+    order_amount: orderAmount,
+    total_amount: numericOrFallback(payload.total_amount, orderAmount),
+    cod_amount: codAmount,
+    insurance,
+    weight: normalizeTruxcargoWeightKg(payload.weight ?? payload.package_weight),
+    length: normalizeTruxcargoDimension(payload.length ?? payload.package_length),
+    breadth: normalizeTruxcargoDimension(payload.breadth ?? payload.package_breadth),
+    width: normalizeTruxcargoDimension(payload.width ?? payload.package_breadth ?? payload.breadth),
+    height: normalizeTruxcargoDimension(payload.height ?? payload.package_height),
+    qty,
+    quantity: Array.isArray(payload.quantity) && payload.quantity.length ? payload.quantity : [qty],
+    count: Array.isArray(payload.count) && payload.count.length ? payload.count : [qty],
+    product_quantity: numericOrFallback(payload.product_quantity, qty),
+    product_price:
+      Array.isArray(payload.product_price) && payload.product_price.length
+        ? payload.product_price
+        : [unitPrice],
+    sku: Array.isArray(payload.sku) && payload.sku.length ? payload.sku : [sku],
+    hsn,
+    hsn_code: Array.isArray(payload.hsn_code) && payload.hsn_code.length ? payload.hsn_code : [hsn],
+    hsnCode: hsn,
+    product_hsn: hsn,
+    product_description: productDescription,
+  }
 }
 
 class ShiprocketUnifiedClient implements UnifiedCourierClient {
@@ -438,47 +620,113 @@ class TruxcargoUnifiedClient implements UnifiedCourierClient {
   readonly capabilities = getCourierCapabilities(this.provider)
   private readonly service = new TruxcargoService()
 
-  createShipment(orderData: Record<string, any>) {
-    const payload = orderData || {}
-    if (
-      isTruthyFlag(payload.deferBookingUntilManifest) ||
-      isTruthyFlag(payload.deferred_manifest) ||
-      isTruthyFlag(payload.localOnly)
-    ) {
-      return implicitSuccess(this.provider, 'createShipment', {
-        deferred_manifest: true,
-        booking_state: 'pending_manifest',
-        next_action: 'generateManifest',
-      })
-    }
-    return this.service.createOrder(payload)
+  private resolveWaybill(source: unknown) {
+    return firstNestedText(source, TRUXCARGO_WAYBILL_KEYS)
   }
 
-  generateAwb(input: Record<string, any>) {
+  private buildManifestResult(
+    waybill: string,
+    createOrderResponse: any,
+    packagingSlipResponse: any,
+    packagingSlipError?: unknown,
+  ) {
+    const shipmentId =
+      firstNestedText(createOrderResponse, TRUXCARGO_SHIPMENT_ID_KEYS) ||
+      firstNestedText(packagingSlipResponse, TRUXCARGO_SHIPMENT_ID_KEYS) ||
+      waybill
+
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateManifest',
+      booking_state: 'manifested',
+      waybill,
+      awb_number: waybill,
+      shipment_id: shipmentId,
+      schedule_pickup: 'implicit',
+      next_action: 'schedulePickup',
+      create_order: createOrderResponse,
+      packaging_slip: packagingSlipResponse,
+      label_pending: Boolean(packagingSlipError),
+      label_error:
+        packagingSlipError instanceof Error
+          ? packagingSlipError.message
+          : toText(packagingSlipError),
+    }
+  }
+
+  createShipment(orderData: Record<string, any>) {
+    const payload = orderData || {}
+    if (isTruthyFlag(payload.forceProviderBooking) || isTruthyFlag(payload.bookImmediately)) {
+      return this.service.createOrder(payload)
+    }
+
+    return implicitSuccess(this.provider, 'createShipment', {
+      deferred_manifest: true,
+      booking_state: 'pending_manifest',
+      next_action: 'generateManifest',
+      courier_id: firstText(payload, ['courier_id', 'courierId']) || undefined,
+    })
+  }
+
+  async generateAwb(input: Record<string, any>) {
     const payload = input || {}
-    const waybill = firstText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber'])
+    const waybill = this.resolveWaybill(payload)
     if (waybill) {
       return implicitSuccess(this.provider, 'generateAwb', {
         waybill,
+        awb_number: waybill,
         message: 'Truxcargo returns waybill during order creation.',
       })
     }
-    return this.service.createOrder(payload)
+
+    const createOrderResponse = await this.service.createOrder(payload)
+    const createdWaybill = this.resolveWaybill(createOrderResponse)
+    if (!createdWaybill) return createOrderResponse
+
+    return {
+      success: true,
+      provider: this.provider,
+      action: 'generateAwb',
+      waybill: createdWaybill,
+      awb_number: createdWaybill,
+      shipment_id: firstNestedText(createOrderResponse, TRUXCARGO_SHIPMENT_ID_KEYS) || createdWaybill,
+      create_order: createOrderResponse,
+    }
   }
 
-  generateManifest(input: Record<string, any>) {
+  async generateManifest(input: Record<string, any>) {
     const payload = input || {}
-    const waybill = firstText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber'])
-    if (waybill) return this.service.createPackagingSlip({ ...payload, waybill })
-    return this.service.createOrder(payload)
+    const existingWaybill = this.resolveWaybill(payload)
+    if (existingWaybill) {
+      const packagingSlipResponse = await this.service.createPackagingSlip({
+        ...payload,
+        waybill: existingWaybill,
+      })
+      return this.buildManifestResult(existingWaybill, null, packagingSlipResponse)
+    }
+
+    const createOrderResponse = await this.service.createOrder(payload)
+    const waybill = this.resolveWaybill(createOrderResponse)
+    if (!waybill) {
+      throw new HttpError(502, 'Truxcargo order creation did not return waybill/AWB.')
+    }
+
+    try {
+      const packagingSlipResponse = await this.service.createPackagingSlip({ ...payload, waybill })
+      return this.buildManifestResult(waybill, createOrderResponse, packagingSlipResponse)
+    } catch (err) {
+      return this.buildManifestResult(waybill, createOrderResponse, null, err)
+    }
   }
 
   schedulePickup(input: Record<string, any>) {
     const payload = input || {}
-    const waybill = firstText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber'])
+    const waybill = this.resolveWaybill(payload)
     if (waybill) {
       return implicitSuccess(this.provider, 'schedulePickup', {
         waybill,
+        awb_number: waybill,
         message: 'Truxcargo pickup is handled by the provider after manifest/order creation.',
       })
     }
@@ -487,25 +735,33 @@ class TruxcargoUnifiedClient implements UnifiedCourierClient {
 
   generateLabel(input: Record<string, any>) {
     const payload = input || {}
-    const waybill = requireText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber'], 'Truxcargo label requires waybill/AWB')
+    const waybill = this.resolveWaybill(payload)
+    if (!waybill) throw new HttpError(400, 'Truxcargo label requires waybill/AWB')
     return this.service.createPackagingSlip({ ...payload, waybill })
   }
 
   trackShipment(trackingId: UnifiedCourierIdentifier) {
     const payload = toPayload(trackingId)
-    const waybill = firstText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber']) || toText(trackingId)
+    const waybill = this.resolveWaybill(payload) || toText(trackingId)
     const orderId = firstText(payload, ['order_id', 'orderId'])
-    return this.service.trackShipment({ waybill, order_id: orderId || undefined })
+    if (!waybill && !orderId) {
+      throw new HttpError(400, 'Truxcargo tracking requires waybill/AWB or order_id.')
+    }
+    return this.service.trackShipment({
+      ...(waybill ? { waybill } : {}),
+      ...(orderId ? { order_id: orderId } : {}),
+    })
   }
 
   cancelShipment(input: UnifiedCourierIdentifier) {
     const payload = toPayload(input)
-    const waybill = firstText(payload, ['waybill', 'waybill_number', 'awb', 'awb_number', 'awbNumber']) || toText(input)
+    const waybill = this.resolveWaybill(payload) || toText(input)
+    if (!waybill) throw new HttpError(400, 'Truxcargo cancellation requires waybill/AWB.')
     return this.service.cancelOrder({ ...payload, waybill })
   }
 
   getRates(input: Record<string, any>) {
-    return this.service.getShippingCharge(input || {})
+    return this.service.getShippingCharge(normalizeTruxcargoRatePayload(input || {}))
   }
 }
 

@@ -48,6 +48,10 @@ export class TruxcargoService {
             'authorization',
             'token',
             'x-api-key',
+            'user_id',
+            'userid',
+            'client_id',
+            'clientid',
             'label',
           ].includes(lowered)
         ) {
