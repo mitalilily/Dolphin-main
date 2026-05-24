@@ -24,6 +24,23 @@ import { sendWebhookEvent } from '../../services/webhookDelivery.service'
 import { getOpaqueProviderCode } from '../../utils/externalApiHelpers'
 import { getHttpStatusCode, normalizeAwb, parseTrackingQuery } from '../../utils/tracking'
 
+const isAlreadyCancelledProviderMessage = (message: unknown) => {
+  const normalized = String(message || '').toLowerCase()
+  return (
+    normalized.includes('already cancelled') ||
+    normalized.includes('already canceled') ||
+    normalized.includes('status is cancelled') ||
+    normalized.includes('status is canceled') ||
+    normalized.includes('order is cancelled') ||
+    normalized.includes('order is canceled')
+  )
+}
+
+const isProviderCancelSuccessText = (value: unknown) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['1', 'true', 'success', 'succeeded', 'cancelled', 'canceled'].includes(normalized)
+}
+
 /**
  * Create a B2C order via external API
  * POST /api/v1/orders
@@ -409,7 +426,19 @@ export const cancelOrderController = async (req: any, res: Response) => {
           })
         }
         const icarry = new IcarryService()
-        cancellationResult = await icarry.cancelShipment({ shipment_id: shipmentId })
+        try {
+          cancellationResult = await icarry.cancelShipment({ shipment_id: shipmentId })
+        } catch (err: any) {
+          if (!isAlreadyCancelledProviderMessage(err?.message)) {
+            throw err
+          }
+          cancellationResult = {
+            success: true,
+            status: 'cancelled',
+            alreadyCancelled: true,
+            message: err.message,
+          }
+        }
       } else {
         const xpressbees = new XpressbeesService()
         cancellationResult = await xpressbees.cancelShipment(order.awb_number)
@@ -426,19 +455,26 @@ export const cancelOrderController = async (req: any, res: Response) => {
     const providerCancelAccepted =
       cancellationResult?.success === true ||
       cancellationResult?.success === 1 ||
+      isProviderCancelSuccessText(cancellationResult?.success) ||
       cancellationResult?.Success === 1 ||
       cancellationResult?.Success === true ||
+      isProviderCancelSuccessText(cancellationResult?.Success) ||
       cancellationResult?.result === true ||
       cancellationResult?.result === 1 ||
       cancellationResult?.result === '1' ||
+      isProviderCancelSuccessText(cancellationResult?.result) ||
       cancellationResult?.response?.result === true ||
       cancellationResult?.response?.result === 1 ||
       cancellationResult?.response?.result === '1' ||
+      isProviderCancelSuccessText(cancellationResult?.response?.result) ||
+      isProviderCancelSuccessText(cancellationResult?.response?.success) ||
       cancellationResult?.status === true ||
       cancellationResult?.status === 1 ||
       cancellationResult?.status === 'Success' ||
       cancellationResult?.status === 'success' ||
+      isProviderCancelSuccessText(cancellationResult?.status) ||
       cancellationResult?.response?.status === true ||
+      isProviderCancelSuccessText(cancellationResult?.response?.status) ||
       (typeof cancellationResult?.remark === 'string' &&
         cancellationResult.remark.toLowerCase().includes('cancelled')) ||
       (typeof cancellationResult?.message === 'string' &&

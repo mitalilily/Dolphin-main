@@ -316,6 +316,14 @@ const buildShipmozoDeferredManifestPayload = (params: ShipmentParams, providerCo
 
 const normalizeShipmozoText = (value: unknown) => String(value ?? '').trim()
 
+const normalizeShipmozoName = (value: unknown, fallback = 'Customer') => {
+  const normalized = normalizeShipmozoText(value)
+    .replace(/[^A-Za-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return normalized || fallback
+}
+
 const normalizeShipmozoWarehouseText = (value: unknown) =>
   normalizeShipmozoText(value).toLowerCase()
 
@@ -593,7 +601,7 @@ const buildShipmozoForwardOrderPayload = async (
     order_id: normalizeShipmozoText(params.order_number),
     order_date: toDateOnly(params.invoice_date || params.order_date),
     order_type: 'ESSENTIALS',
-    consignee_name: normalizeShipmozoText(consignee.name),
+    consignee_name: normalizeShipmozoName(consignee.name),
     consignee_phone: normalizePhoneDigits(consignee.phone),
     consignee_alternate_phone: normalizePhoneDigits((consignee as any).alternate_phone),
     consignee_email: normalizeShipmozoText(consignee.email),

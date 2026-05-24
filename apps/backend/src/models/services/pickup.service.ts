@@ -10,6 +10,23 @@ import { TruxcargoService } from './couriers/truxcargo.service'
 import { XpressbeesService } from './couriers/xpressbees.service'
 import { applyCancellationRefundOnce } from './webhookProcessor'
 
+const isAlreadyCancelledProviderMessage = (message: unknown) => {
+  const normalized = String(message || '').toLowerCase()
+  return (
+    normalized.includes('already cancelled') ||
+    normalized.includes('already canceled') ||
+    normalized.includes('status is cancelled') ||
+    normalized.includes('status is canceled') ||
+    normalized.includes('order is cancelled') ||
+    normalized.includes('order is canceled')
+  )
+}
+
+const isSuccessText = (value: unknown) => {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  return ['1', 'true', 'success', 'succeeded', 'cancelled', 'canceled'].includes(normalized)
+}
+
 export async function cancelOrderShipment(orderId: string, userId: string) {
   console.log('🔍 Starting cancellation for orderId:', orderId)
 
@@ -121,7 +138,19 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
       throw new Error('iCarry cancellation requires a numeric shipment_id')
     }
     const svc = new IcarryService()
-    cancellationResult = await svc.cancelShipment({ shipment_id: shipmentId })
+    try {
+      cancellationResult = await svc.cancelShipment({ shipment_id: shipmentId })
+    } catch (err: any) {
+      if (!isAlreadyCancelledProviderMessage(err?.message)) {
+        throw err
+      }
+      cancellationResult = {
+        success: true,
+        status: 'cancelled',
+        alreadyCancelled: true,
+        message: err.message,
+      }
+    }
   } else {
     const svc = new XpressbeesService()
     cancellationResult = await svc.cancelShipment(awbNumber)
@@ -134,21 +163,28 @@ export async function cancelOrderShipment(orderId: string, userId: string) {
     cancellationResult?.success === 1 ||
     cancellationResult?.success === '1' ||
     cancellationResult?.success === 'true' ||
+    isSuccessText(cancellationResult?.success) ||
     cancellationResult?.Success === true ||
     cancellationResult?.Success === 1 ||
     cancellationResult?.Success === '1' ||
+    isSuccessText(cancellationResult?.Success) ||
     cancellationResult?.result === true ||
     cancellationResult?.result === 1 ||
     cancellationResult?.result === '1' ||
+    isSuccessText(cancellationResult?.result) ||
     cancellationResult?.response?.result === true ||
     cancellationResult?.response?.result === 1 ||
     cancellationResult?.response?.result === '1' ||
+    isSuccessText(cancellationResult?.response?.result) ||
     cancellationResult?.status === true || // Boolean true (most common)
     cancellationResult?.status === 1 ||
     cancellationResult?.status === '1' ||
     cancellationResult?.status === 'Success' ||
     cancellationResult?.status === 'success' ||
+    isSuccessText(cancellationResult?.status) ||
+    isSuccessText(cancellationResult?.response?.success) ||
     cancellationResult?.response?.status === true ||
+    isSuccessText(cancellationResult?.response?.status) ||
     (cancellationResult?.remark &&
       cancellationResult.remark.toLowerCase().includes('cancelled')) || // Check remark field for cancellation confirmation
     (cancellationResult?.message &&
