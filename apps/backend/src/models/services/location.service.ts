@@ -1,6 +1,66 @@
+import axios from 'axios'
 import { and, count, eq, ilike } from 'drizzle-orm'
 import { db } from '../client'
 import { locations } from '../schema/locations'
+
+const PINCODE_REGEX = /^[1-9]\d{5}$/
+
+const cleanText = (value: unknown) =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+const normalizePincode = (value: unknown) => cleanText(value).replace(/\D/g, '').slice(0, 6)
+
+const lookupExternalIndianPincode = async (pincode: string) => {
+  if (!PINCODE_REGEX.test(pincode)) return null
+
+  try {
+    const response = await axios.get(`https://api.zippopotam.us/in/${encodeURIComponent(pincode)}`, {
+      timeout: 5000,
+      headers: { Accept: 'application/json' },
+    })
+    const place = Array.isArray(response.data?.places) ? response.data.places[0] : null
+    const city = cleanText(place?.['place name'] || response.data?.place || response.data?.city)
+    const state = cleanText(place?.state || response.data?.state)
+
+    if (!city || !state) return null
+
+    return {
+      pincode,
+      city,
+      state,
+      country: 'India',
+      tags: ['external_lookup'],
+    }
+  } catch {
+    return null
+  }
+}
+
+const cacheExternalLocation = async (location: {
+  pincode: string
+  city: string
+  state: string
+  country: string
+  tags: string[]
+}) => {
+  const [stored] = await db
+    .insert(locations)
+    .values(location)
+    .onConflictDoUpdate({
+      target: locations.pincode,
+      set: {
+        city: location.city,
+        state: location.state,
+        country: location.country,
+        tags: location.tags,
+      },
+    })
+    .returning()
+
+  return stored
+}
 
 export const LocationService = {
   create: async (data: { pincode: string; city: string; state: string; country?: string }) => {
@@ -58,10 +118,27 @@ export const LocationService = {
       .limit(limit)
       .offset(offset)
 
-    const totalRes = await db.select({ count: count() }).from(locations)
+    if (
+      data.length === 0 &&
+      params.filters?.pincode &&
+      !params.filters.city &&
+      !params.filters.state
+    ) {
+      const normalizedPincode = normalizePincode(params.filters.pincode)
+      const externalLocation = await lookupExternalIndianPincode(normalizedPincode)
+      if (externalLocation) {
+        const stored = await cacheExternalLocation(externalLocation)
+        data.push(stored)
+      }
+    }
+
+    const totalRes = await db
+      .select({ count: count() })
+      .from(locations)
+      .where(conditions.length ? and(...conditions) : undefined)
 
     const total = Number(totalRes[0]?.count ?? 0)
-    return { data, total, page, limit }
+    return { data, total: data.length > total ? data.length : total, page, limit }
   },
 
   getById: async (id: string) => {

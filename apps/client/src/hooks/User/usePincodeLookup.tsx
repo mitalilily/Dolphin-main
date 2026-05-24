@@ -2,17 +2,21 @@ import { useEffect, useState } from 'react'
 import type { UseFormClearErrors, UseFormSetError, UseFormSetValue } from 'react-hook-form'
 import { fetchLocations } from '../../api/locations'
 
-const getPostalApiLocation = async (pincode: string) => {
-  const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`)
-  const data = await res.json()
-  const loc = data?.[0]?.PostOffice?.[0]
-  const status = data?.[0]?.Status
+const getPublicPostcodeLocation = async (pincode: string) => {
+  try {
+    const res = await fetch(`https://api.zippopotam.us/in/${pincode}`)
+    if (!res.ok) return null
 
-  if (status !== 'Success' || !loc) return null
+    const data = await res.json()
+    const loc = Array.isArray(data?.places) ? data.places[0] : null
+    if (!loc) return null
 
-  return {
-    city: loc?.District || '',
-    state: loc?.State || '',
+    return {
+      city: loc?.['place name'] || '',
+      state: loc?.state || '',
+    }
+  } catch {
+    return null
   }
 }
 
@@ -62,7 +66,7 @@ export function usePincodeLookup(
         }
 
         if (!loc) {
-          loc = await getPostalApiLocation(pincode)
+          loc = await getPublicPostcodeLocation(pincode)
         }
 
         if (cancelled) return
