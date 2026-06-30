@@ -15,7 +15,7 @@ PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
 ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
-API_PORT="${API_PORT:-5002}"
+API_PORT="${API_PORT:-5010}"
 DEPLOY_SHA="${DEPLOY_SHA:-}"
 DEPLOY_LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/dolphin-deploy.lock}"
 DEPLOY_LOCK_TIMEOUT_SECONDS="${DEPLOY_LOCK_TIMEOUT_SECONDS:-1800}"
@@ -58,6 +58,38 @@ build_cors_origin_list() {
   done
 }
 
+set_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local escaped_value
+
+  [ -f "$file" ] || touch "$file"
+  escaped_value="$(printf '%s' "$value" | sed -e 's/[\/&]/\\&/g')"
+
+  if grep -Eq "^${key}=" "$file"; then
+    sed -i "s/^${key}=.*/${key}=${escaped_value}/" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
+
+canonicalize_backend_env() {
+  local file="$1"
+  [ -n "$file" ] || return 0
+
+  set_env_value "$file" "NODE_ENV" "production"
+  set_env_value "$file" "PORT" "$API_PORT"
+  set_env_value "$file" "FRONTEND_URL" "$PUBLIC_ORIGIN"
+  set_env_value "$file" "CLIENT_APP_URL" "$CLIENT_ORIGIN"
+  set_env_value "$file" "ADMIN_APP_URL" "$ADMIN_ORIGIN"
+  set_env_value "$file" "API_URL" "$API_ORIGIN"
+  set_env_value "$file" "CORS_ALLOWED_ORIGINS" "$CORS_ORIGIN_LIST"
+  set_env_value "$file" "CORS_ORIGINS" "$CORS_ORIGIN_LIST"
+  set_env_value "$file" "ALLOW_INLINE_OTP" "false"
+  set_env_value "$file" "EXPOSE_AUTH_CODES" "false"
+}
+
 sync_backend_env() {
   local source="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
   local target="$APP_DIR/apps/backend/.env.production"
@@ -70,6 +102,11 @@ sync_backend_env() {
     echo "Create $source or run scripts/vps/bootstrap.sh before deploying." >&2
     exit 1
   fi
+
+  canonicalize_backend_env "$source"
+  canonicalize_backend_env "$target"
+  cp "$source" "$target"
+  chmod 600 "$source" "$target"
 }
 
 write_pm2_config() {
@@ -140,7 +177,6 @@ process.stdin.on("end", () => {
 
     if (
       name === "dolphin-api" ||
-      cwd.includes("/shipzilla/") ||
       port === String(process.env.API_PORT || "") ||
       pids.has(pid)
     ) {

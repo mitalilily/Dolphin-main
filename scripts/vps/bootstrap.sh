@@ -15,12 +15,28 @@ PUBLIC_ORIGIN="${PUBLIC_ORIGIN:-https://$PRIMARY_DOMAIN}"
 CLIENT_ORIGIN="${CLIENT_ORIGIN:-https://$CLIENT_DOMAIN}"
 ADMIN_ORIGIN="${ADMIN_ORIGIN:-https://$ADMIN_DOMAIN}"
 API_ORIGIN="${API_ORIGIN:-https://$API_DOMAIN}"
-API_PORT="${API_PORT:-5002}"
+API_PORT="${API_PORT:-5010}"
 PGADMIN_EMAIL="${PGADMIN_EMAIL:-admin@$PRIMARY_DOMAIN}"
 PGADMIN_PASSWORD="${PGADMIN_PASSWORD:-ChangeThisPgAdminPassword123!}"
 BACKEND_ENV_SOURCE="${BACKEND_ENV_SOURCE:-/root/dolphin-backend.env}"
 ENABLE_SSL="${ENABLE_SSL:-true}"
 SSL_EMAIL="${SSL_EMAIL:-admin@$PRIMARY_DOMAIN}"
+
+set_env_value() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local escaped_value
+
+  [ -f "$file" ] || touch "$file"
+  escaped_value="$(printf '%s' "$value" | sed -e 's/[\/&]/\\&/g')"
+
+  if grep -Eq "^${key}=" "$file"; then
+    sed -i "s/^${key}=.*/${key}=${escaped_value}/" "$file"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$file"
+  fi
+}
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "Run this script as root." >&2
@@ -91,6 +107,17 @@ EOF
   echo "Created ${BACKEND_ENV_SOURCE}. Fill it with backend secrets, then rerun bootstrap." >&2
   exit 1
 fi
+
+set_env_value "$BACKEND_ENV_SOURCE" "NODE_ENV" "production"
+set_env_value "$BACKEND_ENV_SOURCE" "PORT" "$API_PORT"
+set_env_value "$BACKEND_ENV_SOURCE" "FRONTEND_URL" "$PUBLIC_ORIGIN"
+set_env_value "$BACKEND_ENV_SOURCE" "CLIENT_APP_URL" "$CLIENT_ORIGIN"
+set_env_value "$BACKEND_ENV_SOURCE" "ADMIN_APP_URL" "$ADMIN_ORIGIN"
+set_env_value "$BACKEND_ENV_SOURCE" "API_URL" "$API_ORIGIN"
+set_env_value "$BACKEND_ENV_SOURCE" "CORS_ALLOWED_ORIGINS" "$CORS_ORIGIN_LIST"
+set_env_value "$BACKEND_ENV_SOURCE" "CORS_ORIGINS" "$CORS_ORIGIN_LIST"
+set_env_value "$BACKEND_ENV_SOURCE" "ALLOW_INLINE_OTP" "false"
+set_env_value "$BACKEND_ENV_SOURCE" "EXPOSE_AUTH_CODES" "false"
 
 cp "$BACKEND_ENV_SOURCE" "$APP_DIR/apps/backend/.env.production"
 chmod 600 "$APP_DIR/apps/backend/.env.production"

@@ -25,6 +25,7 @@ jobs:
             export CLIENT_EXTRA_DOMAINS=""
             export ADMIN_ORIGIN="${{ secrets.ADMIN_ORIGIN || 'https://admin.shopnship.in' }}"
             export API_ORIGIN="${{ secrets.API_ORIGIN || 'https://api.shopnship.in' }}"
+            export API_PORT="5010"
             export PGADMIN_EMAIL="${{ secrets.PGADMIN_EMAIL || 'admin@shopnship.in' }}"
             export PGADMIN_PASSWORD="${{ secrets.PGADMIN_PASSWORD }}"
 
