@@ -138,6 +138,77 @@ module.exports = {
 }
 EOF
 
+cat > /usr/local/bin/ensure-dolphin-api.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_NAME="${APP_NAME:-dolphin-api}"
+ECOSYSTEM_FILE="${ECOSYSTEM_FILE:-/etc/dolphin/ecosystem.config.cjs}"
+
+if ! command -v pm2 >/dev/null 2>&1; then
+  exit 0
+fi
+
+if pm2 jlist 2>/dev/null | node -e '
+let input = ""
+process.stdin.on("data", (chunk) => {
+  input += chunk
+})
+process.stdin.on("end", () => {
+  try {
+    const apps = JSON.parse(input || "[]")
+    const match = apps.find((app) => String(app.name || "") === String(process.env.APP_NAME || "dolphin-api"))
+    if (match && String(match.pm2_env?.status || "") === "online") {
+      process.exit(0)
+    }
+  } catch {}
+  process.exit(1)
+})
+'; then
+  exit 0
+fi
+
+pm2 start "$ECOSYSTEM_FILE" --only "$APP_NAME" --update-env
+pm2 save
+EOF
+
+chmod 0755 /usr/local/bin/ensure-dolphin-api.sh
+
+cat > /etc/systemd/system/dolphin-api-guard.service <<EOF
+[Unit]
+Description=Ensure Dolphin API stays registered in PM2
+After=network-online.target pm2-root.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_NAME=dolphin-api
+Environment=ECOSYSTEM_FILE=/etc/dolphin/ecosystem.config.cjs
+Environment=API_PORT=${API_PORT}
+ExecStart=/usr/local/bin/ensure-dolphin-api.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/dolphin-api-guard.timer <<'EOF'
+[Unit]
+Description=Periodic Dolphin API PM2 guard
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+Unit=dolphin-api-guard.service
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now dolphin-api-guard.timer >/dev/null 2>&1 || true
+systemctl start dolphin-api-guard.service >/dev/null 2>&1 || true
+
 cat > /opt/pgadmin/servers.json <<'EOF'
 {
   "Servers": {
