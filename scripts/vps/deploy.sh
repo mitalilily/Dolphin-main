@@ -84,6 +84,7 @@ canonicalize_backend_env() {
   set_env_value "$file" "CLIENT_APP_URL" "$CLIENT_ORIGIN"
   set_env_value "$file" "ADMIN_APP_URL" "$ADMIN_ORIGIN"
   set_env_value "$file" "API_URL" "$API_ORIGIN"
+  set_env_value "$file" "RAZORPAY_MODE" "live"
   set_env_value "$file" "CORS_ALLOWED_ORIGINS" "$CORS_ORIGIN_LIST"
   set_env_value "$file" "CORS_ORIGINS" "$CORS_ORIGIN_LIST"
   set_env_value "$file" "ALLOW_INLINE_OTP" "false"
