@@ -1852,6 +1852,19 @@ export const updateShippingRateController = async (req: Request, res: Response) 
 
 type CSVRow = Record<string, string | undefined>
 
+type RateItem = { zone_id: string; type: 'forward' | 'rto'; rate: number }
+type ParsedSlabsByZone = Record<string, { forward?: any[]; rto?: any[] }>
+
+const MAX_B2C_TEMPLATE_SLABS = 4
+
+const getCell = (row: CSVRow, key: string) => row[key]?.trim()
+
+const toOptionalNumber = (value?: string | number | null) => {
+  if (value === undefined || value === null || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 const parseSlabJsonCell = (value?: string) => {
   if (!value) return []
   try {
@@ -1864,6 +1877,151 @@ const parseSlabJsonCell = (value?: string) => {
 
 const isSlabValidationError = (err: unknown) =>
   /slab|overlap|extra_rate|extra_weight_unit/i.test(String((err as any)?.message || err || ''))
+
+const parseTemplateSlabs = (row: CSVRow, prefix: 'Forward' | 'RTO') => {
+  const slabs: any[] = []
+
+  for (let index = 1; index <= MAX_B2C_TEMPLATE_SLABS; index += 1) {
+    const weightFrom = toOptionalNumber(getCell(row, `${prefix} Slab ${index} From Kg`))
+    const weightTo = toOptionalNumber(getCell(row, `${prefix} Slab ${index} To Kg`))
+    const rate = toOptionalNumber(getCell(row, `${prefix} Slab ${index} Rate`))
+    const extraRate = toOptionalNumber(getCell(row, `${prefix} Slab ${index} Extra Rate`))
+    const extraWeightUnit = toOptionalNumber(
+      getCell(row, `${prefix} Slab ${index} Extra Weight Unit Kg`),
+    )
+
+    const hasAnyValue =
+      weightFrom !== null ||
+      weightTo !== null ||
+      rate !== null ||
+      extraRate !== null ||
+      extraWeightUnit !== null
+
+    if (!hasAnyValue || rate === null) continue
+
+    slabs.push({
+      weight_from: weightFrom ?? 0,
+      weight_to: weightTo,
+      rate,
+      extra_rate: extraRate,
+      extra_weight_unit: extraWeightUnit,
+    })
+  }
+
+  return slabs
+}
+
+const getZoneFromTemplateRow = (row: CSVRow, zonesList: Awaited<ReturnType<typeof getAllZones>>) => {
+  const zoneValue = getCell(row, 'Zone')
+  const zoneCode = getCell(row, 'Zone Code')
+
+  if (zoneValue) {
+    const normalizedZone = zoneValue.toLowerCase()
+    const byName = zonesList.find((zone) => zone.name.toLowerCase() === normalizedZone)
+    if (byName) return byName
+  }
+
+  if (zoneCode) {
+    const normalizedCode = zoneCode.toLowerCase()
+    const byCode = zonesList.find((zone) => zone.code.toLowerCase() === normalizedCode)
+    if (byCode) return byCode
+  }
+
+  if (zoneValue) {
+    const normalizedZone = zoneValue.toLowerCase()
+    return zonesList.find(
+      (zone) =>
+        zone.name.toLowerCase().includes(normalizedZone) ||
+        zone.code.toLowerCase() === normalizedZone,
+    )
+  }
+
+  return undefined
+}
+
+const addRateIfPresent = (
+  rates: RateItem[],
+  zoneId: string,
+  type: 'forward' | 'rto',
+  rateValue: number | null,
+  slabs: any[],
+) => {
+  if (rates.some((rate) => rate.zone_id === zoneId && rate.type === type)) return
+  const fallbackSlabRate = toOptionalNumber(slabs[0]?.rate)
+  const rate = rateValue ?? fallbackSlabRate
+  if (rate === null) return
+  rates.push({ zone_id: zoneId, type, rate })
+}
+
+const parseSimpleB2CRateRows = (
+  rows: CSVRow[],
+  zonesList: Awaited<ReturnType<typeof getAllZones>>,
+) => {
+  const groupedRows = new Map<
+    string,
+    {
+      courierId: string
+      courierName: string
+      serviceProvider?: string
+      mode: string
+      codCharges: number | null
+      codPercent: number | null
+      otherCharges: number | null
+      rates: RateItem[]
+      zoneSlabs: ParsedSlabsByZone
+    }
+  >()
+
+  for (const row of rows) {
+    const courierId = getCell(row, 'Courier ID')
+    const courierName = getCell(row, 'Courier Name')
+    const mode = getCell(row, 'Mode') || ''
+    const serviceProvider = getCell(row, 'Service Provider')
+    const zone = getZoneFromTemplateRow(row, zonesList)
+
+    if (!courierId || !courierName || !zone) continue
+
+    const forwardSlabs = parseTemplateSlabs(row, 'Forward')
+    const rtoSlabs = parseTemplateSlabs(row, 'RTO')
+    const forwardRate = toOptionalNumber(getCell(row, 'Forward Rate'))
+    const rtoRate = toOptionalNumber(getCell(row, 'RTO Rate'))
+    const rates: RateItem[] = []
+
+    addRateIfPresent(rates, zone.id, 'forward', forwardRate, forwardSlabs)
+    addRateIfPresent(rates, zone.id, 'rto', rtoRate, rtoSlabs)
+
+    if (!rates.length && !forwardSlabs.length && !rtoSlabs.length) continue
+
+    const key = [courierId, serviceProvider || '', mode].join('|').toLowerCase()
+    if (!groupedRows.has(key)) {
+      groupedRows.set(key, {
+        courierId,
+        courierName,
+        serviceProvider,
+        mode,
+        codCharges: toOptionalNumber(getCell(row, 'COD Charges')),
+        codPercent: toOptionalNumber(getCell(row, 'COD Percent')),
+        otherCharges: toOptionalNumber(getCell(row, 'Other Charges')),
+        rates: [],
+        zoneSlabs: {},
+      })
+    }
+
+    const grouped = groupedRows.get(key)!
+    grouped.codCharges = grouped.codCharges ?? toOptionalNumber(getCell(row, 'COD Charges'))
+    grouped.codPercent = grouped.codPercent ?? toOptionalNumber(getCell(row, 'COD Percent'))
+    grouped.otherCharges = grouped.otherCharges ?? toOptionalNumber(getCell(row, 'Other Charges'))
+    grouped.rates.push(...rates)
+
+    if (forwardSlabs.length || rtoSlabs.length) {
+      grouped.zoneSlabs[zone.id] = grouped.zoneSlabs[zone.id] || {}
+      if (forwardSlabs.length) grouped.zoneSlabs[zone.id].forward = forwardSlabs
+      if (rtoSlabs.length) grouped.zoneSlabs[zone.id].rto = rtoSlabs
+    }
+  }
+
+  return Array.from(groupedRows.values())
+}
 
 export const importShippingRatesController = async (req: any, res: Response) => {
   try {
@@ -1888,45 +2046,86 @@ export const importShippingRatesController = async (req: any, res: Response) => 
       return res.status(400).json({ success: false, message: 'Invalid CSV format', errors: errors })
     }
 
-    const zonesList = await getAllZones()
+    const normalizedBusinessType = String(business_type || '').trim().toLowerCase()
+    if (normalizedBusinessType !== 'b2b' && normalizedBusinessType !== 'b2c') {
+      return res.status(400).json({ success: false, message: 'Invalid business_type' })
+    }
+
+    const zonesList = await getAllZones(normalizedBusinessType)
+    const isSimpleB2CTemplate =
+      normalizedBusinessType === 'b2c' &&
+      data.some((row) => Object.prototype.hasOwnProperty.call(row, 'Zone'))
+
+    if (isSimpleB2CTemplate) {
+      const imports = parseSimpleB2CRateRows(data as CSVRow[], zonesList)
+
+      if (!imports.length) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'No valid B2C rates found. Fill Courier ID, Courier Name, Mode, Zone, and at least one Forward or RTO rate/slab.',
+        })
+      }
+
+      for (const item of imports) {
+        await upsertShippingRate({
+          courier_id: item.courierId,
+          courier_name: item.courierName,
+          service_provider: item.serviceProvider,
+          plan_id: plan_id as string,
+          min_weight: undefined,
+          business_type: 'b2c',
+          mode: item.mode,
+          cod_charges: item.codCharges,
+          cod_percent: item.codPercent,
+          other_charges: item.otherCharges,
+          rates: item.rates,
+          zone_slabs: item.zoneSlabs,
+        })
+      }
+
+      return res.json({
+        success: true,
+        message: `Shipping rates imported successfully (${imports.length} courier rate card${imports.length === 1 ? '' : 's'})`,
+      })
+    }
 
     for (const row of data as CSVRow[]) {
-      const courierId = row['Courier ID']
-      const courierName = row['Courier Name']
-      const serviceProvider = row['Service Provider']
-      const minWeight = row['Min Weight']
-      const mode = row['Mode'] || ''
+      const courierId = getCell(row, 'Courier ID')
+      const courierName = getCell(row, 'Courier Name')
+      const serviceProvider = getCell(row, 'Service Provider')
+      const minWeight = getCell(row, 'Min Weight')
+      const mode = getCell(row, 'Mode') || ''
 
       if (!courierId || !courierName) continue
 
       // Parse rates for each zone
-      type RateItem = { zone_id: string; type: 'forward' | 'rto'; rate: number }
-
       const rates: RateItem[] = Object.entries(row)
         .filter(([key]) =>
-          business_type === 'b2b'
+          normalizedBusinessType === 'b2b'
             ? key.toLowerCase().includes('forward') || key.toLowerCase().includes('rto')
             : key.includes('(Forward)') || key.includes('(RTO)'),
         )
         .flatMap(([zoneKey, value]): RateItem[] => {
-          if (!value) return []
+          const rate = toOptionalNumber(value)
+          if (rate === null) return []
 
           const zone = zonesList.find((z) => zoneKey.includes(z.name))
           if (!zone) return []
 
           if (zoneKey.toLowerCase().includes('forward')) {
-            return [{ zone_id: zone.id, type: 'forward', rate: Number(value) }]
+            return [{ zone_id: zone.id, type: 'forward', rate }]
           }
 
           if (zoneKey.toLowerCase().includes('rto')) {
-            return [{ zone_id: zone.id, type: 'rto', rate: Number(value) }]
+            return [{ zone_id: zone.id, type: 'rto', rate }]
           }
 
           return []
         })
 
       const zoneSlabs: Record<string, { forward?: any[]; rto?: any[] }> = {}
-      if (business_type === 'b2c') {
+      if (normalizedBusinessType === 'b2c') {
         for (const zone of zonesList) {
           const forwardSlabs = parseSlabJsonCell(row[`${zone.name} (Forward Slabs)`])
           const rtoSlabs = parseSlabJsonCell(row[`${zone.name} (RTO Slabs)`])
@@ -1934,13 +2133,15 @@ export const importShippingRatesController = async (req: any, res: Response) => 
             zoneSlabs[zone.id] = {}
             if (forwardSlabs.length) zoneSlabs[zone.id].forward = forwardSlabs
             if (rtoSlabs.length) zoneSlabs[zone.id].rto = rtoSlabs
+            addRateIfPresent(rates, zone.id, 'forward', null, forwardSlabs)
+            addRateIfPresent(rates, zone.id, 'rto', null, rtoSlabs)
           }
         }
       }
 
-      const codCharges = row['COD Charges'] ? Number(row['COD Charges']) : null
-      const codPercent = row['COD Percent'] ? Number(row['COD Percent']) : null
-      const otherCharges = row['Other Charges'] ? Number(row['Other Charges']) : null
+      const codCharges = toOptionalNumber(getCell(row, 'COD Charges'))
+      const codPercent = toOptionalNumber(getCell(row, 'COD Percent'))
+      const otherCharges = toOptionalNumber(getCell(row, 'Other Charges'))
 
       // ✅ skip rows without mode, courier info, or any charges/rates
       const hasData =
@@ -1959,13 +2160,13 @@ export const importShippingRatesController = async (req: any, res: Response) => 
         service_provider: serviceProvider,
         plan_id: plan_id as string,
         min_weight: minWeight,
-        business_type: business_type as 'b2b' | 'b2c',
+        business_type: normalizedBusinessType as 'b2b' | 'b2c',
         mode,
         cod_charges: codCharges,
         cod_percent: codPercent,
         other_charges: otherCharges,
         rates,
-        zone_slabs: business_type === 'b2c' ? zoneSlabs : undefined,
+        zone_slabs: normalizedBusinessType === 'b2c' ? zoneSlabs : undefined,
       })
     }
 

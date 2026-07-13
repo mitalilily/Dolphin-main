@@ -33,6 +33,12 @@ import { fetchAllCouriersList } from 'services/courier.service'
 import { PlansService } from 'services/plan.service'
 
 const normalizeProvider = (value) => String(value || '').trim().toLowerCase()
+const B2C_TEMPLATE_SLAB_COUNT = 4
+
+const getCourierProvider = (courier = {}) =>
+  courier.serviceProvider || courier.service_provider || courier.provider || ''
+
+const getCourierKey = (courier = {}) => `${courier.id || ''}::${getCourierProvider(courier)}`
 
 const normalizeMode = (value) => {
   const raw = String(value || '').trim().toLowerCase()
@@ -40,6 +46,83 @@ const normalizeMode = (value) => {
   if (['air', 'a', 'express'].includes(raw)) return 'air'
   if (['surface', 's', 'ground'].includes(raw)) return 'surface'
   return raw
+}
+
+const buildB2CSlabHeaders = (prefix) =>
+  Array.from({ length: B2C_TEMPLATE_SLAB_COUNT }, (_, index) => {
+    const slab = index + 1
+    return [
+      `${prefix} Slab ${slab} From Kg`,
+      `${prefix} Slab ${slab} To Kg`,
+      `${prefix} Slab ${slab} Rate`,
+      `${prefix} Slab ${slab} Extra Rate`,
+      `${prefix} Slab ${slab} Extra Weight Unit Kg`,
+    ]
+  }).flat()
+
+const downloadBlobCsv = (headers, rows, filename) => {
+  const csv = Papa.unparse({ fields: headers, data: rows })
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.setAttribute('download', filename)
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+const downloadSingleCourierB2CTemplate = (courier, allZones = [], mode = 'surface') => {
+  if (!courier?.id || !allZones?.length) return
+
+  const forwardSlabHeaders = buildB2CSlabHeaders('Forward')
+  const rtoSlabHeaders = buildB2CSlabHeaders('RTO')
+  const headers = [
+    'Courier ID',
+    'Courier Name',
+    'Service Provider',
+    'Mode',
+    'Business Type',
+    'Zone Code',
+    'Zone',
+    'Forward Rate',
+    ...forwardSlabHeaders,
+    'RTO Rate',
+    ...rtoSlabHeaders,
+    'COD Charges',
+    'COD Percent',
+    'Other Charges',
+  ]
+
+  const rows = allZones.map((zone) => [
+    courier.id || '',
+    courier.name || '',
+    getCourierProvider(courier),
+    normalizeMode(mode) || 'surface',
+    'b2c',
+    zone.code || '',
+    zone.name || '',
+    '',
+    ...forwardSlabHeaders.map(() => ''),
+    '',
+    ...rtoSlabHeaders.map(() => ''),
+    '',
+    '',
+    '',
+  ])
+
+  const provider = getCourierProvider(courier) || 'provider'
+  const safeName = String(courier.name || courier.id)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
+  downloadBlobCsv(
+    headers,
+    rows,
+    `b2c_single_courier_rate_card_${provider}_${safeName || courier.id}_${normalizeMode(mode) || 'surface'}.csv`,
+  )
 }
 
 // CSV exporter
@@ -152,14 +235,7 @@ const downloadCSV = (allCouriers = [], allZones = [], existingData = [], filters
       })
   }
 
-  const csv = Papa.unparse({ fields: headers, data: rows })
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.setAttribute('download', `shipping_rate_card_${type}.csv`)
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
+  downloadBlobCsv(headers, rows, `shipping_rate_card_${type}.csv`)
 }
 
 export const RateCardContainer = ({ forceBusinessType = null, embedded = false }) => {
@@ -200,6 +276,8 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
   const [selectedRate, setSelectedRate] = useState(null)
   const [isModalOpen, setModalOpen] = useState(false)
   const [isImportModalOpen, setImportModalOpen] = useState(false)
+  const [templateCourierKey, setTemplateCourierKey] = useState('')
+  const [templateMode, setTemplateMode] = useState('surface')
 
   // Default to first plan if available
   const [selectedPlanId, setSelectedPlanId] = useState('')
@@ -213,6 +291,16 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
       }
     }
   }, [plans, selectedPlanId])
+
+  useEffect(() => {
+    if (!courierList?.length) return
+    if (
+      !templateCourierKey ||
+      !courierList.find((courier) => getCourierKey(courier) === templateCourierKey)
+    ) {
+      setTemplateCourierKey(getCourierKey(courierList[0]))
+    }
+  }, [courierList, templateCourierKey])
 
   // Update filters whenever business type or plan changes
   useEffect(() => {
@@ -238,6 +326,11 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
   }
 
   const handleImportRates = () => setImportModalOpen(true)
+
+  const selectedTemplateCourier = useMemo(
+    () => courierList?.find((courier) => getCourierKey(courier) === templateCourierKey),
+    [courierList, templateCourierKey],
+  )
 
   const filterOptions = useMemo(
     () => {
@@ -415,18 +508,57 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
           <CustomModal
             isOpen={isImportModalOpen}
             onClose={() => setImportModalOpen(false)}
-            title="Import Rates"
+            title="Import B2C Rates"
             size="xl"
-            action={
-              <Button
-                size="sm"
-                colorScheme="blue"
-                onClick={() => downloadCSV(courierList || [], zones || [], data || [], filters)}
-              >
-                Download CSV
-              </Button>
-            }
+            action={null}
           >
+            <Stack spacing={4} mb={5}>
+              <Box>
+                <Text fontWeight="semibold" mb={1}>
+                  One courier template
+                </Text>
+                <Text fontSize="sm" color="gray.600">
+                  Download a simple CSV for one courier. Fill forward, RTO, or both; blank RTO
+                  columns are allowed.
+                </Text>
+              </Box>
+              <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={3}>
+                <Select
+                  value={templateCourierKey}
+                  onChange={(event) => setTemplateCourierKey(event.target.value)}
+                >
+                  {(courierList || []).map((courier) => (
+                    <option key={getCourierKey(courier)} value={getCourierKey(courier)}>
+                      {courier.name} ({getCourierProvider(courier) || 'provider'} #{courier.id})
+                    </option>
+                  ))}
+                </Select>
+                <Select value={templateMode} onChange={(event) => setTemplateMode(event.target.value)}>
+                  <option value="surface">Surface</option>
+                  <option value="air">Air</option>
+                </Select>
+              </Grid>
+              <Flex gap={2} wrap="wrap">
+                <Button
+                  size="sm"
+                  colorScheme="blue"
+                  onClick={() =>
+                    downloadSingleCourierB2CTemplate(selectedTemplateCourier, zones || [], templateMode)
+                  }
+                  isDisabled={!selectedTemplateCourier || !zones?.length}
+                >
+                  Download One Courier Template
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  colorScheme="blue"
+                  onClick={() => downloadCSV(courierList || [], zones || [], data || [], filters)}
+                >
+                  Download Existing Wide CSV
+                </Button>
+              </Flex>
+            </Stack>
             <FileUploader
               maxSizeMb={5}
               folderKey="rates"
