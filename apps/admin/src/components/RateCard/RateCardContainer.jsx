@@ -32,7 +32,6 @@ import { useZones } from 'hooks/useZones'
 import { fetchAllCouriersList } from 'services/courier.service'
 import { PlansService } from 'services/plan.service'
 
-const normalizeProvider = (value) => String(value || '').trim().toLowerCase()
 const B2C_TEMPLATE_SLAB_COUNT = 4
 
 const getCourierProvider = (courier = {}) =>
@@ -60,6 +59,53 @@ const buildB2CSlabHeaders = (prefix) =>
     ]
   }).flat()
 
+const getB2CTemplateHeaders = () => {
+  const forwardSlabHeaders = buildB2CSlabHeaders('Forward')
+  const rtoSlabHeaders = buildB2CSlabHeaders('RTO')
+
+  return [
+    'Courier ID',
+    'Courier Name',
+    'Service Provider',
+    'Mode',
+    'Business Type',
+    'Zone Code',
+    'Zone',
+    'Forward Rate',
+    ...forwardSlabHeaders,
+    'RTO Rate',
+    ...rtoSlabHeaders,
+    'COD Charges',
+    'COD Percent',
+    'Other Charges',
+  ]
+}
+
+const buildB2CTemplateRows = (couriers = [], allZones = [], mode = 'surface') => {
+  const normalizedMode = normalizeMode(mode) || 'surface'
+  const forwardSlabHeaders = buildB2CSlabHeaders('Forward')
+  const rtoSlabHeaders = buildB2CSlabHeaders('RTO')
+
+  return couriers.flatMap((courier) =>
+    allZones.map((zone) => [
+      courier.id || '',
+      courier.name || '',
+      getCourierProvider(courier),
+      normalizedMode,
+      'b2c',
+      zone.code || '',
+      zone.name || '',
+      '',
+      ...forwardSlabHeaders.map(() => ''),
+      '',
+      ...rtoSlabHeaders.map(() => ''),
+      '',
+      '',
+      '',
+    ]),
+  )
+}
+
 const downloadBlobCsv = (headers, rows, filename) => {
   const csv = Papa.unparse({ fields: headers, data: rows })
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -76,42 +122,6 @@ const downloadBlobCsv = (headers, rows, filename) => {
 const downloadSingleCourierB2CTemplate = (courier, allZones = [], mode = 'surface') => {
   if (!courier?.id || !allZones?.length) return
 
-  const forwardSlabHeaders = buildB2CSlabHeaders('Forward')
-  const rtoSlabHeaders = buildB2CSlabHeaders('RTO')
-  const headers = [
-    'Courier ID',
-    'Courier Name',
-    'Service Provider',
-    'Mode',
-    'Business Type',
-    'Zone Code',
-    'Zone',
-    'Forward Rate',
-    ...forwardSlabHeaders,
-    'RTO Rate',
-    ...rtoSlabHeaders,
-    'COD Charges',
-    'COD Percent',
-    'Other Charges',
-  ]
-
-  const rows = allZones.map((zone) => [
-    courier.id || '',
-    courier.name || '',
-    getCourierProvider(courier),
-    normalizeMode(mode) || 'surface',
-    'b2c',
-    zone.code || '',
-    zone.name || '',
-    '',
-    ...forwardSlabHeaders.map(() => ''),
-    '',
-    ...rtoSlabHeaders.map(() => ''),
-    '',
-    '',
-    '',
-  ])
-
   const provider = getCourierProvider(courier) || 'provider'
   const safeName = String(courier.name || courier.id)
     .toLowerCase()
@@ -119,123 +129,20 @@ const downloadSingleCourierB2CTemplate = (courier, allZones = [], mode = 'surfac
     .replace(/^-|-$/g, '')
 
   downloadBlobCsv(
-    headers,
-    rows,
+    getB2CTemplateHeaders(),
+    buildB2CTemplateRows([courier], allZones, mode),
     `b2c_single_courier_rate_card_${provider}_${safeName || courier.id}_${normalizeMode(mode) || 'surface'}.csv`,
   )
 }
 
-// CSV exporter
-const downloadCSV = (allCouriers = [], allZones = [], existingData = [], filters = {}) => {
+const downloadAllCouriersB2CTemplate = (allCouriers = [], allZones = [], mode = 'surface') => {
   if (!allCouriers?.length || !allZones?.length) return
-  const type = filters?.businessType?.toLowerCase()
 
-  let headers = []
-  let rows = []
-
-  // Common headers
-  const baseHeaders = [
-    'Courier ID',
-    'Courier Name',
-    'Service Provider',
-    'Mode',
-    'Business Type',
-  ]
-
-  if (type === 'b2c') {
-    headers = [
-      ...baseHeaders,
-      ...allZones.flatMap((zone) => [
-        `${zone.name} (Forward)`,
-        `${zone.name} (RTO)`,
-        `${zone.name} (Forward Slabs)`,
-        `${zone.name} (RTO Slabs)`,
-      ]),
-      'COD Charges',
-      'COD Percent',
-      'Other Charges',
-    ]
-
-    rows = existingData
-      .filter((r) => r.business_type === type && r.plan_id === filters.planId)
-      .map((row) => {
-        const courier =
-          allCouriers.find(
-            (c) =>
-              Number(c.id) === Number(row.courier_id) &&
-              normalizeProvider(c.serviceProvider || c.service_provider || '') ===
-                normalizeProvider(row.service_provider || row.serviceProvider || '') &&
-              normalizeMode(c.mode || row.mode || '') === normalizeMode(row.mode || ''),
-          ) || {}
-
-        const zoneValues = allZones.flatMap((zone) => {
-          const zoneRates = row.rates?.[zone.name] || {}
-          const zoneSlabs = row.zone_slabs?.[zone.name] || {}
-          return [
-            zoneRates.forward ?? '',
-            zoneRates.rto ?? '',
-            zoneSlabs.forward?.length ? JSON.stringify(zoneSlabs.forward) : '',
-            zoneSlabs.rto?.length ? JSON.stringify(zoneSlabs.rto) : '',
-          ]
-        })
-
-        return [
-          row.courier_id ?? courier.id ?? '',
-          row.courier_name ?? courier.name ?? '',
-          row.service_provider || row.serviceProvider || courier.serviceProvider || '',
-          row.mode || '',
-          type,
-          ...zoneValues,
-          row.cod_charges ?? '',
-          row.cod_percent ?? '',
-          row.other_charges ?? '',
-        ]
-      })
-  }
-
-  if (type === 'b2b') {
-    headers = [
-      ...baseHeaders,
-      'Min Weight',
-      ...allZones.flatMap((zone) => [`${zone.name} (Per Kg Forward)`, `${zone.name} (Per Kg RTO)`]),
-      'COD Charges',
-      'COD Percent',
-      'Other Charges',
-    ]
-
-    rows = existingData
-      .filter((r) => r.business_type === type && r.plan_id === filters.planId)
-      .map((row) => {
-        const courier =
-          allCouriers.find(
-            (c) =>
-              Number(c.id) === Number(row.courier_id) &&
-              normalizeProvider(c.serviceProvider || c.service_provider || '') ===
-                normalizeProvider(row.service_provider || row.serviceProvider || '') &&
-              normalizeMode(c.mode || row.mode || '') === normalizeMode(row.mode || ''),
-          ) || {}
-
-        const zoneValues = allZones.flatMap((zone) => {
-          const zoneRates = row.rates?.[zone.name] || {}
-          return [zoneRates.forward_per_kg ?? '', zoneRates.rto_per_kg ?? '']
-        })
-
-        return [
-          row.courier_id ?? courier.id ?? '',
-          row.courier_name ?? courier.name ?? '',
-          row.service_provider || row.serviceProvider || courier.serviceProvider || '',
-          row.mode || '',
-          row.min_weight || '',
-          type,
-          ...zoneValues,
-          row.cod_charges ?? '',
-          row.cod_percent ?? '',
-          row.other_charges ?? '',
-        ]
-      })
-  }
-
-  downloadBlobCsv(headers, rows, `shipping_rate_card_${type}.csv`)
+  downloadBlobCsv(
+    getB2CTemplateHeaders(),
+    buildB2CTemplateRows(allCouriers, allZones, mode),
+    `b2c_all_couriers_rate_card_${normalizeMode(mode) || 'surface'}.csv`,
+  )
 }
 
 export const RateCardContainer = ({ forceBusinessType = null, embedded = false }) => {
@@ -515,11 +422,11 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
             <Stack spacing={4} mb={5}>
               <Box>
                 <Text fontWeight="semibold" mb={1}>
-                  One courier template
+                  Choose template
                 </Text>
                 <Text fontSize="sm" color="gray.600">
-                  Download a simple CSV for one courier. Fill forward, RTO, or both; blank RTO
-                  columns are allowed.
+                  Download a fresh blank CSV for all couriers or only one courier. Fill forward,
+                  RTO, or both; blank RTO columns are allowed.
                 </Text>
               </Box>
               <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={3}>
@@ -542,20 +449,21 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
                 <Button
                   size="sm"
                   colorScheme="blue"
+                  onClick={() => downloadAllCouriersB2CTemplate(courierList || [], zones || [], templateMode)}
+                  isDisabled={!courierList?.length || !zones?.length}
+                >
+                  Download All Couriers Template
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  colorScheme="blue"
                   onClick={() =>
                     downloadSingleCourierB2CTemplate(selectedTemplateCourier, zones || [], templateMode)
                   }
                   isDisabled={!selectedTemplateCourier || !zones?.length}
                 >
                   Download One Courier Template
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  colorScheme="blue"
-                  onClick={() => downloadCSV(courierList || [], zones || [], data || [], filters)}
-                >
-                  Download Existing Wide CSV
                 </Button>
               </Flex>
             </Stack>
