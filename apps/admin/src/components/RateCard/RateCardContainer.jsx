@@ -422,50 +422,85 @@ export const RateCardContainer = ({ forceBusinessType = null, embedded = false }
             <Stack spacing={4} mb={5}>
               <Box>
                 <Text fontWeight="semibold" mb={1}>
-                  Choose template
+                  Upload options
                 </Text>
                 <Text fontSize="sm" color="gray.600">
-                  Download a fresh blank CSV for all couriers or only one courier. Fill forward,
-                  RTO, or both; blank RTO columns are allowed.
+                  Use the uploader below for either file. The all-couriers template lets you send
+                  every courier rate card at once; the one-courier template is for smaller updates.
                 </Text>
               </Box>
-              <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={3}>
-                <Select
-                  value={templateCourierKey}
-                  onChange={(event) => setTemplateCourierKey(event.target.value)}
-                >
-                  {(courierList || []).map((courier) => (
-                    <option key={getCourierKey(courier)} value={getCourierKey(courier)}>
-                      {courier.name} ({getCourierProvider(courier) || 'provider'} #{courier.id})
-                    </option>
-                  ))}
-                </Select>
-                <Select value={templateMode} onChange={(event) => setTemplateMode(event.target.value)}>
-                  <option value="surface">Surface</option>
-                  <option value="air">Air</option>
-                </Select>
+              <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={4}>
+                <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={4}>
+                  <Text fontWeight="semibold" mb={1}>
+                    All courier rate card at once
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" mb={3}>
+                    One CSV containing every B2C courier and every zone for the selected mode.
+                  </Text>
+                  <Select
+                    value={templateMode}
+                    onChange={(event) => setTemplateMode(event.target.value)}
+                    mb={3}
+                  >
+                    <option value="surface">Surface</option>
+                    <option value="air">Air</option>
+                  </Select>
+                  <Button
+                    size="sm"
+                    colorScheme="blue"
+                    width="100%"
+                    onClick={() =>
+                      downloadAllCouriersB2CTemplate(courierList || [], zones || [], templateMode)
+                    }
+                    isDisabled={!courierList?.length || !zones?.length}
+                  >
+                    Download All Couriers Template
+                  </Button>
+                </Box>
+                <Box borderWidth="1px" borderColor="gray.200" borderRadius="md" p={4}>
+                  <Text fontWeight="semibold" mb={1}>
+                    One courier rate card
+                  </Text>
+                  <Text fontSize="sm" color="gray.600" mb={3}>
+                    A smaller CSV for only the selected courier and selected mode.
+                  </Text>
+                  <Grid templateColumns={{ base: '1fr', md: '2fr 1fr' }} gap={3} mb={3}>
+                    <Select
+                      value={templateCourierKey}
+                      onChange={(event) => setTemplateCourierKey(event.target.value)}
+                    >
+                      {(courierList || []).map((courier) => (
+                        <option key={getCourierKey(courier)} value={getCourierKey(courier)}>
+                          {courier.name} ({getCourierProvider(courier) || 'provider'} #{courier.id})
+                        </option>
+                      ))}
+                    </Select>
+                    <Select
+                      value={templateMode}
+                      onChange={(event) => setTemplateMode(event.target.value)}
+                    >
+                      <option value="surface">Surface</option>
+                      <option value="air">Air</option>
+                    </Select>
+                  </Grid>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    colorScheme="blue"
+                    width="100%"
+                    onClick={() =>
+                      downloadSingleCourierB2CTemplate(
+                        selectedTemplateCourier,
+                        zones || [],
+                        templateMode,
+                      )
+                    }
+                    isDisabled={!selectedTemplateCourier || !zones?.length}
+                  >
+                    Download One Courier Template
+                  </Button>
+                </Box>
               </Grid>
-              <Flex gap={2} wrap="wrap">
-                <Button
-                  size="sm"
-                  colorScheme="blue"
-                  onClick={() => downloadAllCouriersB2CTemplate(courierList || [], zones || [], templateMode)}
-                  isDisabled={!courierList?.length || !zones?.length}
-                >
-                  Download All Couriers Template
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  colorScheme="blue"
-                  onClick={() =>
-                    downloadSingleCourierB2CTemplate(selectedTemplateCourier, zones || [], templateMode)
-                  }
-                  isDisabled={!selectedTemplateCourier || !zones?.length}
-                >
-                  Download One Courier Template
-                </Button>
-              </Flex>
             </Stack>
             <FileUploader
               maxSizeMb={5}
