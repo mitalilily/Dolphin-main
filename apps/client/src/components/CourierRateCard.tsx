@@ -61,16 +61,6 @@ const ACCENT = '#0D3B8E'
 const TEXT_PRIMARY = '#102A54'
 const TEXT_MUTED = '#496189'
 const BORDER = '#E2E8F0'
-const AGGREGATOR_LABELS: Record<string, string> = {
-  shiprocket: 'Shiprocket',
-  shipmozo: 'Shipmozo',
-  delhivery: 'Delhivery',
-  ekart: 'Ekart',
-  xpressbees: 'Xpressbees',
-  truxcargo: 'Truxcargo',
-  icarry: 'iCarry',
-}
-
 const inferProviderFromName = (name?: string | null) => {
   const n = String(name || '').toLowerCase()
   if (n.includes('shiprocket')) return 'shiprocket'
@@ -180,8 +170,6 @@ export default function CourierRateList({
           // Parse EDD
           const eddText = courier?.edd ?? '—'
           const isClickable = Boolean(onSelect)
-
-          const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'Unknown Aggregator'
 
           return (
             <Grid
@@ -419,22 +407,6 @@ export default function CourierRateList({
                       </Tooltip>
                     )}
                   </Stack>
-
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      mt: 2.25,
-                      display: 'block',
-                      textAlign: 'left',
-                      color: '#0B2348',
-                      letterSpacing: '0.02em',
-                      fontWeight: 700,
-                      borderTop: `1px solid ${alpha('#0B2348', 0.14)}`,
-                      pt: 1.1,
-                    }}
-                  >
-                    {aggregatorName}
-                  </Typography>
                 </CardContent>
               </Card>
             </Grid>

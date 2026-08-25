@@ -14,16 +14,6 @@ const ACCENT = '#0D3B8E'
 const TEXT_PRIMARY = '#102A54'
 const TEXT_SECONDARY = '#4C6185'
 const SURFACE = '#F6F8FC'
-const AGGREGATOR_LABELS: Record<string, string> = {
-  shiprocket: 'shiprocket',
-  shipmozo: 'shipmozo',
-  delhivery: 'delhivery',
-  ekart: 'ekart',
-  xpressbees: 'xpressbees',
-  truxcargo: 'truxcargo',
-  icarry: 'icarry',
-}
-
 type CourierProviderFields = {
   integration_type?: unknown
   service_provider?: unknown
@@ -461,7 +451,6 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                 .trim()
                 .toLowerCase()
               const providerKey = providerKeyRaw || inferProviderFromName(courier?.name)
-              const aggregatorName = AGGREGATOR_LABELS[providerKey] || providerKey || 'unknown'
               const selectedIntegrationType = (
                 providerKey ||
                 inferProviderFromName(courier?.name) ||
@@ -577,9 +566,6 @@ export const SelectCourierForm = ({ shipment_type }: { shipment_type: 'b2b' | 'b
                           </Stack>
                           <Typography sx={{ mt: 0.35, fontSize: 13, color: TEXT_SECONDARY }}>
                             {courier?.edd ? `Estimated delivery: ${courier.edd}` : 'EDD unavailable'}
-                          </Typography>
-                          <Typography sx={{ mt: 0.35, fontSize: 12, fontWeight: 700, color: '#0B2348' }}>
-                            {aggregatorName}
                           </Typography>
                         </Box>
                       </Stack>
